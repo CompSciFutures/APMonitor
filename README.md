@@ -412,6 +412,8 @@ WantedBy=multi-user.target
 
 ## Execution Flow
 
+Here are some basic devnotes on how APMonitor is built, in case you want to modify it.
+
 Each invocation of APMonitor:
 
 1. Loads and validates configuration file
@@ -426,6 +428,18 @@ Each invocation of APMonitor:
 5. Exits
 
 This stateless design allows APMonitor to be killed/restarted safely at any time without losing monitoring history or creating duplicate notifications.
+
+### Modifying with AI
+
+APMonitor was designed with an engineering based approach to Vibe Coding in mind, should you wish to change it. 
+
+Steps:
+
+1. Paste in `READAI.md` (containing an Entrance Prompt) into your favourite AI coding tool (e.g., Grok 4.1 or Claude Sonnet)
+2. Paste in `APMonitor.py` (the source code)
+3. Vibe your changes as you see fit.
+
+Enjoy!
 
 ## Default State File Location
 
