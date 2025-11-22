@@ -1,0 +1,132 @@
+# APMonitor Example Configuration
+# This file demonstrates all available configuration options
+
+site:
+  # Required: Site name for notifications
+  name: "Production Infrastructure"
+
+  # Optional: Email notification recipients
+  outage_emails:
+    - email: "ops-team@example.com"
+    - email: "alerts@example.com"
+
+  # Optional: Webhook notification endpoints
+  outage_webhooks:
+    # Example: Simple GET webhook with URL-encoded message
+    - endpoint_url: "https://hooks.example.com/alerts"
+      request_method: GET
+      request_encoding: URL
+      request_prefix: "?message="
+      request_suffix: ""
+
+    # Example: Pushover notification service
+    - endpoint_url: "https://api.pushover.net/1/messages.json"
+      request_method: POST
+      request_encoding: URL
+      request_prefix: "token=YOUR_APP_TOKEN&user=YOUR_USER_KEY&message="
+      request_suffix: ""
+
+    # Example: JSON webhook for Slack/Discord/etc
+    - endpoint_url: "https://hooks.slack.com/services/YOUR/WEBHOOK/URL"
+      request_method: POST
+      request_encoding: JSON
+      request_prefix: ""
+      request_suffix: ""
+
+    # Example: Custom API with HTML-escaped content
+    - endpoint_url: "https://api.example.com/notify"
+      request_method: POST
+      request_encoding: HTML
+      request_prefix: "<alert>"
+      request_suffix: "</alert>"
+
+  # Optional: Override default retry behavior
+  max_retries: 3        # Number of retries before marking down (default: 3)
+  max_try_secs: 20      # Timeout per attempt in seconds (default: 20)
+
+# Required: List of resources to monitor
+monitors:
+
+  # Example 1: Basic ping monitor with heartbeat
+  - type: ping
+    name: gateway
+    address: "192.168.1.1"
+    check_every_n_secs: 60           # Check every 60 seconds
+    notify_every_n_secs: 600         # Notify every 10 minutes if still down
+    heartbeat_url: "https://hc-ping.com/your-uuid-here"
+    heartbeat_every_n_secs: 300      # Heartbeat every 5 minutes
+
+  # Example 2: Simple HTTP health check
+  - type: http
+    name: web-app
+    address: "http://192.168.1.100:8080/health"
+    check_every_n_secs: 30           # More frequent checks
+    notify_every_n_secs: 1800        # Less frequent notifications (30 min)
+
+  # Example 3: HTTP with content verification
+  - type: http
+    name: api-server
+    address: "http://api.internal.example.com/status"
+    expect: '"status":"healthy"'    # Response must contain this string
+    check_every_n_secs: 60
+    notify_every_n_secs: 900
+    heartbeat_url: "https://plus.site24x7.com/hb/uuid/api-server"
+
+  # Example 4: HTTPS with SSL certificate pinning
+  - type: https
+    name: secure-nvr
+    address: "https://192.168.1.50/api/system"
+    expect: "nvr0"
+    ssl_fingerprint: "e85260e8f8e85629cfa4d023ea0ae8dd3ce8ccc0040b054a4753c2a5ab269296"
+    check_every_n_secs: 120
+    notify_every_n_secs: 3600
+    heartbeat_url: "https://hc-ping.com/nvr-uuid"
+    heartbeat_every_n_secs: 600
+
+  # Example 5: HTTPS with self-signed cert (ignore expiry)
+  - type: https
+    name: internal-dashboard
+    address: "https://dashboard.local:8443/health"
+    ssl_fingerprint: "a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456"
+    ignore_ssl_expiry: true          # Don't fail on expired cert
+    check_every_n_secs: 300
+    notify_every_n_secs: 1800
+
+  # Example 6: IPv6 ping monitor
+  - type: ping
+    name: ipv6-router
+    address: "2001:db8::1"
+    check_every_n_secs: 60
+
+  # Example 7: Domain name ping
+  - type: ping
+    name: dns-server
+    address: "dns.google.com"
+    check_every_n_secs: 120
+    notify_every_n_sec: 3600
+    after_every_n_notifications: 8  #
+
+  # Example 8: HTTPS public endpoint
+  - type: https
+    name: external-website
+    address: "https://www.example.com"
+    expect: "Example Domain"
+    check_every_n_secs: 300
+    notify_every_n_secs: 3600
+    heartbeat_url: "https://healthchecks.io/ping/website-uuid"
+
+  # Example 9: Minimal configuration (uses all defaults)
+  - type: ping
+    name: simple-host
+    address: "192.168.1.200"
+    # check_every_n_secs defaults to 60
+    # notify_every_n_secs defaults to 600
+
+  # Example 10: High-frequency monitoring
+  - type: http
+    name: critical-service
+    address: "http://critical.internal:9090/alive"
+    check_every_n_secs: 10           # Check every 10 seconds
+    notify_every_n_secs: 300         # Notify every 5 minutes
+    heartbeat_url: "https://hc-ping.com/critical-uuid"
+    heartbeat_every_n_secs: 60       # Heartbeat every minute

@@ -1,0 +1,17 @@
+/statefile.json
+/statefile.json.old
+/statefile.json.new
+/apmonitor-statefile.json
+/apmonitor-statefile.json.old
+/apmonitor-statefile.json.new
+/.idea
+/.idea/*
+/.idea/workspace.xml/statefile.json
+statefile.json.old
+statefile.json.new
+apmonitor-statefile.json
+apmonitor-statefile.json.old
+apmonitor-statefile.json.new
+.idea
+.idea/*
+.idea/workspace.xml
