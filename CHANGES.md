@@ -2,12 +2,18 @@
 
 ## About `APMonitor.py` (APMonitor)
 
-On-premises/LAN availability monitoring tool with guaranteed alerts & decaying alert pacing.
-Multithreaded high speed availability checking for PING & HTTP(S) resources.
-Integrates with Site24x7 heartbeat monitoring for failover alerting + Slack & Pushover webhooks.
-Runs on Raspberry Pi to enterprise systems.
-Python-only, easily modifiable.
-GPL 3.0 licensed.
+On-premises/LAN availability monitoring tool with guaranteed alerts & decaying alert pacing.<br />
+Multithreaded high speed availability checking for PING & HTTP(S) resources.<br />
+Integrates with Site24x7 heartbeat monitoring for failover alerting + Slack & Pushover webhooks.<br />
+Runs on RPi to enterprise systems.<br />
+Thread safe, reentrant, easily modifiable Python.<br />
+GPL 3.0 licensed.<br/>
+
+## Release 0.1.3 (23-Nov-2025)
+
+- Tweaked parallel PID locking to use absolute paths to fix problems with concurrently checking multiple site configs & crontab use-case.
+- Allowed setting of default MAX_THREADS in config file (still can be overridden on command line).
+- Made config file parsing more robust and added support for missing `notify_every_n_sec` to global site config.
 
 ## Release 0.1.2 (22-Nov-2025)
 

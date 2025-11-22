@@ -41,7 +41,8 @@ site:
       request_suffix: "</alert>"
 
   # Optional: Override default retry behavior
-  max_retries: 3        # Number of retries before marking down (default: 3)
+  max_threads: 1        # Number of monitored resources to check in parallel (default: 1, set > 2 for near-realtime)
+  max_retries: 3        # Number of retries before marking down (default: 3, set to 1 for near-realtime)
   max_try_secs: 20      # Timeout per attempt in seconds (default: 20)
 
 # Required: List of resources to monitor

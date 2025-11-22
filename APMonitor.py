@@ -182,6 +182,15 @@ def print_and_exit_on_bad_config(config):
 
         site = config['site']
 
+        # Check for unrecognized site-level parameters
+        valid_site_params = {
+            'name', 'outage_emails', 'outage_webhooks', 'max_threads', 'max_retries',
+            'max_try_secs', 'notify_every_n_secs', 'after_every_n_notifications'
+        }
+        unrecognized_site = set(site.keys()) - valid_site_params
+        if unrecognized_site:
+            raise ConfigError(f"Unrecognized site-level parameters: {', '.join(sorted(unrecognized_site))}")
+
         # Check site name is present and is a string
         if 'name' not in site:
             raise ConfigError("Missing required field: 'site.name'")
@@ -246,6 +255,11 @@ def print_and_exit_on_bad_config(config):
                     if not isinstance(webhook['request_suffix'], str):
                         raise ConfigError(f"Field 'site.outage_webhooks[{i}].request_suffix' must be a string")
 
+        # Validate optional site.max_threads
+        if 'max_threads' in site:
+            if not isinstance(site['max_threads'], int) or site['max_threads'] < 1:
+                raise ConfigError("Field 'site.max_threads' must be a positive integer")
+
         # Validate optional site.max_retries
         if 'max_retries' in site:
             if not isinstance(site['max_retries'], int) or site['max_retries'] < 1:
@@ -256,10 +270,15 @@ def print_and_exit_on_bad_config(config):
             if not isinstance(site['max_try_secs'], int) or site['max_try_secs'] < 1:
                 raise ConfigError("Field 'site.max_try_secs' must be a positive integer")
 
-        # Validate optional site.default_after_every_n_notifications
-        if 'default_after_every_n_notifications' in site:
-            if not isinstance(site['default_after_every_n_notifications'], int) or site['default_after_every_n_notifications'] < 1:
-                raise ConfigError("Field 'site.default_after_every_n_notifications' must be a positive integer")
+        # Validate optional site.notify_every_n_secs
+        if 'notify_every_n_secs' in site:
+            if not isinstance(site['notify_every_n_secs'], int) or site['notify_every_n_secs'] < 1:
+                raise ConfigError("Field 'site.notify_every_n_secs' must be a positive integer")
+
+        # Validate optional site.after_every_n_notifications
+        if 'after_every_n_notifications' in site:
+            if not isinstance(site['after_every_n_notifications'], int) or site['after_every_n_notifications'] < 1:
+                raise ConfigError("Field 'site.after_every_n_notifications' must be a positive integer")
 
         # Check monitors list exists
         if 'monitors' not in config:
@@ -285,6 +304,16 @@ def print_and_exit_on_bad_config(config):
                 if field not in monitor:
                     raise ConfigError(
                         f"Monitor {i} (name: {monitor.get('name', 'unknown')}): missing required field '{field}'")
+
+            # Check for unrecognized monitor-level parameters
+            valid_monitor_params = {
+                'type', 'name', 'address', 'check_every_n_secs', 'notify_every_n_secs',
+                'notify_on_down_every_n_secs', 'after_every_n_notifications', 'heartbeat_url',
+                'heartbeat_every_n_secs', 'expect', 'ssl_fingerprint', 'ignore_ssl_expiry'
+            }
+            unrecognized_monitor = set(monitor.keys()) - valid_monitor_params
+            if unrecognized_monitor:
+                raise ConfigError(f"Monitor {i} (name: {monitor.get('name', 'unknown')}): unrecognized parameters: {', '.join(sorted(unrecognized_monitor))}")
 
             # Validate name is non-empty string
             if not isinstance(monitor['name'], str):
@@ -899,8 +928,8 @@ def create_pid_file_or_exit_on_unix(config_path):
     if system not in ['linux', 'darwin', 'freebsd', 'openbsd', 'netbsd']:
         return None
 
-    # Generate hash from config file path
-    config_hash = hashlib.sha256(config_path.encode()).hexdigest()[:16]
+    # Generate hash from config file path (use absolute path for consistency)
+    config_hash = hashlib.sha256(os.path.abspath(config_path).encode()).hexdigest()[:16]
     lockfile_path = f'/tmp/apmonitor-{config_hash}.lock'
 
     if os.path.exists(lockfile_path):
@@ -934,7 +963,7 @@ def create_pid_file_or_exit_on_unix(config_path):
 
 
 def main():
-    global VERBOSE, MAX_THREADS, STATEFILE, STATE, MAX_RETRIES, MAX_TRY_SECS, DEFAULT_AFTER_EVERY_N_NOTIFICATIONS
+    global VERBOSE, MAX_THREADS, STATEFILE, STATE, MAX_RETRIES, MAX_TRY_SECS, DEFAULT_NOTIFY_EVERY_N_SECS, DEFAULT_AFTER_EVERY_N_NOTIFICATIONS
 
     parser = argparse.ArgumentParser(description='Network resource availability monitor')
     parser.add_argument('config', help='Path to configuration file (JSON or YAML)')
@@ -990,13 +1019,16 @@ def main():
             print("Email test complete")
             sys.exit(0)
 
-        # Update global config from site settings
+        if args.threads == 1 and 'max_threads' in config['site']: # only if not overridden by command line
+            MAX_THREADS = config['site']['max_threads']
         if 'max_retries' in config['site']:
             MAX_RETRIES = config['site']['max_retries']
         if 'max_try_secs' in config['site']:
             MAX_TRY_SECS = config['site']['max_try_secs']
-        if 'default_after_every_n_notifications' in config['site']:
-            DEFAULT_AFTER_EVERY_N_NOTIFICATIONS = config['site']['default_after_every_n_notifications']
+        if 'notify_every_n_secs' in config['site']:
+            DEFAULT_NOTIFY_EVERY_N_SECS = config['site']['notify_every_n_secs']
+        if 'after_every_n_notifications' in config['site']:
+            DEFAULT_AFTER_EVERY_N_NOTIFICATIONS = config['site']['after_every_n_notifications']
 
         # Load previous state
         STATE = load_state(STATEFILE)
@@ -1016,7 +1048,7 @@ def main():
 
         if VERBOSE:
             print(f"Starting monitoring run at {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
-            print(f"max_retries={MAX_RETRIES}, max_try_secs={MAX_TRY_SECS}, default_check_every_n_secs={DEFAULT_CHECK_EVERY_N_SECS}, " +
+            print(f"max_threads={MAX_THREADS}, max_retries={MAX_RETRIES}, max_try_secs={MAX_TRY_SECS}, default_check_every_n_secs={DEFAULT_CHECK_EVERY_N_SECS}, " +
                   f"default_notify_every_n_secs={DEFAULT_NOTIFY_EVERY_N_SECS}, default_after_every_n_notifications={DEFAULT_AFTER_EVERY_N_NOTIFICATIONS}")
             print(f"Loaded {len(config['monitors'])} resources to monitor for " + config['site']['name'])
 

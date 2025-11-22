@@ -106,19 +106,35 @@ The `site` section defines global settings for the monitoring site.
   - **`request_prefix`** (string, optional): String to prepend to encoded message (e.g., API tokens, field names)
   - **`request_suffix`** (string, optional): String to append to encoded message
 
+- **`max_threads`** (integer, optional): Number of concurrent threads for checking resources in parallel. Must be ≥ 1. Default: 1 (single-threaded). Can be overridden by command line `-t` option.
+```yaml
+  max_threads: 1
+```
+
+**Note**: For near-realtime monitoring environments, set `max_threads` to 5-15 to enable parallel checking of multiple resources. Single-threaded mode (1) is recommended for small systems like Raspberry Pi or when log clarity is important. This setting is overridden by the `-t` command line argument if specified.
+
 - **`max_retries`** (integer, optional): Number of times to retry failed checks before marking resource as down. Must be ≥ 1. Default: 3
 ```yaml
-  max_retries: 1
+  max_retries: 3
 ```
+
+**Note**: For near-realtime monitoring, set `max_retries: 1` to reduce detection latency. Higher values (3-5) are better for unstable networks where transient failures are common.
 
 - **`max_try_secs`** (integer, optional): Timeout in seconds for each individual check attempt. Must be ≥ 1. Default: 20
 ```yaml
-  max_try_secs: 30
+  max_try_secs: 20
 ```
 
-- **`default_after_every_n_notifications`** (integer, optional): Default number of notifications after which the notification interval reaches `notify_every_n_secs` for all monitors. Individual monitors can override this with their own `after_every_n_notifications` setting. Must be ≥ 1. Default: 1 (constant notification intervals)
+- **`notify_every_n_secs`** (integer, optional): Default minimum seconds between outage notifications for all monitors. Individual monitors can override this with their own `notify_every_n_secs` setting. Must be ≥ 1. Default: 600
 ```yaml
-  default_after_every_n_notifications: 10
+  notify_every_n_secs: 1800
+```
+
+**Note**: This sets the baseline notification throttling interval. Combined with `default_after_every_n_notifications`, controls the notification escalation curve for all monitors unless overridden per-monitor.
+
+- **`after_every_n_notifications`** (integer, optional): Default number of notifications after which the notification interval reaches `notify_every_n_secs` for all monitors. Individual monitors can override this with their own `after_every_n_notifications` setting. Must be ≥ 1. Default: 1 (constant notification intervals)
+```yaml
+  after_every_n_notifications: 1
 ```
 
 **Note**: When set to a value > 1, notification intervals start shorter and gradually increase following a quadratic Bezier curve until reaching `notify_every_n_secs` after the specified number of notifications. This provides more frequent alerts at the start of an outage when immediate attention is needed, then reduces notification frequency as the outage continues. A value of 1 maintains constant notification intervals (original behavior).
@@ -744,6 +760,7 @@ sudo pip3 uninstall -y PyYAML requests pyOpenSSL urllib3
 - Add additional monitors:
   - TCP &amp; UDP
   - Add `quic` UDP monitoring resource type to replace `https`
+  - Make `https` do certificate checking AFTER failed SSL hit & see if we can do in one request (hit an invalid SSL url host to isolate current problem)
 
 - Make email work (right now we're only using webhooks and heartbeats for alerts):
   - With system mailer
@@ -769,7 +786,7 @@ sudo pip3 uninstall -y PyYAML requests pyOpenSSL urllib3
 
 APMonitor.py is licensed under the [GNU General Public License version 3](LICENSE.txt).
 ```
-Software: APMonitor 0.1.0
+Software: APMonitor 0.1.3
 License: GNU General Public License version 3
 Licensor: Andrew (AP) Prendergast, ap@andrewprendergast.com -- FSF Member
 ```
