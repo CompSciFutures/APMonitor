@@ -748,12 +748,9 @@ sudo pip3 uninstall -y PyYAML requests pyOpenSSL urllib3
 
 APMonitor.py is licensed under the [GNU General Public License version 3](LICENSE.txt).
 ```
-Software: APMonitor 0.0.2
+Software: APMonitor 0.1.0
 License: GNU General Public License version 3
 Licensor: Andrew (AP) Prendergast, ap@andrewprendergast.com -- FSF Member
 ```
 
 We use [SemVer](http://semver.org/) for version numbering.
-
-[![Free Software Foundation](https://apwww-static-assets.s3.us-west-1.amazonaws.com/images/FSF-Badge-6055467.png)](https://www.fsf.org/)
-
