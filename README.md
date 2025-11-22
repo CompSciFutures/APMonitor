@@ -718,8 +718,11 @@ sudo pip3 uninstall -y PyYAML requests pyOpenSSL urllib3
 
 # TODO
 
+- Add a PID lockfile to tempfs to correctly enable support for crontab use case
+
 - Add additional monitors:
   - TCP &amp; UDP
+  - Add `quic` UDP monitoring resource type to replace `https`
 
 - Make email work (right now we're only using webhooks and heartbeats for alerts):
   - With system mailer
@@ -738,8 +741,6 @@ sudo pip3 uninstall -y PyYAML requests pyOpenSSL urllib3
   - Test if we are `root` when doing a `ping` syscall and fallback to direct `SOCK_RAW` if we are for high performance
 
 - Update docs to provide examples for Pushover &amp; Slack
-
-- Add `quic` UDP monitoring resource type to replace `https`
 
 - Refactor retry logic out of checking resources into an enclosing function such that we can add `last_response_time_ms` to statefile for successful requests 
 
