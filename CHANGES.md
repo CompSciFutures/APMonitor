@@ -9,6 +9,13 @@ Runs on Raspberry Pi to enterprise systems.
 Python-only, easily modifiable.
 GPL 3.0 licensed.
 
+## Release 0.1.2 (22-Nov-2025)
+
+This release supports multi-site crontab use cases by way of slightly fancy PID file locking that supports one process per site config file. 
+
+- Add a PID lockfile to tempfs to correctly enable support for crontab use case.
+- Add a hash of the config file to the PID lockfile name to enable monitoring of multiple site configs in parallel.
+
 ## Release 0.1.0 (22-Nov-2025)
 
 This is a notification/heartbeat webhooks only version that doesn't support email yet.

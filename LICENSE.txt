@@ -17,7 +17,7 @@ or substantially, from the functionality of the Software. Any license
 notice or attribution required by the License must also include this
 Commons Clause License Condition notice.
 
-Software: APMonitor 0.1.0
+Software: APMonitor 0.1.2
 License: GNU General Public License version 3
 Licensor: Andrew (AP) Prendergast, ap@andrewprendergast.com -- FSF Member
 

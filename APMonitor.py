@@ -892,6 +892,47 @@ def get_default_statefile():
         return './apmonitor-statefile.json'
 
 
+def create_pid_file_or_exit_on_unix(config_path):
+    """Create PID lockfile on Unix-like systems. Returns lockfile path or None."""
+    system = platform.system().lower()
+
+    if system not in ['linux', 'darwin', 'freebsd', 'openbsd', 'netbsd']:
+        return None
+
+    # Generate hash from config file path
+    config_hash = hashlib.sha256(config_path.encode()).hexdigest()[:16]
+    lockfile_path = f'/tmp/apmonitor-{config_hash}.lock'
+
+    if os.path.exists(lockfile_path):
+        try:
+            with open(lockfile_path, 'r') as f:
+                old_pid = int(f.read().strip())
+
+            # Check if process exists
+            try:
+                os.kill(old_pid, 0)
+                # Process exists, exit
+                print(f"Error: Another APMonitor instance is already running with config '{config_path}' (PID {old_pid})", file=sys.stderr)
+                sys.exit(1)
+            except OSError:
+                # Process doesn't exist, stale lockfile
+                if VERBOSE:
+                    print(f"Removing stale lockfile for PID {old_pid}")
+        except (ValueError, IOError) as e:
+            if VERBOSE:
+                print(f"Warning: Could not read lockfile: {e}")
+
+    # Create lockfile with current PID
+    try:
+        with open(lockfile_path, 'w') as f:
+            f.write(str(os.getpid()))
+    except IOError as e:
+        print(f"Error: Could not create lockfile '{lockfile_path}': {e}", file=sys.stderr)
+        sys.exit(1)
+
+    return lockfile_path
+
+
 def main():
     global VERBOSE, MAX_THREADS, STATEFILE, STATE, MAX_RETRIES, MAX_TRY_SECS, DEFAULT_AFTER_EVERY_N_NOTIFICATIONS
 
@@ -912,91 +953,99 @@ def main():
         print("Error: threads must be a positive integer greater than 0", file=sys.stderr)
         sys.exit(1)
 
-    # load & parse YAML/JSON config
-    config = load_config(args.config)
-    if VERBOSE > 2:
-        print(json.dumps(config, indent=2))
+    # Acquire PID lock (Unix-like systems only)
+    lockfile_path = create_pid_file_or_exit_on_unix(args.config)
 
-    print_and_exit_on_bad_config(config)
-
-    # Test mode for webhooks
-    if args.test_webhooks:
-        if 'outage_webhooks' not in config['site']:
-            print("Error: No outage_webhooks configured in site config", file=sys.stderr)
-            sys.exit(1)
-
-        test_error = "TEST: test_monitor is down: connection timeout (192.168.1.999)"
-        print("Testing webhook notifications...")
-        for webhook in config['site']['outage_webhooks']:
-            notify_resource_outage_with_webhook(webhook, config['site']['name'], test_error)
-        print("Webhook test complete")
-        sys.exit(0)
-
-    # Test mode for emails
-    if args.test_emails:
-        if 'outage_emails' not in config['site']:
-            print("Error: No outage_emails configured in site config", file=sys.stderr)
-            sys.exit(1)
-
-        test_error = "TEST: test_monitor is down: connection timeout (192.168.1.999)"
-        print("Testing email notifications...")
-        for email_entry in config['site']['outage_emails']:
-            notify_resource_outage_with_email(email_entry, config['site']['name'], test_error)
-        print("Email test complete")
-        sys.exit(0)
-
-    # Update global config from site settings
-    if 'max_retries' in config['site']:
-        MAX_RETRIES = config['site']['max_retries']
-    if 'max_try_secs' in config['site']:
-        MAX_TRY_SECS = config['site']['max_try_secs']
-    if 'default_after_every_n_notifications' in config['site']:
-        DEFAULT_AFTER_EVERY_N_NOTIFICATIONS = config['site']['default_after_every_n_notifications']
-
-    # Load previous state
-    STATE = load_state(STATEFILE)
-
-    if VERBOSE and STATE:
-        last_execution_time = STATE.get('execution_time')
-        last_execution_ms = STATE.get('execution_ms')
-        if last_execution_ms and last_execution_time:
-            last_execution_time = datetime.fromisoformat(last_execution_time)
-            print(f"Last execution time: {last_execution_ms}ms, ending at {last_execution_time.strftime('%Y-%m-%d %H:%M:%S')}")
-        elif last_execution_ms:
-            print(f"Last execution time: {last_execution_ms}ms")
-
-    # Record start time
-    start_time = datetime.now()
-    start_ms = int(start_time.timestamp() * 1000)
-
-    if VERBOSE:
-        print(f"Starting monitoring run at {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
-        print(f"max_retries={MAX_RETRIES}, max_try_secs={MAX_TRY_SECS}, default_check_every_n_secs={DEFAULT_CHECK_EVERY_N_SECS}, " +
-              f"default_notify_every_n_secs={DEFAULT_NOTIFY_EVERY_N_SECS}, default_after_every_n_notifications={DEFAULT_AFTER_EVERY_N_NOTIFICATIONS}")
-        print(f"Loaded {len(config['monitors'])} resources to monitor for " + config['site']['name'])
-
-    # check availability of each resource in config using thread pool
     try:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_THREADS) as executor:
-            futures = [executor.submit(check_and_heartbeat, resource, config['site']) for resource in config['monitors']]
-            concurrent.futures.wait(futures)
-    finally:
-        # Calculate execution time
-        end_time = datetime.now()
-        end_ms = int(end_time.timestamp() * 1000)
-        execution_ms = end_ms - start_ms
+        # load & parse YAML/JSON config
+        config = load_config(args.config)
+        if VERBOSE > 2:
+            print(json.dumps(config, indent=2))
 
-        # Update state
-        STATE.update({
-            'execution_time': end_time.isoformat(),
-            'execution_ms': execution_ms,
-        })
+        print_and_exit_on_bad_config(config)
+
+        # Test mode for webhooks
+        if args.test_webhooks:
+            if 'outage_webhooks' not in config['site']:
+                print("Error: No outage_webhooks configured in site config", file=sys.stderr)
+                sys.exit(1)
+
+            test_error = "TEST: test_monitor is down: connection timeout (192.168.1.999)"
+            print("Testing webhook notifications...")
+            for webhook in config['site']['outage_webhooks']:
+                notify_resource_outage_with_webhook(webhook, config['site']['name'], test_error)
+            print("Webhook test complete")
+            sys.exit(0)
+
+        # Test mode for emails
+        if args.test_emails:
+            if 'outage_emails' not in config['site']:
+                print("Error: No outage_emails configured in site config", file=sys.stderr)
+                sys.exit(1)
+
+            test_error = "TEST: test_monitor is down: connection timeout (192.168.1.999)"
+            print("Testing email notifications...")
+            for email_entry in config['site']['outage_emails']:
+                notify_resource_outage_with_email(email_entry, config['site']['name'], test_error)
+            print("Email test complete")
+            sys.exit(0)
+
+        # Update global config from site settings
+        if 'max_retries' in config['site']:
+            MAX_RETRIES = config['site']['max_retries']
+        if 'max_try_secs' in config['site']:
+            MAX_TRY_SECS = config['site']['max_try_secs']
+        if 'default_after_every_n_notifications' in config['site']:
+            DEFAULT_AFTER_EVERY_N_NOTIFICATIONS = config['site']['default_after_every_n_notifications']
+
+        # Load previous state
+        STATE = load_state(STATEFILE)
+
+        if VERBOSE and STATE:
+            last_execution_time = STATE.get('execution_time')
+            last_execution_ms = STATE.get('execution_ms')
+            if last_execution_ms and last_execution_time:
+                last_execution_time = datetime.fromisoformat(last_execution_time)
+                print(f"Last execution time: {last_execution_ms}ms, ending at {last_execution_time.strftime('%Y-%m-%d %H:%M:%S')}")
+            elif last_execution_ms:
+                print(f"Last execution time: {last_execution_ms}ms")
+
+        # Record start time
+        start_time = datetime.now()
+        start_ms = int(start_time.timestamp() * 1000)
 
         if VERBOSE:
-            print(f"Execution time: {execution_ms}ms")
+            print(f"Starting monitoring run at {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
+            print(f"max_retries={MAX_RETRIES}, max_try_secs={MAX_TRY_SECS}, default_check_every_n_secs={DEFAULT_CHECK_EVERY_N_SECS}, " +
+                  f"default_notify_every_n_secs={DEFAULT_NOTIFY_EVERY_N_SECS}, default_after_every_n_notifications={DEFAULT_AFTER_EVERY_N_NOTIFICATIONS}")
+            print(f"Loaded {len(config['monitors'])} resources to monitor for " + config['site']['name'])
 
-        # Save state atomically
-        save_state(STATE)
+        # check availability of each resource in config using thread pool
+        try:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_THREADS) as executor:
+                futures = [executor.submit(check_and_heartbeat, resource, config['site']) for resource in config['monitors']]
+                concurrent.futures.wait(futures)
+        finally:
+            # Calculate execution time
+            end_time = datetime.now()
+            end_ms = int(end_time.timestamp() * 1000)
+            execution_ms = end_ms - start_ms
+
+            # Update state
+            STATE.update({
+                'execution_time': end_time.isoformat(),
+                'execution_ms': execution_ms,
+            })
+
+            if VERBOSE:
+                print(f"Execution time: {execution_ms}ms")
+
+            # Save state atomically
+            save_state(STATE)
+    finally:
+        # Remove lockfile on exit
+        if lockfile_path and os.path.exists(lockfile_path):
+            os.remove(lockfile_path)
 
 
 if __name__ == '__main__':

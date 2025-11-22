@@ -19,6 +19,7 @@ APMonitor monitors network resources (ping/HTTP/HTTPS) on your LAN and integrate
 - Pings heartbeat URLs when resources are up, with configurable heartbeat intervals (`heartbeat_every_n_secs`)
 - Supports SSL certificate pinning via SHA-256 fingerprints for self-signed certificates
 - Optionally ignores SSL certificate expiration for development environments
+- Uses PID lockfiles (per-config) to prevent duplicate instances when invoked via cron
 - Runs multi-threaded for concurrent monitoring of many resources
 - Uses atomic file rotation (.new → .old) to prevent state corruption on crashes
 - Designed for repeated invocation (via cron or systemd loop) rather than long-running daemon mode
@@ -27,19 +28,31 @@ APMonitor monitors network resources (ping/HTTP/HTTPS) on your LAN and integrate
 
 **Stateless Execution Model**: Each invocation loads state, performs checks, saves state, and exits. No persistent daemon process—safer for crashes and easier to manage.
 
+**Per-Config PID Locking**: Creates `/tmp/apmonitor-{hash}.lock` where hash = SHA256(config_path)[:16]. Prevents duplicate processes per config file, allows concurrent monitoring of different sites. Stale lockfile detection via `os.kill(pid, 0)`. Unix-only feature (Linux/Darwin/BSD).
+
 **Thread-Safe State Management**: Global `STATE` dict protected by `STATE_LOCK`. Updates written immediately to `.new` file, rotated atomically on exit.
 
 **Interval-Based Scheduling**: Each monitor tracks `last_checked`, `last_notified`, `last_successful_heartbeat` timestamps. Decisions made by comparing elapsed time against configured intervals—enables sub-minute execution without redundant work.
 
 **Bezier Curve Notification Escalation**: Notification timing follows quadratic Bezier curve over first `after_every_n_notifications` alerts. Formula: `t = (1/N) * index`, `delay = (1-t)² * 0 + 2(1-t)t * notify_every_n_secs + t² * notify_every_n_secs`. After N notifications, delay plateaus at `notify_every_n_secs`.
 
-**Separation of Concerns**: Configuration validation happens once at startup. Check logic is type-specific (ping vs HTTP/S). Notification logic is protocol-specific (webhook vs email). State management is centralized.
+**Separation of Concerns**: Configuration validation happens once at startup. Check logic is type-specific (ping vs HTTP/S). Notification logic is protocol-specific (webhook vs email). State management is centralized. PID locking is isolated in dedicated function.
 
 ## Important Modules & Communication
 
+**PID Lock Management** (`create_pid_file_or_exit_on_unix`):
+- Platform detection—only runs on Unix-like systems (Linux/Darwin/BSD)
+- Generates deterministic hash from config path: `SHA256(config_path)[:16]`
+- Lockfile path: `/tmp/apmonitor-{hash}.lock`
+- Reads existing lockfile, checks if PID alive via `os.kill(pid, 0)`
+- Exits with error if another instance running same config
+- Removes stale lockfiles from dead processes
+- Returns lockfile path for cleanup in `main()`'s finally block
+- Critical for cron use case—prevents job pileup
+
 **Configuration Loading & Validation** (`load_config`, `print_and_exit_on_bad_config`):
 - Loads YAML/JSON into dict
-- Validates all fields, types, formats, constraints including new `default_after_every_n_notifications` site setting and per-monitor `after_every_n_notifications`
+- Validates all fields, types, formats, constraints including `default_after_every_n_notifications` site setting and per-monitor `after_every_n_notifications`
 - Exits with clear error messages on invalid config
 - No config state passed between invocations—reloaded fresh each run
 
@@ -74,9 +87,9 @@ APMonitor monitors network resources (ping/HTTP/HTTPS) on your LAN and integrate
 - Debug output gated by `VERBOSE > 1`
 
 **Main Orchestration** (`check_and_heartbeat`, `main`):
+- `main`: Acquires PID lock first (exits if duplicate detected), loads config/state, applies site-level defaults, spawns thread pool, records execution time, saves state, releases PID lock in finally block
 - `check_and_heartbeat`: Per-monitor logic—load prev state, decide if check/notify/heartbeat due, execute actions, update state
 - State transitions: down→up triggers recovery notification, up→down starts new outage (sets `last_alarm_started`), ongoing down increments `down_count` and `notified_count`
-- `main`: Loads config/state, applies site-level defaults (`DEFAULT_AFTER_EVERY_N_NOTIFICATIONS`), spawns thread pool, waits for completion, records execution time, saves state atomically
 
 **Time Formatting** (`format_time_ago`):
 - Accepts ISO timestamps or raw seconds (int/float)
@@ -84,6 +97,8 @@ APMonitor monitors network resources (ping/HTTP/HTTPS) on your LAN and integrate
 - Used for verbose output showing time until next check/notification and time since last action
 
 ## Technical Tactics
+
+**PID Lockfile Strategy**: Hash config path to enable per-site locking. Use `/tmp` for tempfs performance. Check process liveness before claiming lock. Clean stale locks automatically. Remove lock in outermost finally block to handle all exit paths (normal, exception, sys.exit). Deterministic hash ensures same config always gets same lockfile.
 
 **Atomic State File Rotation**: Write to `.new`, then atomically rename to prevent corruption if killed mid-write. Keep `.old` as backup. This ensures state consistency even with kill -9.
 
@@ -95,11 +110,13 @@ APMonitor monitors network resources (ping/HTTP/HTTPS) on your LAN and integrate
 
 **Lazy Checking**: Skip checks when `check_every_n_secs` hasn't elapsed. Skip heartbeats when `heartbeat_every_n_secs` hasn't elapsed. Skip notifications when calculated Bezier delay hasn't elapsed. Minimizes work and external API calls.
 
-**Platform-Appropriate Defaults**: State file location varies by OS—`/var/tmp` (persistent across reboots) on Unix-like, `%TEMP%` on Windows, `./` as fallback.
+**Platform-Appropriate Defaults**: State file location varies by OS—`/var/tmp` (persistent across reboots) on Unix-like, `%TEMP%` on Windows, `./` as fallback. PID locking only on Unix-like systems where `/tmp` exists.
 
 **Global Configuration Override**: Site-level settings (`max_retries`, `max_try_secs`, `default_after_every_n_notifications`) override module-level constants using `global` declaration in `main()`.
 
 ## Engineering Principles for This Code
+
+**PID Lock Cleanup is Critical**: Lockfile must be removed in outermost finally block to handle all exit paths. Never use multiple cleanup locations (once and only once). Hash-based naming prevents collisions between different configs while enabling duplicate detection for same config.
 
 **State Transitions Are Critical**: `last_alarm_started` must only be set on first down detection (transition from up→down), never on subsequent down states. `notified_count` increments only when notifications actually sent. Recovery notifications require previous `last_alarm_started` to exist. Get these wrong and alert timing breaks.
 
@@ -109,7 +126,7 @@ APMonitor monitors network resources (ping/HTTP/HTTPS) on your LAN and integrate
 
 **Verbosity Levels Matter**: `-v` shows check results, `-vv` shows skip decisions, heartbeat activity, and Bezier curve calculations. Design output for progressive detail, not noise.
 
-**Error Messages Include Context**: Always include monitor name, address, and specific error reason in messages. Site name in notifications helps when monitoring multiple sites. Timestamp format includes AM/PM for human readability.
+**Error Messages Include Context**: Always include monitor name, address, and specific error reason in messages. Site name in notifications helps when monitoring multiple sites. Timestamp format includes AM/PM for human readability. PID lock errors show config path and conflicting PID.
 
 **Validation Before Execution**: Config validation must be comprehensive and fail-fast. Better to exit with clear error than silently ignore invalid config. Validate types, formats, constraints, and cross-field dependencies (e.g., `heartbeat_every_n_secs` requires `heartbeat_url`, `after_every_n_notifications` requires `notify_every_n_secs`).
 

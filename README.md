@@ -356,6 +356,8 @@ Run every minute via cron for standard monitoring:
 * * * * * /path/to/APMonitor.py -s /tmp/statefile.json /path/to/monitoring-config.yaml 2>&1 | logger -t apmonitor
 ```
 
+NB: PID file locking should keep this under control, in case you get a long-running process.
+
 **Advantages**:
 - Automatic restart if process crashes
 - Built-in scheduling
@@ -416,16 +418,18 @@ Here are some basic devnotes on how APMonitor is built, in case you want to modi
 
 Each invocation of APMonitor:
 
-1. Loads and validates configuration file
-2. Loads previous state from state file (if exists)
-3. For each monitor:
+1. Acquires a PID lockfile via tempfs, using the config path as the hash to support multiple site configs in parallel. 
+2. Loads and validates configuration file
+3Loads previous state from state file (if exists)
+4For each monitor:
    - Checks if `check_every_n_secs` has elapsed since `last_checked`
    - If due: performs resource check
    - If down and `notify_every_n_secs` elapsed: sends notifications
    - If up and heartbeat configured: pings heartbeat URL if due
    - Updates state atomically
-4. Saves state file with execution timing
-5. Exits
+5. Saves state file with execution timing
+6. Cleans up the PID file if possible.
+7. Exits
 
 This stateless design allows APMonitor to be killed/restarted safely at any time without losing monitoring history or creating duplicate notifications.
 
@@ -469,9 +473,12 @@ APMonitor automatically selects a platform-appropriate default location for the 
 
 ### Concurrency and Multiple Instances
 
-APMonitor's state file locking is designed for **single-process concurrency only**—multiple threads within one process safely share state through internal locks. However, **no file-level locking** is implemented to coordinate between multiple APMonitor processes.
+APMonitor's state file locking &amp; PID locking is designed for **single-process concurrency only**—multiple threads within one process safely share state through internal locks. However, **no file-level locking** is implemented to coordinate between multiple APMonitor processes.
 
-**Running multiple concurrent instances requires separate state files**:
+Having said that, APMonitor is very much re-entrant and thread safe for the most part, thus, if you specify different config files, it will happily allow a single process per config file to co-exist in parallel. 
+The config filename is used as the hash when forming a PID lockfile in tempfs (`/tmp/apmonitor-##########.lock`), so that multiple lockfiles can coexist.
+
+**Thus, running multiple concurrent instances requires separate state files**:
 ```
 # Instance 1: Production monitoring
 ./APMonitor.py -s /var/tmp/apmonitor-prod.json prod-apmonitor-config.yaml
@@ -482,6 +489,8 @@ APMonitor's state file locking is designed for **single-process concurrency only
 # Instance 3: Critical services (high-frequency)
 ./APMonitor.py -t 5 -s /tmp/apmonitor-critical.json critical-apmonitor-config.yaml
 ```
+
+Which should mean sensible cardinality rules are enforced: one config per site, one process per config, one and IFF only one; good for running out of crontab. 
 
 **Why separate state files are required**:
 - No inter-process file locking mechanism exists
@@ -731,8 +740,6 @@ sudo pip3 uninstall -y PyYAML requests pyOpenSSL urllib3
 ```
 
 # TODO
-
-- Add a PID lockfile to tempfs to correctly enable support for crontab use case
 
 - Add additional monitors:
   - TCP &amp; UDP
