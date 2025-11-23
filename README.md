@@ -797,3 +797,5 @@ Licensor: Andrew (AP) Prendergast, ap@andrewprendergast.com -- FSF Member
 ```
 
 We use [SemVer](http://semver.org/) for version numbering.
+
+[![Free Software Foundation](https://apwww-static-assets.s3.us-west-1.amazonaws.com/images/FSF-Badge-6055467.png)](https://www.fsf.org/)
