@@ -26,7 +26,7 @@ ap
 
 # Recommended configuration for real-time environments
 
-To put APMonitor into near-realtime mode so that it check resources multiple times per second, use these global settings:
+To put APMonitor into near-realtime mode so that it checks resources multiple times per second, use these global settings:
 
 - Dial up threads with `-t 15` on the command line or `max_threads: 15` in the site config,
 - set `max_retries` to `1` and
@@ -540,8 +540,8 @@ Each invocation of APMonitor:
 
 1. Acquires a PID lockfile via tempfs, using the config path as the hash to support multiple site configs in parallel. 
 2. Loads and validates configuration file
-3Loads previous state from state file (if exists)
-4For each monitor:
+3. Loads previous state from state file (if exists)
+4. For each monitor:
    - Checks if `check_every_n_secs` has elapsed since `last_checked`
    - If due: performs resource check
    - If down and `notify_every_n_secs` elapsed: sends notifications
