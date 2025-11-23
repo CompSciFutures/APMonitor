@@ -9,6 +9,12 @@ Runs on RPi to enterprise systems.<br />
 Thread safe, reentrant, easily modifiable Python.<br />
 GPL 3.0 licensed.<br/>
 
+## Release 1.0.0 (24-Nov-2025): Email now works
+
+- Implemented per site server email_server configuration
+- Added per-email and per-monitored resource `email_outages`, `email_recoveries` & `email_reminders`
+- Implemented delivery of email with internal email client (ignoring system settings)
+
 ## Release 0.1.4 (24-Nov-2025): Made outage messages more user friendly 
 
 - Cleaned up SSL certificate checking control flow for `http` monitored resources so it always runs for SSL resources

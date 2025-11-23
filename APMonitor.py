@@ -188,10 +188,57 @@ def print_and_exit_on_bad_config(config):
         if not isinstance(site['name'], str):
             raise ConfigError("Field 'site.name' must be a string")
 
+        # Validate optional site.email_server
+        if 'email_server' in site:
+            if not isinstance(site['email_server'], dict):
+                raise ConfigError("Field 'site.email_server' must be a dictionary")
+
+            email_server = site['email_server']
+
+            # Required fields
+            if 'smtp_host' not in email_server:
+                raise ConfigError("Field 'site.email_server': missing required field 'smtp_host'")
+            if not isinstance(email_server['smtp_host'], str):
+                raise ConfigError("Field 'site.email_server.smtp_host' must be a string")
+
+            if 'smtp_port' not in email_server:
+                raise ConfigError("Field 'site.email_server': missing required field 'smtp_port'")
+            if not isinstance(email_server['smtp_port'], int) or email_server['smtp_port'] < 1 or email_server['smtp_port'] > 65535:
+                raise ConfigError("Field 'site.email_server.smtp_port' must be an integer between 1 and 65535")
+
+            # Optional fields
+            if 'smtp_username' in email_server:
+                if not isinstance(email_server['smtp_username'], str):
+                    raise ConfigError("Field 'site.email_server.smtp_username' must be a string")
+
+            if 'smtp_password' in email_server:
+                if not isinstance(email_server['smtp_password'], str):
+                    raise ConfigError("Field 'site.email_server.smtp_password' must be a string")
+
+            if 'from_address' not in email_server:
+                raise ConfigError("Field 'site.email_server': missing required field 'from_address'")
+            if not isinstance(email_server['from_address'], str):
+                raise ConfigError("Field 'site.email_server.from_address' must be a string")
+
+            # Validate from_address email format
+            email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+            if not re.match(email_pattern, email_server['from_address']):
+                raise ConfigError(f"Field 'site.email_server.from_address': '{email_server['from_address']}' is not a valid email address")
+
+            # Optional use_tls field
+            if 'use_tls' in email_server:
+                if not isinstance(email_server['use_tls'], bool):
+                    raise ConfigError("Field 'site.email_server.use_tls' must be a boolean")
+
         # Validate optional site.outage_emails
         if 'outage_emails' in site:
+            # Require email_server if outage_emails is specified
+            if 'email_server' not in site:
+                raise ConfigError("Field 'site.outage_emails' can only be specified if 'site.email_server' is configured")
+
             if not isinstance(site['outage_emails'], list):
                 raise ConfigError("Field 'site.outage_emails' must be a list")
+
             for i, email_entry in enumerate(site['outage_emails']):
                 if not isinstance(email_entry, dict):
                     raise ConfigError(f"Field 'site.outage_emails[{i}]' must be a dictionary")
@@ -199,10 +246,38 @@ def print_and_exit_on_bad_config(config):
                     raise ConfigError(f"Field 'site.outage_emails[{i}]': missing required field 'email'")
                 if not isinstance(email_entry['email'], str):
                     raise ConfigError(f"Field 'site.outage_emails[{i}].email' must be a string")
+
                 # Validate email format
                 email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
                 if not re.match(email_pattern, email_entry['email']):
                     raise ConfigError(f"Field 'site.outage_emails[{i}].email': '{email_entry['email']}' is not a valid email address")
+
+                # Validate optional email_outages
+                if 'email_outages' in email_entry:
+                    val = email_entry['email_outages']
+                    if isinstance(val, str):
+                        if val.lower() not in ['true', 'yes', 'on', '1', 'false', 'no', 'off', '0']:
+                            raise ConfigError(f"Field 'site.outage_emails[{i}].email_outages' must be a boolean or one of: true/yes/on/1/false/no/off/0")
+                    elif not isinstance(val, (bool, int)):
+                        raise ConfigError(f"Field 'site.outage_emails[{i}].email_outages' must be a boolean, integer, or string")
+
+                # Validate optional email_recoveries
+                if 'email_recoveries' in email_entry:
+                    val = email_entry['email_recoveries']
+                    if isinstance(val, str):
+                        if val.lower() not in ['true', 'yes', 'on', '1', 'false', 'no', 'off', '0']:
+                            raise ConfigError(f"Field 'site.outage_emails[{i}].email_recoveries' must be a boolean or one of: true/yes/on/1/false/no/off/0")
+                    elif not isinstance(val, (bool, int)):
+                        raise ConfigError(f"Field 'site.outage_emails[{i}].email_recoveries' must be a boolean, integer, or string")
+
+                # Validate optional email_reminders
+                if 'email_reminders' in email_entry:
+                    val = email_entry['email_reminders']
+                    if isinstance(val, str):
+                        if val.lower() not in ['true', 'yes', 'on', '1', 'false', 'no', 'off', '0']:
+                            raise ConfigError(f"Field 'site.outage_emails[{i}].email_reminders' must be a boolean or one of: true/yes/on/1/false/no/off/0")
+                    elif not isinstance(val, (bool, int)):
+                        raise ConfigError(f"Field 'site.outage_emails[{i}].email_reminders' must be a boolean, integer, or string")
 
         # Validate optional site.outage_webhooks
         if 'outage_webhooks' in site:
@@ -273,7 +348,7 @@ def print_and_exit_on_bad_config(config):
 
         # Check for unrecognized site-level parameters
         valid_site_params = {
-            'name', 'outage_emails', 'outage_webhooks', 'max_threads', 'max_retries',
+            'name', 'email_server', 'outage_emails', 'outage_webhooks', 'max_threads', 'max_retries',
             'max_try_secs', 'notify_every_n_secs', 'after_every_n_notifications'
         }
         unrecognized_site = set(site.keys()) - valid_site_params
@@ -309,7 +384,7 @@ def print_and_exit_on_bad_config(config):
             valid_monitor_params = {
                 'type', 'name', 'address', 'check_every_n_secs', 'notify_every_n_secs',
                 'notify_on_down_every_n_secs', 'after_every_n_notifications', 'heartbeat_url',
-                'heartbeat_every_n_secs', 'expect', 'ssl_fingerprint', 'ignore_ssl_expiry'
+                'heartbeat_every_n_secs', 'expect', 'ssl_fingerprint', 'ignore_ssl_expiry', 'email'
             }
             unrecognized_monitor = set(monitor.keys()) - valid_monitor_params
             if unrecognized_monitor:
@@ -356,6 +431,15 @@ def print_and_exit_on_bad_config(config):
                     raise ConfigError(f"Monitor {i} (name: {name}): 'after_every_n_notifications' can only be specified if 'notify_every_n_secs' is present")
                 if not isinstance(monitor['after_every_n_notifications'], int) or monitor['after_every_n_notifications'] < 1:
                     raise ConfigError(f"Monitor {i} (name: {name}): 'after_every_n_notifications' must be a positive integer")
+
+            # Validate optional email flag
+            if 'email' in monitor:
+                val = monitor['email']
+                if isinstance(val, str):
+                    if val.lower() not in ['true', 'yes', 'on', '1', 'false', 'no', 'off', '0']:
+                        raise ConfigError(f"Monitor {i} (name: {name}): 'email' must be a boolean or one of: true/yes/on/1/false/no/off/0")
+                elif not isinstance(val, (bool, int)):
+                    raise ConfigError(f"Monitor {i} (name: {name}): 'email' must be a boolean, integer, or string")
 
             monitor_type = monitor['type']
             address = monitor['address']
@@ -406,30 +490,30 @@ def print_and_exit_on_bad_config(config):
                     if fp_len == 0 or (fp_len & (fp_len - 1)) != 0:
                         raise ConfigError(f"Monitor {i} (name: {name}): 'ssl_fingerprint' length must be a power of two (got {fp_len} hex characters)")
 
-                    # Validate heartbeat_url if present (valid for all monitor types)
-                    if 'heartbeat_url' in monitor:
-                        if not isinstance(monitor['heartbeat_url'], str):
-                            raise ConfigError(f"Monitor {i} (name: {name}): 'heartbeat_url' must be a string")
+            # Validate heartbeat_url if present (valid for all monitor types)
+            if 'heartbeat_url' in monitor:
+                if not isinstance(monitor['heartbeat_url'], str):
+                    raise ConfigError(f"Monitor {i} (name: {name}): 'heartbeat_url' must be a string")
 
-                        parsed_heartbeat = urlparse(monitor['heartbeat_url'])
-                        if not parsed_heartbeat.scheme or not parsed_heartbeat.netloc:
-                            raise ConfigError(
-                                f"Monitor {i} (name: {name}): 'heartbeat_url' must be a valid URL with scheme and host, got '{monitor['heartbeat_url']}'")
+                parsed_heartbeat = urlparse(monitor['heartbeat_url'])
+                if not parsed_heartbeat.scheme or not parsed_heartbeat.netloc:
+                    raise ConfigError(
+                        f"Monitor {i} (name: {name}): 'heartbeat_url' must be a valid URL with scheme and host, got '{monitor['heartbeat_url']}'")
 
-                    # Validate optional heartbeat_every_n_secs
-                    if 'heartbeat_every_n_secs' in monitor:
-                        if 'heartbeat_url' not in monitor:
-                            raise ConfigError(f"Monitor {i} (name: {name}): 'heartbeat_every_n_secs' can only be specified if 'heartbeat_url' is present")
-                        if not isinstance(monitor['heartbeat_every_n_secs'], int) or monitor['heartbeat_every_n_secs'] < 1:
-                            raise ConfigError(f"Monitor {i} (name: {name}): 'heartbeat_every_n_secs' must be a positive integer")
+            # Validate optional heartbeat_every_n_secs
+            if 'heartbeat_every_n_secs' in monitor:
+                if 'heartbeat_url' not in monitor:
+                    raise ConfigError(f"Monitor {i} (name: {name}): 'heartbeat_every_n_secs' can only be specified if 'heartbeat_url' is present")
+                if not isinstance(monitor['heartbeat_every_n_secs'], int) or monitor['heartbeat_every_n_secs'] < 1:
+                    raise ConfigError(f"Monitor {i} (name: {name}): 'heartbeat_every_n_secs' must be a positive integer")
 
-                # Validate optional ignore_ssl_expiry
-                if 'ignore_ssl_expiry' in monitor:
-                    if monitor_type not in ['http', 'https']:
-                        raise ConfigError(f"Monitor {i} (name: {name}): 'ignore_ssl_expiry' field is only valid for 'http' and 'https' monitors")
-                    # Accept various truthy values (case-insensitive)
-                    if not isinstance(monitor['ignore_ssl_expiry'], (bool, int, str)):
-                        raise ConfigError(f"Monitor {i} (name: {name}): 'ignore_ssl_expiry' must be a boolean, integer, or string")
+            # Validate optional ignore_ssl_expiry
+            if 'ignore_ssl_expiry' in monitor:
+                if monitor_type not in ['http', 'https']:
+                    raise ConfigError(f"Monitor {i} (name: {name}): 'ignore_ssl_expiry' field is only valid for 'http' and 'https' monitors")
+                # Accept various truthy values (case-insensitive)
+                if not isinstance(monitor['ignore_ssl_expiry'], (bool, int, str)):
+                    raise ConfigError(f"Monitor {i} (name: {name}): 'ignore_ssl_expiry' must be a boolean, integer, or string")
 
     except ConfigError as e:
         print(str(e), file=sys.stderr)
@@ -737,11 +821,117 @@ def notify_resource_outage_with_webhook(outage_notifier, site_name, error_reason
         return False
 
 
-def notify_resource_outage_with_email(outage_notifier, site_name, error_reason):
-    print(f"DEBUG: notify_resource_outage_with_email called", file=sys.stderr)
-    print(f"  outage_notifier: {outage_notifier}", file=sys.stderr)
-    print(f"  site_name: {site_name}", file=sys.stderr)
-    print(f"  error_reason: {error_reason}", file=sys.stderr)
+def notify_resource_outage_with_email(email_entry, site_name, error_reason, site_config, notification_type='outage'):
+    """Send outage notification via email.
+
+    Args:
+        email_entry: Email configuration dict with 'email' and optional control flags
+        site_name: Name of the site
+        error_reason: The error/recovery message to send
+        site_config: Full site configuration dict (needed for email_server)
+        notification_type: One of 'outage', 'recovery', or 'reminder'
+    """
+
+    # Check if email_server is configured
+    if 'email_server' not in site_config:
+        if VERBOSE:
+            print(f"Email notification skipped: no email_server configured")
+        return False
+
+    email_server = site_config['email_server']
+
+    # Normalize email control flags to boolean
+    def normalize_bool(val):
+        if isinstance(val, str):
+            return val.lower() in ['true', 'yes', 'on', '1']
+        elif isinstance(val, int):
+            return bool(val)
+        else:
+            return bool(val)
+
+    # Check notification type control flags (default: true for all)
+    email_outages = normalize_bool(email_entry.get('email_outages', True))
+    email_recoveries = normalize_bool(email_entry.get('email_recoveries', True))
+    email_reminders = normalize_bool(email_entry.get('email_reminders', True))
+
+    # Check if this notification type should be sent
+    if notification_type == 'outage' and not email_outages:
+        if VERBOSE:
+            print(f"Email notification skipped for {email_entry['email']}: email_outages=false")
+        return False
+    elif notification_type == 'recovery' and not email_recoveries:
+        if VERBOSE:
+            print(f"Email notification skipped for {email_entry['email']}: email_recoveries=false")
+        return False
+    elif notification_type == 'reminder' and not email_reminders:
+        if VERBOSE:
+            print(f"Email notification skipped for {email_entry['email']}: email_reminders=false")
+        return False
+
+    # Extract SMTP configuration
+    smtp_host = email_server['smtp_host']
+    smtp_port = email_server['smtp_port']
+    smtp_username = email_server.get('smtp_username')
+    smtp_password = email_server.get('smtp_password')
+    from_address = email_server['from_address']
+    use_tls = email_server.get('use_tls', True)
+    to_address = email_entry['email']
+
+    # Build email message
+    import smtplib
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+
+    # Determine subject based on notification type
+    if notification_type == 'recovery':
+        subject = f"[RECOVERY] {site_name} - Service Restored"
+    elif notification_type == 'reminder':
+        subject = f"[REMINDER] {site_name} - Ongoing Outage"
+    else:  # outage
+        subject = f"[OUTAGE] {site_name} - Service Down"
+
+    # Create message
+    msg = MIMEMultipart()
+    msg['From'] = from_address
+    msg['To'] = to_address
+    msg['Subject'] = subject
+
+    # Email body
+    body = f"{error_reason}\n\n---\nAPMonitor Notification\nSite: {site_name}\n"
+    msg.attach(MIMEText(body, 'plain'))
+
+    try:
+        # Connect to SMTP server
+        if use_tls:
+            # Use STARTTLS
+            server = smtplib.SMTP(smtp_host, smtp_port, timeout=MAX_TRY_SECS)
+            server.starttls()
+        else:
+            # Plain connection
+            server = smtplib.SMTP(smtp_host, smtp_port, timeout=MAX_TRY_SECS)
+
+        # Authenticate if credentials provided
+        if smtp_username and smtp_password:
+            server.login(smtp_username, smtp_password)
+
+        # Send email
+        server.send_message(msg)
+        server.quit()
+
+        if VERBOSE:
+            print(f"Email notification SUCCESS to '{to_address}' via {smtp_host}:{smtp_port}")
+
+        return True
+
+    except smtplib.SMTPAuthenticationError as e:
+        print(f"Email notification FAILED to '{to_address}': SMTP authentication error: {e}", file=sys.stderr)
+        return False
+    except smtplib.SMTPException as e:
+        print(f"Email notification FAILED to '{to_address}': SMTP error: {e}", file=sys.stderr)
+        return False
+    except Exception as e:
+        print(f"Email notification FAILED to '{to_address}': {type(e).__name__}: {e}", file=sys.stderr)
+        return False
 
 
 # Increases the delay between notification messages according to a quadratic bezier curve
@@ -842,9 +1032,21 @@ def check_and_heartbeat(resource, site_config):
             recovery_message = f"{resource['name']} in {site_config['name']} is UP ({resource['address']}) at {timestamp_str}, outage lasted {outage_duration}"
             print(f"##### RECOVERY: {recovery_message} #####", file=sys.stderr)
 
-            if 'outage_emails' in site_config:
+            # Check monitor-level email override
+            monitor_email_enabled = True
+            if 'email' in resource:
+                val = resource['email']
+                if isinstance(val, str):
+                    monitor_email_enabled = val.lower() in ['true', 'yes', 'on', '1']
+                elif isinstance(val, int):
+                    monitor_email_enabled = bool(val)
+                else:
+                    monitor_email_enabled = bool(val)
+
+            if monitor_email_enabled and 'outage_emails' in site_config:
                 for email_entry in site_config['outage_emails']:
-                    notify_resource_outage_with_email(email_entry, site_config['name'], recovery_message)
+                    notify_resource_outage_with_email(email_entry, site_config['name'], recovery_message, site_config, 'recovery')
+
             if 'outage_webhooks' in site_config:
                 for webhook in site_config['outage_webhooks']:
                     notify_resource_outage_with_webhook(webhook, site_config['name'], recovery_message)
@@ -897,10 +1099,25 @@ def check_and_heartbeat(resource, site_config):
                 should_notify = True
 
         if should_notify:
+            # Check monitor-level email override
+            monitor_email_enabled = True
+            if 'email' in resource:
+                val = resource['email']
+                if isinstance(val, str):
+                    monitor_email_enabled = val.lower() in ['true', 'yes', 'on', '1']
+                elif isinstance(val, int):
+                    monitor_email_enabled = bool(val)
+                else:
+                    monitor_email_enabled = bool(val)
+
+            # Determine notification type (first notification is 'outage', subsequent are 'reminder')
+            notification_type = 'outage' if prev_notified_count == 0 else 'reminder'
+
             # Send outage notifications
-            if 'outage_emails' in site_config:
+            if monitor_email_enabled and 'outage_emails' in site_config:
                 for email_entry in site_config['outage_emails']:
-                    notify_resource_outage_with_email(email_entry, site_config['name'], error_message)
+                    notify_resource_outage_with_email(email_entry, site_config['name'], error_message, site_config, notification_type)
+
             if 'outage_webhooks' in site_config:
                 for webhook in site_config['outage_webhooks']:
                     notify_resource_outage_with_webhook(webhook, site_config['name'], error_message)
@@ -1042,11 +1259,14 @@ def main():
             if 'outage_emails' not in config['site']:
                 print("Error: No outage_emails configured in site config", file=sys.stderr)
                 sys.exit(1)
+            if 'email_server' not in config['site']:
+                print("Error: No email_server configured in site config", file=sys.stderr)
+                sys.exit(1)
 
             test_error = "TEST: test_monitor is down: connection timeout (192.168.1.999)"
             print("Testing email notifications...")
             for email_entry in config['site']['outage_emails']:
-                notify_resource_outage_with_email(email_entry, config['site']['name'], test_error)
+                notify_resource_outage_with_email(email_entry, config['site']['name'], test_error, config['site'], 'outage')
             print("Email test complete")
             sys.exit(0)
 

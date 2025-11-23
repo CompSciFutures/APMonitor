@@ -18,7 +18,7 @@ You can quickly signup for a [Site24x7.com Lite or Pro Plan](https://www.site24x
 
 **Note: Heartbeat Monitoring is not available on their Website Monitoring plans. You need an 'Infrastructure Monitoring' or 'All-In-One' plan for it to work correctly.**
 
-APMonitor also integrates well with [Slack](https://slack.com/) and [Pushover](https://pushover.net/) via webhook URL endpoints. Email is not yet supported, because my focus was primarily realtime environments for this initial release.
+APMonitor also integrates well with [Slack](https://slack.com/) and [Pushover](https://pushover.net/) via webhook URL endpoints, and supports email notifications via SMTP.
 
 APMonitor is a neat way to guarantee your on-prem availability monitoring will always let you know about an outage and to avoid putting resources onto the net that don't need to be.
 
@@ -39,9 +39,9 @@ for real-time environments.
 You do need to configure Site24x7's Hearbeat Monitoring to achieve high-availability second opinion availability monitoring.
 
 As an exemplar, for the following monitored resource:
-```text
+```yaml
 monitors:
-- type: http
+  - type: http
     name: home-nas
     address: https://192.168.1.12/api/bump
     expect: "(C) COPYRIGHT 2005, Super NAS Storage Inc."
@@ -90,6 +90,73 @@ Note that alarm pacing can be set at a global level in the `site:` config, and i
 
 APMonitor uses a YAML or JSON configuration file to define the site being monitored and the resources to check. The configuration consists of two main sections: site-level settings that apply globally, and per-monitor settings that define individual resources to check.
 
+## Complete Example Configuration
+
+Here's a complete example showing all available configuration options:
+```yaml
+site:
+  name: "HomeLab"
+  
+  email_server:
+    smtp_host: "smtp.gmail.com"
+    smtp_port: 587
+    smtp_username: "alerts@example.com"
+    smtp_password: "app_password_here"
+    from_address: "alerts@example.com"
+    use_tls: true
+  
+  outage_emails:
+    - email: "admin@example.com"
+      email_outages: true
+      email_recoveries: true
+      email_reminders: true
+    - email: "manager@example.com"
+      email_outages: yes
+      email_recoveries: yes
+      email_reminders: no
+  
+  outage_webhooks:
+    - endpoint_url: "https://api.pushover.net/1/messages.json"
+      request_method: POST
+      request_encoding: JSON
+      request_prefix: "token=your_app_token&user=your_user_key&message="
+      request_suffix: ""
+  
+  max_threads: 1
+  max_retries: 3
+  max_try_secs: 20
+  notify_every_n_secs: 600
+  after_every_n_notifications: 1
+
+monitors:
+  - type: ping
+    name: home-fw
+    address: "192.168.1.1"
+    check_every_n_secs: 60
+    email: true
+    heartbeat_url: "https://hc-ping.com/uuid-here"
+    heartbeat_every_n_secs: 300
+
+  - type: http
+    name: in3245622
+    address: "http://192.168.1.21/Login?oldUrl=Index"
+    expect: "System Name: <b>HomeLab</b>"
+    check_every_n_secs: 120
+    notify_every_n_secs: 3600
+    after_every_n_notifications: 5
+    email: yes
+
+  - type: https
+    name: nvr0
+    address: "https://192.168.1.12/api/system"
+    expect: "nvr0"
+    ssl_fingerprint: "a1b2c3d4e5f67890abcdef1234567890abcdef1234567890abcdef1234567890"
+    ignore_ssl_expiry: true
+    email: false
+    heartbeat_url: "https://plus.site24x7.com/hb/uuid/nvr0"
+    heartbeat_every_n_secs: 60
+```
+
 ## site: configuration options
 
 The `site` section defines global settings for the monitoring site.
@@ -98,28 +165,57 @@ The `site` section defines global settings for the monitoring site.
 
 - **`name`** (string): The name of the site being monitored. Used in notification messages to identify which site is reporting issues.
 ```yaml
-  site:
-    name: "HomeLab"
+site:
+  name: "HomeLab"
 ```
 
 ### Optional Fields
 
-- **`outage_emails`** (list of objects): Email addresses to notify when resources go down or recover. Each entry is an object with an `email` field.
+- **`email_server`** (object, optional): SMTP server configuration for sending email notifications. Required if `outage_emails` is configured.
 ```yaml
-  outage_emails:
-    - email: "admin@example.com"
-    - email: "alerts@example.com"
+email_server:
+  smtp_host: "smtp.gmail.com"
+  smtp_port: 587
+  smtp_username: "alerts@example.com"
+  smtp_password: "app_password_here"
+  from_address: "alerts@example.com"
+  use_tls: true
+```
+  - **`smtp_host`** (string, required): SMTP server hostname or IP address
+  - **`smtp_port`** (integer, required): SMTP server port (typically 587 for TLS, 465 for SSL, 25 for unencrypted). Must be between 1 and 65535
+  - **`smtp_username`** (string, optional): SMTP authentication username. Not required for servers without authentication
+  - **`smtp_password`** (string, optional): SMTP authentication password. Not required for servers without authentication. Use app-specific passwords for Gmail/Google Workspace
+  - **`from_address`** (string, required): Email address to use in the "From" field. Must be a valid email address
+  - **`use_tls`** (boolean, optional): Whether to use TLS/STARTTLS encryption. Default: true
+
+**Note**: For Gmail/Google Workspace, you must use an [app-specific password](https://support.google.com/accounts/answer/185833) rather than your account password. Port 587 with `use_tls: true` is the recommended configuration for most SMTP servers. For servers without authentication (like local SMTP relays), omit `smtp_username` and `smtp_password`.
+
+- **`outage_emails`** (list of objects, optional): Email addresses to notify when resources go down or recover. Requires `email_server` to be configured. Each entry is an object with an `email` field and optional notification control flags.
+```yaml
+outage_emails:
+  - email: "admin@example.com"
+    email_outages: true
+    email_recoveries: true
+    email_reminders: true
+  - email: "oncall@example.com"
+    email_outages: yes
+    email_recoveries: no
 ```
   - **`email`** (string, required): Valid email address matching standard email format
+  - **`email_outages`** (boolean/integer/string, optional): Send email when resource goes down. Accepts: `true`/`yes`/`on`/`1` (case-insensitive) for enabled, `false`/`no`/`off`/`0` for disabled. Default: true
+  - **`email_recoveries`** (boolean/integer/string, optional): Send email when resource recovers. Accepts same values as `email_outages`. Default: true
+  - **`email_reminders`** (boolean/integer/string, optional): Send email for ongoing outage reminders (respecting `notify_every_n_secs` throttling). Accepts same values as `email_outages`. Default: true
 
-- **`outage_webhooks`** (list of objects): Webhook endpoints to call when resources go down or recover. Each webhook requires several configuration fields.
+**Note**: These email control flags allow fine-grained control over which notifications each recipient receives. For example, operations staff might want all notifications (`email_outages: true`, `email_recoveries: true`, `email_reminders: true`), while management might only want initial outage alerts (`email_outages: true`, `email_recoveries: false`, `email_reminders: false`).
+
+- **`outage_webhooks`** (list of objects, optional): Webhook endpoints to call when resources go down or recover. Each webhook requires several configuration fields.
 ```yaml
-  outage_webhooks:
-    - endpoint_url: "https://api.example.com/alerts"
-      request_method: POST
-      request_encoding: JSON
-      request_prefix: ""
-      request_suffix: ""
+outage_webhooks:
+  - endpoint_url: "https://api.example.com/alerts"
+    request_method: POST
+    request_encoding: JSON
+    request_prefix: ""
+    request_suffix: ""
 ```
   - **`endpoint_url`** (string, required): Valid URL with scheme and host for the webhook
   - **`request_method`** (string, required): HTTP method, must be `GET` or `POST`
@@ -133,33 +229,33 @@ The `site` section defines global settings for the monitoring site.
 
 - **`max_threads`** (integer, optional): Number of concurrent threads for checking resources in parallel. Must be ≥ 1. Default: 1 (single-threaded). Can be overridden by command line `-t` option.
 ```yaml
-  max_threads: 1
+max_threads: 1
 ```
 
 **Note**: For near-realtime monitoring environments, set `max_threads` to 5-15 to enable parallel checking of multiple resources. Single-threaded mode (1) is recommended for small systems like Raspberry Pi or when log clarity is important. This setting is overridden by the `-t` command line argument if specified.
 
 - **`max_retries`** (integer, optional): Number of times to retry failed checks before marking resource as down. Must be ≥ 1. Default: 3
 ```yaml
-  max_retries: 3
+max_retries: 3
 ```
 
 **Note**: For near-realtime monitoring, set `max_retries: 1` to reduce detection latency. Higher values (3-5) are better for unstable networks where transient failures are common.
 
 - **`max_try_secs`** (integer, optional): Timeout in seconds for each individual check attempt. Must be ≥ 1. Default: 20
 ```yaml
-  max_try_secs: 20
+max_try_secs: 20
 ```
 
 - **`notify_every_n_secs`** (integer, optional): Default minimum seconds between outage notifications for all monitors. Individual monitors can override this with their own `notify_every_n_secs` setting. Must be ≥ 1. Default: 600
 ```yaml
-  notify_every_n_secs: 1800
+notify_every_n_secs: 1800
 ```
 
-**Note**: This sets the baseline notification throttling interval. Combined with `default_after_every_n_notifications`, controls the notification escalation curve for all monitors unless overridden per-monitor.
+**Note**: This sets the baseline notification throttling interval. Combined with `after_every_n_notifications`, controls the notification escalation curve for all monitors unless overridden per-monitor.
 
 - **`after_every_n_notifications`** (integer, optional): Default number of notifications after which the notification interval reaches `notify_every_n_secs` for all monitors. Individual monitors can override this with their own `after_every_n_notifications` setting. Must be ≥ 1. Default: 1 (constant notification intervals)
 ```yaml
-  after_every_n_notifications: 1
+after_every_n_notifications: 1
 ```
 
 **Note**: When set to a value > 1, notification intervals start shorter and gradually increase following a quadratic Bezier curve until reaching `notify_every_n_secs` after the specified number of notifications. This provides more frequent alerts at the start of an outage when immediate attention is needed, then reduces notification frequency as the outage continues. A value of 1 maintains constant notification intervals (original behavior).
@@ -185,30 +281,37 @@ The `monitors` section is a list of resources to monitor. Each monitor defines w
 
 - **`check_every_n_secs`** (integer, optional): Seconds between checks for this resource. Must be ≥ 1. Default: 60
 ```yaml
-  check_every_n_secs: 300
+check_every_n_secs: 300
 ```
 
 - **`notify_every_n_secs`** (integer, optional): Minimum seconds between outage notifications while resource remains down. Must be ≥ 1 and ≥ `check_every_n_secs`. Default: 600
 ```yaml
-  notify_every_n_secs: 1800
+notify_every_n_secs: 1800
 ```
 
-- **`after_every_n_notifications`** (integer, optional): Number of notifications after which the notification interval reaches `notify_every_n_secs` for this specific monitor. Overrides site-level `default_after_every_n_notifications`. Can only be specified if `notify_every_n_secs` is present. Must be ≥ 1.
+- **`after_every_n_notifications`** (integer, optional): Number of notifications after which the notification interval reaches `notify_every_n_secs` for this specific monitor. Overrides site-level `after_every_n_notifications`. Can only be specified if `notify_every_n_secs` is present. Must be ≥ 1.
 ```yaml
-  notify_every_n_secs: 3600
-  after_every_n_notifications: 5
+notify_every_n_secs: 3600
+after_every_n_notifications: 5
 ```
 
 **Behavior**: Notification timing follows a quadratic Bezier curve—intervals start shorter and gradually increase over the first N notifications until reaching the full `notify_every_n_secs` interval. After N notifications, the interval remains constant at `notify_every_n_secs`. This provides aggressive early alerting that tapers off as outages persist.
 
+- **`email`** (boolean/integer/string, optional): Master switch to enable/disable email notifications for this specific monitor. Accepts: `true`/`yes`/`on`/`1` (case-insensitive) for enabled, `false`/`no`/`off`/`0` for disabled. Default: true (enabled if `email_server` configured)
+```yaml
+email: true
+```
+
+**Note**: When set to `false`, this monitor will not send any email notifications regardless of site-level `outage_emails` configuration. Useful for non-critical resources or during maintenance windows. This is a monitor-level override that takes precedence over all other email settings.
+
 - **`heartbeat_url`** (string, optional): URL to ping (HTTP GET) when resource check succeeds. Useful for external monitoring services like Site24x7 or Healthchecks.io. Must be valid URL with scheme and host.
 ```yaml
-  heartbeat_url: "https://hc-ping.com/your-uuid-here"
+heartbeat_url: "https://hc-ping.com/your-uuid-here"
 ```
 
 - **`heartbeat_every_n_secs`** (integer, optional): Seconds between heartbeat pings. Must be ≥ 1. Can only be specified if `heartbeat_url` is present. If not specified, heartbeat is sent on every successful check.
 ```yaml
-  heartbeat_every_n_secs: 300
+heartbeat_every_n_secs: 300
 ```
 
 ### HTTP/HTTPS Monitor Specific Fields
@@ -217,17 +320,17 @@ These fields are only valid for monitors with `type: http` or `type: https`:
 
 - **`expect`** (string, optional): Substring that must appear in the HTTP response body for the check to succeed. If not present, any 200 OK response is considered successful.
 ```yaml
-  expect: "System Name: <b>HomeLab</b>"
+expect: "System Name: <b>HomeLab</b>"
 ```
 
 - **`ssl_fingerprint`** (string, optional): SHA-256 fingerprint of the expected SSL certificate (with or without colons). Enables certificate pinning for self-signed certificates. When specified, the certificate is verified before making the HTTP request.
 ```yaml
-  ssl_fingerprint: "e85260e8f8e85629cfa4d023ea0ae8dd3ce8ccc0040b054a4753c2a5ab269296"
+ssl_fingerprint: "e85260e8f8e85629cfa4d023ea0ae8dd3ce8ccc0040b054a4753c2a5ab269296"
 ```
 
 - **`ignore_ssl_expiry`** (boolean/integer/string, optional): Skip SSL certificate expiration checking. Accepts: `true`/`1`/`"yes"`/`"ok"` (case-insensitive) for true, or `false`/`0`/`"no"` for false. Useful for development environments or when certificate renewal is managed separately.
 ```yaml
-  ignore_ssl_expiry: true
+ignore_ssl_expiry: true
 ```
 
 ### Example Configurations
@@ -275,6 +378,11 @@ The configuration validator enforces these rules:
 6. Email addresses must match standard email format (RFC 5322 simplified)
 7. SSL fingerprints must be valid hexadecimal strings with length that's a power of two
 8. `after_every_n_notifications` can only be specified if `notify_every_n_secs` is present
+9. `outage_emails` can only be specified if `email_server` is configured
+10. If `email_server` is present, `smtp_host`, `smtp_port`, and `from_address` are required
+11. `smtp_username` and `smtp_password` are optional (for servers without authentication)
+12. Email control flags (`email_outages`, `email_recoveries`, `email_reminders`) accept boolean or string values
+13. Monitor-level `email` flag accepts boolean or string values
 
 # Dependencies
 
@@ -294,6 +402,9 @@ sudo pip3 install --break-system-packages PyYAML requests pyOpenSSL urllib3
 ```
 ```
 ./APMonitor.py --test-webhooks -v homelab-monitorhosts.yaml 
+```
+```
+./APMonitor.py --test-emails -v homelab-monitorhosts.yaml 
 ```
 
 # Command Line Usage
@@ -461,7 +572,7 @@ APMonitor automatically selects a platform-appropriate default location for the 
 
 ### Concurrency and Multiple Instances
 
-APMonitor's state file locking &amp; PID locking is designed for **single-process concurrency only**—multiple threads within one process safely share state through internal locks. However, **no file-level locking** is implemented to coordinate between multiple APMonitor processes.
+APMonitor's state file locking & PID locking is designed for **single-process concurrency only**—multiple threads within one process safely share state through internal locks. However, **no file-level locking** is implemented to coordinate between multiple APMonitor processes.
 
 Having said that, APMonitor is very much re-entrant and thread safe for the most part, thus, if you specify different config files, it will happily allow a single process per config file to co-exist in parallel. 
 The config filename is used as the hash when forming a PID lockfile in tempfs (`/tmp/apmonitor-##########.lock`), so that multiple lockfiles can coexist.
@@ -523,10 +634,12 @@ APMonitor uses a JSON state file to persist monitoring data across runs:
 The state file tracks:
 - `is_up`: Current resource status
 - `last_checked`: When resource was last checked
+- `last_response_time_ms`: Response time in milliseconds for successful checks
 - `last_notified`: When last notification was sent
 - `last_alarm_started`: When current/last outage began
 - `last_successful_heartbeat`: When heartbeat URL last succeeded
 - `down_count`: Consecutive failed checks
+- `notified_count`: Number of notifications sent for current outage
 - `error_reason`: Last error message
 
 **Note**: If using `/tmp/statefile.json`, the state file is cleared on system reboot. This resets all monitoring history but doesn't affect functionality—monitoring resumes normally on first run.
@@ -722,6 +835,13 @@ Test webhook configuration without checking resources:
 sudo -u monitoring /usr/local/bin/APMonitor.py --test-webhooks -v /usr/local/etc/apmonitor-config.yaml
 ```
 
+### Test Email Notifications
+
+Test email configuration without checking resources:
+```
+sudo -u monitoring /usr/local/bin/APMonitor.py --test-emails -v /usr/local/etc/apmonitor-config.yaml
+```
+
 ### Check State File Permissions
 
 Verify the monitoring user can write to the state file location:
@@ -789,12 +909,8 @@ sudo pip3 uninstall -y PyYAML requests pyOpenSSL urllib3
 # TODO
 
 - Add additional monitors:
-  - TCP &amp; UDP
+  - TCP & UDP
   - Add `quic` UDP monitoring resource type to replace deprecated `https`
-
-- Make email work (right now we're only using webhooks and heartbeats for alerts):
-  - With system mailer
-  - With specified SMTP server details
 
 - Aggregated root cause alerting:
   - Specify parent dependencies using config option `parent_name` so we have a network topology graph
@@ -808,13 +924,13 @@ sudo pip3 uninstall -y PyYAML requests pyOpenSSL urllib3
   - Add a Mercator + `APTree.c` `#InfoRec` inspired/styled priority queue for handling large numbers of monitored resources with proper realtime programming guarantees
   - Test if we are `root` when doing a `ping` syscall and fallback to direct `SOCK_RAW` if we are for high performance
 
-- Update docs to provide examples for Pushover &amp; Slack
+- Update docs to provide examples for Pushover & Slack
 
 # Licensing & Versioning
 
 APMonitor.py is licensed under the [GNU General Public License version 3](LICENSE.txt).
 ```
-Software: APMonitor 0.1.4
+Software: APMonitor 1.0.0
 License: GNU General Public License version 3
 Licensor: Andrew (AP) Prendergast, ap@andrewprendergast.com -- FSF Member
 ```
