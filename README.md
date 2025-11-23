@@ -6,6 +6,8 @@ This is an on-prem monitoring tool written completely in very clear Python-only 
 
 It supports multi-threading of the availability checking of monitored resources for high speed near-realtime performance, if that is what you need (see the `-t` command line option). The default operation mode is single-threaded for log clarity that runs on small systems like a Raspberry Pi.
 
+It also supports pacing of monitoring alarms using a decaying curve that delivers alert notifications quickly at the start, then slows down notifications over time.
+
 `APMonitor.py` (APMonitor) is primarily designed to work in tandem with [Site24x7](https://site24x7.com) and integrates very well with their "[Heartbeat Monitoring](https://www.site24x7.com/help/heartbeat/)".
 
 To achieve **guaranteed always-on monitoring service levels**, simply setup local availability monitors in your config, [sign-up for a Pro Plan at Site24x7](https://www.site24x7.com/site24x7-pricing.html) then use `heartbeat_url` and `heartbeat_every_n_secs` configuration options to `APMonitor.py` to ping a [Heartbeat Monitoring](https://www.site24x7.com/help/heartbeat/) URL endpoint at [Site24x7](https://site24x7.com) when the monitored resource is up. This then ensures that when a heartbeat doesn't arrive from APMonitor, monitoring alerts fall back to Site24x7, and when both are working you have second-opinion availability monitoring reporting.
@@ -26,9 +28,9 @@ ap
 
 To put APMonitor into near-realtime mode so that it check resources multiple times per second, use these global settings:
 
-- Dial up threads with `-t 15`,
-- set `max_retries` to 1 and
-- dial down `max_try_secs` to 10 or 15 seconds
+- Dial up threads with `-t 15` on the command line or `max_threads: 15` in the site config,
+- set `max_retries` to `1` and
+- dial down `max_try_secs` to `10` or `15` seconds
 
 for real-time environments.
 
@@ -60,6 +62,29 @@ This also means you don't need to expose internal LAN network resources to The I
 See Site24x7 docs for more info:
 - [Heartbeat Monitoring](https://www.site24x7.com/help/heartbeat/)
 - [Thresholds configuration](https://www.site24x7.com/help/admin/configuration-profiles/threshold-and-availability/server-monitor.html)
+
+
+# Recommended configuration for alarm notification pacing
+
+You might also want to consider alarm notification pacing, so that recently down resources generate more frequent messages, whilst long outages are notified less frequently. To enable:
+
+- Set `notify_every_n_secs` to `3600` seconds (i.e., 1 hour), and
+- Set `after_every_n_notifications` to `8`,
+
+which will slow alarms down to one per hour after 8 notifications.
+
+An alternate config for monitored resources that have long outages is as follows:
+
+- Set `notify_every_n_secs` to `43200` (i.e., 12 hours), and
+- Set `after_every_n_notifications` to `6`,
+
+which will slow alarms down to one every 12 hours after 6 notifications, which means after a few days you will only get at most one alarm whilst asleep.
+
+To see how the alarm pacing will accelerate then subsequently delay notifications, use the example calculations spreadsheet in  [20151122 Reminder Timing with Quadratic Bezier Curve.xlsx](devnotes/20151122%20Reminder%20Timing%20with%20Quadratic%20Bezier%20Curve.xlsx) to experiment with various configuration scenarios:
+
+![Screenshot_of_Reminder_Timing_simulator.png](images/Screenshot_of_Reminder_Timing_simulator.png)
+
+Note that alarm pacing can be set at a global level in the `site:` config, and is overridden when set at a per monitored resource level in the `monitors:` section of the config.
 
 # `APMonitor.py` YAML/JSON Site Configuration Options
 
