@@ -12,7 +12,7 @@ To achieve **guaranteed always-on monitoring service levels**, simply setup loca
 
 **The service level guarantee works as follows:** If the resource is down, `APMonitor.py` won't hit the [Heartbeat Monitoring](https://www.site24x7.com/help/heartbeat/) endpoint URL, and Site24x7 will then send an alert about the missed heartbeat without the need for any additional dependencies on-prem/on-site. So the entire machine `APMonitor.py` is running on can fall over, and you still get availability monitoring alerts sent, with all the benefits of having on-prem monitoring on your local network behind your firewall.  
 
-You can quickly signup for a [Lite or Pro Plan](https://www.site24x7.com/site24x7-pricing.html) for \$10-\$50 USD per month, then setup a bunch of [Heartbeat Monitoring](https://www.site24x7.com/help/heartbeat/) URL endpoints that works with `APMonitor.py` rather easily.
+You can quickly signup for a [Site24x7.com Lite or Pro Plan](https://www.site24x7.com/site24x7-pricing.html) for \$10-\$50 USD per month, then setup a bunch of [Heartbeat Monitoring](https://www.site24x7.com/help/heartbeat/) URL endpoints that works with `APMonitor.py` rather easily.
 
 **Note: Heartbeat Monitoring is not available on their Website Monitoring plans. You need an 'Infrastructure Monitoring' or 'All-In-One' plan for it to work correctly.**
 
@@ -294,26 +294,6 @@ APMonitor is invoked from the command line with various options to control verbo
 
 - **`--test-emails`**: Test email notifications by sending a dummy alert to all configured email addresses, then exit. Does not check resources or modify state file.
 
-## State File
-
-APMonitor uses a JSON state file to persist monitoring data across runs:
-
-- **Location**: Recommended path is `/tmp/statefile.json` for tmpfs storage (faster, no disk wear)
-- **Format**: JSON with per-resource nested objects containing timestamps, status, and counters
-- **Atomic Updates**: Uses `.new` and `.old` rotation to prevent corruption on crashes
-- **Thread Safety**: Protected by internal lock during concurrent access
-
-The state file tracks:
-- `is_up`: Current resource status
-- `last_checked`: When resource was last checked
-- `last_notified`: When last notification was sent
-- `last_alarm_started`: When current/last outage began
-- `last_successful_heartbeat`: When heartbeat URL last succeeded
-- `down_count`: Consecutive failed checks
-- `error_reason`: Last error message
-
-**Note**: If using `/tmp/statefile.json`, the state file is cleared on system reboot. This resets all monitoring history but doesn't affect functionality—monitoring resumes normally on first run.
-
 ## Common Usage Examples
 
 ### Basic Monitoring (Single-Threaded)
@@ -428,39 +408,6 @@ StandardError=journal
 WantedBy=multi-user.target
 ```
 
-## Execution Flow
-
-Here are some basic devnotes on how APMonitor is built, in case you want to modify it.
-
-Each invocation of APMonitor:
-
-1. Acquires a PID lockfile via tempfs, using the config path as the hash to support multiple site configs in parallel. 
-2. Loads and validates configuration file
-3Loads previous state from state file (if exists)
-4For each monitor:
-   - Checks if `check_every_n_secs` has elapsed since `last_checked`
-   - If due: performs resource check
-   - If down and `notify_every_n_secs` elapsed: sends notifications
-   - If up and heartbeat configured: pings heartbeat URL if due
-   - Updates state atomically
-5. Saves state file with execution timing
-6. Cleans up the PID file if possible.
-7. Exits
-
-This stateless design allows APMonitor to be killed/restarted safely at any time without losing monitoring history or creating duplicate notifications.
-
-### Modifying with AI
-
-APMonitor was designed with an engineering based approach to Vibe Coding in mind, should you wish to change it. 
-
-Steps:
-
-1. Paste in `READAI.md` (containing an Entrance Prompt) into your favourite AI coding tool (e.g., Grok 4.1 or Claude Sonnet)
-2. Paste in `APMonitor.py` (the source code)
-3. Vibe your changes as you see fit.
-
-Enjoy!
-
 ## Default State File Location
 
 APMonitor automatically selects a platform-appropriate default location for the state file if the `-s/--statefile` option is not specified:
@@ -534,6 +481,64 @@ Always specify `-s/--statefile` when:
 ```
 
 **Note**: The `apmonitor-` prefix prevents naming collisions with other applications using generic `statefile.json` names.
+
+
+
+# Developer Notes for modifying `APMonitor.py`
+
+## State File
+
+APMonitor uses a JSON state file to persist monitoring data across runs:
+
+- **Location**: Recommended path is `/tmp/statefile.json` for tmpfs storage (faster, no disk wear)
+- **Format**: JSON with per-resource nested objects containing timestamps, status, and counters
+- **Atomic Updates**: Uses `.new` and `.old` rotation to prevent corruption on crashes
+- **Thread Safety**: Protected by internal lock during concurrent access
+
+The state file tracks:
+- `is_up`: Current resource status
+- `last_checked`: When resource was last checked
+- `last_notified`: When last notification was sent
+- `last_alarm_started`: When current/last outage began
+- `last_successful_heartbeat`: When heartbeat URL last succeeded
+- `down_count`: Consecutive failed checks
+- `error_reason`: Last error message
+
+**Note**: If using `/tmp/statefile.json`, the state file is cleared on system reboot. This resets all monitoring history but doesn't affect functionality—monitoring resumes normally on first run.
+
+
+## Execution Flow
+
+Here are some basic devnotes on how APMonitor is built, in case you want to modify it.
+
+Each invocation of APMonitor:
+
+1. Acquires a PID lockfile via tempfs, using the config path as the hash to support multiple site configs in parallel. 
+2. Loads and validates configuration file
+3Loads previous state from state file (if exists)
+4For each monitor:
+   - Checks if `check_every_n_secs` has elapsed since `last_checked`
+   - If due: performs resource check
+   - If down and `notify_every_n_secs` elapsed: sends notifications
+   - If up and heartbeat configured: pings heartbeat URL if due
+   - Updates state atomically
+5. Saves state file with execution timing
+6. Cleans up the PID file if possible.
+7. Exits
+
+This stateless design allows APMonitor to be killed/restarted safely at any time without losing monitoring history or creating duplicate notifications.
+
+## Modifying with AI
+
+APMonitor was designed with an engineering based approach to Vibe Coding in mind, should you wish to change it. 
+
+Steps:
+
+1. Paste in `READAI.md` (containing an Entrance Prompt) into your favourite AI coding tool (e.g., Grok 4.1 or Claude Sonnet)
+2. Paste in `APMonitor.py` (the source code)
+3. Vibe your changes as you see fit.
+
+Enjoy!
 
 
 # Installation Instructions - Debian Linux
