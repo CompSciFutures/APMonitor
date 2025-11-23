@@ -9,6 +9,13 @@ Runs on RPi to enterprise systems.<br />
 Thread safe, reentrant, easily modifiable Python.<br />
 GPL 3.0 licensed.<br/>
 
+## Release 0.1.4 (24-Nov-2025): Made outage messages more user friendly 
+
+- Cleaned up SSL certificate checking control flow for `http` monitored resources so it always runs for SSL resources
+- Cleaned up `http` errors so "Name or service not known", "Connection timeout" and "Connection refused" are clearer
+- Refactor retry logic out of checking resources into an enclosing function
+- add `last_response_time_ms` to statefile for successful requests
+
 ## Release 0.1.3 (23-Nov-2025)
 
 - Tweaked parallel PID locking to use absolute paths to fix problems with concurrently checking multiple site configs & crontab use-case.

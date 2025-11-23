@@ -182,15 +182,6 @@ def print_and_exit_on_bad_config(config):
 
         site = config['site']
 
-        # Check for unrecognized site-level parameters
-        valid_site_params = {
-            'name', 'outage_emails', 'outage_webhooks', 'max_threads', 'max_retries',
-            'max_try_secs', 'notify_every_n_secs', 'after_every_n_notifications'
-        }
-        unrecognized_site = set(site.keys()) - valid_site_params
-        if unrecognized_site:
-            raise ConfigError(f"Unrecognized site-level parameters: {', '.join(sorted(unrecognized_site))}")
-
         # Check site name is present and is a string
         if 'name' not in site:
             raise ConfigError("Missing required field: 'site.name'")
@@ -279,6 +270,15 @@ def print_and_exit_on_bad_config(config):
         if 'after_every_n_notifications' in site:
             if not isinstance(site['after_every_n_notifications'], int) or site['after_every_n_notifications'] < 1:
                 raise ConfigError("Field 'site.after_every_n_notifications' must be a positive integer")
+
+        # Check for unrecognized site-level parameters
+        valid_site_params = {
+            'name', 'outage_emails', 'outage_webhooks', 'max_threads', 'max_retries',
+            'max_try_secs', 'notify_every_n_secs', 'after_every_n_notifications'
+        }
+        unrecognized_site = set(site.keys()) - valid_site_params
+        if unrecognized_site:
+            raise ConfigError(f"Unrecognized site-level parameters: {', '.join(sorted(unrecognized_site))}")
 
         # Check monitors list exists
         if 'monitors' not in config:
@@ -443,6 +443,7 @@ def check_url_resource(resource):
     expect = resource.get('expect')
     ssl_fingerprint = resource.get('ssl_fingerprint')
     ignore_ssl_expiry = resource.get('ignore_ssl_expiry', False)
+    error_msg = None
 
     # Normalize ignore_ssl_expiry to boolean
     if isinstance(ignore_ssl_expiry, str):
@@ -450,9 +451,18 @@ def check_url_resource(resource):
     elif isinstance(ignore_ssl_expiry, int):
         ignore_ssl_expiry = bool(ignore_ssl_expiry)
 
-    # If ssl_fingerprint provided, verify it before making request
-    if ssl_fingerprint:
-        parsed = urlparse(url)
+    # parse the url and don't proceed if it's not pure HTTP/S (e.g., QUIC)
+    parsed = urlparse(url)
+    if parsed.scheme not in ('http', 'https'):
+        error_msg = f"{parsed.scheme.upper()} protocol not supported, use http or https"
+        print(f"HTTP/S check FAILED for '{name}' at '{url}': {error_msg}", file=sys.stderr)
+        return error_msg
+
+    # calculate is_ssl
+    is_ssl = parsed.scheme == 'https'
+
+    # Determine if we need to verify SSL
+    if is_ssl and (ssl_fingerprint or not ignore_ssl_expiry):
         hostname = parsed.hostname
         port = parsed.port or 443
 
@@ -461,19 +471,20 @@ def check_url_resource(resource):
             cert_pem = ssl.get_server_certificate((hostname, port))
             cert_der = ssl.PEM_cert_to_DER_cert(cert_pem)
 
-            # Calculate fingerprint
-            server_fingerprint = hashlib.sha256(cert_der).hexdigest()
-            expected_fingerprint = ssl_fingerprint.replace(':', '').lower()
+            # Check fingerprint if provided
+            if ssl_fingerprint:
+                server_fingerprint = hashlib.sha256(cert_der).hexdigest()
+                expected_fingerprint = ssl_fingerprint.replace(':', '').lower()
 
-            if server_fingerprint != expected_fingerprint:
-                error_msg = f"SSL fingerprint mismatch"
+                if server_fingerprint != expected_fingerprint:
+                    error_msg = f"SSL fingerprint mismatch"
+                    if VERBOSE:
+                        print(f"SSL fingerprint check FAILED for '{name}': expected {expected_fingerprint}, got {server_fingerprint}")
+                    print(f"HTTP/S check FAILED for '{name}' at '{url}': {error_msg}", file=sys.stderr)
+                    return error_msg
+
                 if VERBOSE:
-                    print(f"SSL fingerprint check FAILED for '{name}': expected {expected_fingerprint}, got {server_fingerprint}")
-                print(f"HTTP/S check FAILED for '{name}' at '{url}': {error_msg}", file=sys.stderr)
-                return error_msg
-
-            if VERBOSE:
-                print(f"SSL fingerprint check PASSED for '{name}'")
+                    print(f"SSL fingerprint check PASSED for '{name}'")
 
             # Check certificate expiry unless ignored
             if not ignore_ssl_expiry:
@@ -510,52 +521,56 @@ def check_url_resource(resource):
                 print(f"SSL certificate expiry check SKIPPED for '{name}' (ignore_ssl_expiry=True)")
 
         except Exception as e:
-            error_msg = f"SSL verification error: {e}"
+            error_msg = f"{type(e).__name__}: {e}"
             print(f"HTTP/S check FAILED for '{name}' at '{url}': {error_msg}", file=sys.stderr)
             return error_msg
 
-        # Fingerprint matched and cert valid, proceed with pinned cert
+        # Certificate checks passed, proceed with verification disabled (we already validated)
         verify_ssl = False
-    else:
+    elif is_ssl:
+        # HTTPS but no certificate checks requested, use standard verification
         verify_ssl = not IGNORE_SSL_ERRORS
+    else:
+        # HTTP - no SSL verification
+        verify_ssl = False
 
-    for attempt in range(1, MAX_RETRIES + 1):
-        try:
-            response = requests.get(url, timeout=MAX_TRY_SECS, verify=verify_ssl)
+    try:
+        response = requests.get(url, timeout=MAX_TRY_SECS, verify=verify_ssl)
 
-            if response.status_code == 200:
-                # If 'expect' is specified, check content
-                if expect:
-                    if expect in response.text:
-                        if VERBOSE:
-                            print(f"HTTP/S check SUCCESS for '{name}' at '{url}' (expected content found)")
-                        return None
-                    else:
-                        error_msg = "expected content not found"
-                        print(f"HTTP/S check FAILED for '{name}' at '{url}': {error_msg}", file=sys.stderr)
-                        if attempt < MAX_RETRIES:
-                            time.sleep(MAX_TRY_SECS)
-                        continue
-                else:
+        if response.status_code == 200:
+            # If 'expect' is specified, check content
+            if expect:
+                if expect in response.text:
                     if VERBOSE:
-                        print(f"HTTP/S check SUCCESS for '{name}' at '{url}'")
+                        print(f"HTTP/S check SUCCESS for '{name}' at '{url}' (expected content found)")
                     return None
+                else:
+                    error_msg = "expected content not found"
+                    print(f"HTTP/S check FAILED for '{name}' at '{url}': {error_msg}", file=sys.stderr)
+                    return error_msg
             else:
-                error_msg = f"status {response.status_code}"
-                print(f"HTTP/S check FAILED for '{name}' at '{url}': {error_msg}", file=sys.stderr)
-                if attempt < MAX_RETRIES:
-                    time.sleep(MAX_TRY_SECS)
-
-        except requests.exceptions.RequestException as e:
-            error_msg = str(e)
+                if VERBOSE:
+                    print(f"HTTP/S check SUCCESS {response.status_code} for '{name}' at '{url}'")
+                return None
+        else:
+            error_msg = f"error response code {response.status_code} returned by server at {parsed.netloc}"
             print(f"HTTP/S check FAILED for '{name}' at '{url}': {error_msg}", file=sys.stderr)
-            if attempt < MAX_RETRIES:
-                time.sleep(MAX_TRY_SECS)
+            return error_msg
 
-    return error_msg if 'error_msg' in locals() else "unknown error"
+    except requests.exceptions.RequestException as e:
+        # Extract the root cause from nested exceptions (check both __cause__ and __context__)
+        root_cause = e
+        while True:
+            next_cause = getattr(root_cause, '__cause__', None) or getattr(root_cause, '__context__', None)
+            if next_cause is None or next_cause == root_cause:
+                break
+            root_cause = next_cause
+
+        error_msg = f"{type(root_cause).__name__}: {root_cause}"
+        print(f"HTTP/S check FAILED for '{name}' at '{url}': {error_msg}", file=sys.stderr)
+        return error_msg
 
 
-# ping host & return None if up, error message if down
 def check_ping_resource(resource):
     """Ping host and return None if up, error message if down."""
     address = resource['address']
@@ -572,35 +587,50 @@ def check_ping_resource(resource):
     else:
         cmd = ['ping', '-c', '1', '-W', str(MAX_TRY_SECS), address]
 
-    error_msg = None
-    for attempt in range(1, MAX_RETRIES + 1):
-        try:
-            result = subprocess.run(cmd, capture_output=True, timeout=MAX_TRY_SECS + 2)
-            if result.returncode == 0:
-                if VERBOSE:
-                    print(f"PING check SUCCESS for '{name}' at '{address}'")
-                return None
-            else:
-                error_msg = "host unreachable"
-                print(f"PING check FAILED for '{name}' at '{address}': {error_msg}", file=sys.stderr)
-                if attempt < MAX_RETRIES:
-                    time.sleep(MAX_TRY_SECS)
-        except subprocess.TimeoutExpired:
-            error_msg = "timeout"
+    try:
+        result = subprocess.run(cmd, capture_output=True, timeout=MAX_TRY_SECS + 2)
+        if result.returncode == 0:
+            if VERBOSE:
+                print(f"PING check SUCCESS for '{name}' at '{address}'")
+            return None
+        else:
+            error_msg = "host unreachable"
             print(f"PING check FAILED for '{name}' at '{address}': {error_msg}", file=sys.stderr)
-            if attempt < MAX_RETRIES:
-                time.sleep(MAX_TRY_SECS)
-
-    return error_msg if error_msg else "unknown error"
+            return error_msg
+    except subprocess.TimeoutExpired:
+        error_msg = "timeout"
+        print(f"PING check FAILED for '{name}' at '{address}': {error_msg}", file=sys.stderr)
+        return error_msg
 
 
 def check_resource(resource):
-    if resource['type'] == 'ping':
-        return check_ping_resource(resource)
-    elif resource['type'] == 'http' or resource['type'] == 'https':
-        return check_url_resource(resource)
-    else:
-        raise ConfigError(f"Unknown resource type: {resource['type']} for monitor {resource['name']}")
+    """Check resource with retry logic and response time tracking."""
+    last_response_time_ms = None
+
+    for attempt in range(1, MAX_RETRIES + 1):
+        start_time_ms = int(time.time() * 1000)
+
+        if resource['type'] == 'ping':
+            error_msg = check_ping_resource(resource)
+        elif resource['type'] == 'http' or resource['type'] == 'https':
+            error_msg = check_url_resource(resource)
+        else:
+            raise ConfigError(f"Unknown resource type: {resource['type']} for monitor {resource['name']}")
+
+        end_time_ms = int(time.time() * 1000)
+        response_time_ms = end_time_ms - start_time_ms
+
+        # If check succeeded, record response time and return
+        if error_msg is None:
+            last_response_time_ms = response_time_ms
+            return None, last_response_time_ms
+
+        # If check failed and we have retries left, sleep before next attempt
+        if attempt < MAX_RETRIES:
+            time.sleep(MAX_TRY_SECS)
+
+    # All retries exhausted, return the last error (no response time on failure)
+    return error_msg, None
 
 
 # fetch a heartbeat URL - tries 5 times and returns True if 200 OK
@@ -778,7 +808,7 @@ def check_and_heartbeat(resource, site_config):
     timestamp_str = now.strftime('%I:%M %p %Z').lstrip('0').strip()
 
     # Check resource and ping heartbeat URL
-    error_reason = check_resource(resource)
+    error_reason, last_response_time_ms = check_resource(resource)
     is_up = error_reason is None
     last_successful_heartbeat = prev_last_successful_heartbeat
     if is_up and 'heartbeat_url' in resource:
@@ -895,6 +925,7 @@ def check_and_heartbeat(resource, site_config):
         resource['name']: {
             'is_up': is_up,
             'last_checked': now.isoformat(),
+            'last_response_time_ms': last_response_time_ms,
             'down_count': down_count,
             'last_alarm_started': last_alarm_started,
             'last_notified': last_notified,

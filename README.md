@@ -172,8 +172,8 @@ The `monitors` section is a list of resources to monitor. Each monitor defines w
 
 - **`type`** (string): Type of check to perform. Must be one of:
   - `ping`: ICMP ping check
-  - `http`: HTTP endpoint check
-  - `https`: HTTPS endpoint check
+  - `http`: HTTP endpoint check (supports HTTP/S, follows and checks redirect chain for errors)
+  - `https`: HTTPS endpoint check (deprecated)
 
 - **`name`** (string): Unique identifier for this monitor. Must be unique across all monitors in the configuration. Used in notifications and state tracking.
 
@@ -790,8 +790,7 @@ sudo pip3 uninstall -y PyYAML requests pyOpenSSL urllib3
 
 - Add additional monitors:
   - TCP &amp; UDP
-  - Add `quic` UDP monitoring resource type to replace `https`
-  - Make `https` do certificate checking AFTER failed SSL hit & see if we can do in one request (hit an invalid SSL url host to isolate current problem)
+  - Add `quic` UDP monitoring resource type to replace deprecated `https`
 
 - Make email work (right now we're only using webhooks and heartbeats for alerts):
   - With system mailer
@@ -811,13 +810,11 @@ sudo pip3 uninstall -y PyYAML requests pyOpenSSL urllib3
 
 - Update docs to provide examples for Pushover &amp; Slack
 
-- Refactor retry logic out of checking resources into an enclosing function such that we can add `last_response_time_ms` to statefile for successful requests 
-
 # Licensing & Versioning
 
 APMonitor.py is licensed under the [GNU General Public License version 3](LICENSE.txt).
 ```
-Software: APMonitor 0.1.3
+Software: APMonitor 0.1.4
 License: GNU General Public License version 3
 Licensor: Andrew (AP) Prendergast, ap@andrewprendergast.com -- FSF Member
 ```
