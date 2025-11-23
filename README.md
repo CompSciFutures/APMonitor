@@ -286,7 +286,7 @@ APMonitor is invoked from the command line with various options to control verbo
 
 - **`-v, --verbose`**: Increase verbosity level (can be repeated: `-v`, `-vv`, `-vvv`). Shows check progress, skip reasons, and diagnostic information. Useful for troubleshooting configuration or understanding monitoring behavior.
 
-- **`-t, --threads <N>`**: Number of concurrent threads for checking resources (default: 1). Higher values enable parallel checking of multiple resources but increase lock contention. Use values > 1 for systems with many independent monitors.
+- **`-t, --threads <N>`**: Number of concurrent threads for checking resources (default: 1). Higher values enable parallel checking of multiple resources but increase lock contention. Use values > 1 for systems with many independent monitors. Will override the configuration file settings if `max_threads` is specified in the site config.
 
 - **`-s, --statefile <path>`**: Path to state file for persistence (default: platform-dependent). **Recommended: use `/tmp/statefile.json`** to store state in tmpfs for better performance and reduced disk wear.
 
@@ -535,8 +535,9 @@ APMonitor was designed with an engineering based approach to Vibe Coding in mind
 Steps:
 
 1. Paste in `READAI.md` (containing an Entrance Prompt) into your favourite AI coding tool (e.g., Grok 4.1 or Claude Sonnet)
-2. Paste in `APMonitor.py` (the source code)
-3. Vibe your changes as you see fit.
+2. Paste in `APMonitor.py` (tell your AI this is the source code)
+3. Paste in `README.md` (tell your AI this is the documentation)
+4. Vibe your changes as you see fit.
 
 Enjoy!
 
