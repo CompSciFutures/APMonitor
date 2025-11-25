@@ -17,6 +17,9 @@ import os
 from datetime import datetime
 import ssl
 import hashlib
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 # Hush insecure SSL warnings
 import urllib3
@@ -35,6 +38,48 @@ STATE_LOCK = threading.Lock()
 DEFAULT_CHECK_EVERY_N_SECS = 60
 DEFAULT_NOTIFY_EVERY_N_SECS = 600
 DEFAULT_AFTER_EVERY_N_NOTIFICATIONS = 1
+
+
+def to_natural_language_boolean(value):
+    """Convert various representations to boolean.
+
+    False values: false, no, fail, 0, bad, negative, off, n, f (case-insensitive)
+    True values: true, yes, ok, 1, good, positive, on, y, t (case-insensitive)
+
+    Args:
+        value: Can be bool, int, str, or None
+
+    Returns:
+        bool: The boolean interpretation
+
+    Raises:
+        ValueError: If string value is not a recognized boolean representation
+    """
+    if value is None:
+        return False
+
+    if isinstance(value, bool):
+        return value
+
+    if isinstance(value, int):
+        return bool(value)
+
+    if isinstance(value, str):
+        normalized = value.lower().strip()
+
+        # False values
+        if normalized in ['false', 'no', 'fail', '0', 'bad', 'negative', 'off', 'n', 'f']:
+            return False
+
+        # True values
+        if normalized in ['true', 'yes', 'ok', '1', 'good', 'positive', 'on', 'y', 't']:
+            return True
+
+        raise ValueError(f"Unrecognized boolean value: '{value}'")
+
+    # For any other type, use Python's truthiness
+    return bool(value)
+
 
 # Loads YAML or JSON config file
 #
@@ -254,30 +299,24 @@ def print_and_exit_on_bad_config(config):
 
                 # Validate optional email_outages
                 if 'email_outages' in email_entry:
-                    val = email_entry['email_outages']
-                    if isinstance(val, str):
-                        if val.lower() not in ['true', 'yes', 'on', '1', 'false', 'no', 'off', '0']:
-                            raise ConfigError(f"Field 'site.outage_emails[{i}].email_outages' must be a boolean or one of: true/yes/on/1/false/no/off/0")
-                    elif not isinstance(val, (bool, int)):
-                        raise ConfigError(f"Field 'site.outage_emails[{i}].email_outages' must be a boolean, integer, or string")
+                    try:
+                        to_natural_language_boolean(email_entry['email_outages'])
+                    except ValueError as e:
+                        raise ConfigError(f"Field 'site.outage_emails[{i}].email_outages': {e}")
 
                 # Validate optional email_recoveries
                 if 'email_recoveries' in email_entry:
-                    val = email_entry['email_recoveries']
-                    if isinstance(val, str):
-                        if val.lower() not in ['true', 'yes', 'on', '1', 'false', 'no', 'off', '0']:
-                            raise ConfigError(f"Field 'site.outage_emails[{i}].email_recoveries' must be a boolean or one of: true/yes/on/1/false/no/off/0")
-                    elif not isinstance(val, (bool, int)):
-                        raise ConfigError(f"Field 'site.outage_emails[{i}].email_recoveries' must be a boolean, integer, or string")
+                    try:
+                        to_natural_language_boolean(email_entry['email_recoveries'])
+                    except ValueError as e:
+                        raise ConfigError(f"Field 'site.outage_emails[{i}].email_recoveries': {e}")
 
                 # Validate optional email_reminders
                 if 'email_reminders' in email_entry:
-                    val = email_entry['email_reminders']
-                    if isinstance(val, str):
-                        if val.lower() not in ['true', 'yes', 'on', '1', 'false', 'no', 'off', '0']:
-                            raise ConfigError(f"Field 'site.outage_emails[{i}].email_reminders' must be a boolean or one of: true/yes/on/1/false/no/off/0")
-                    elif not isinstance(val, (bool, int)):
-                        raise ConfigError(f"Field 'site.outage_emails[{i}].email_reminders' must be a boolean, integer, or string")
+                    try:
+                        to_natural_language_boolean(email_entry['email_reminders'])
+                    except ValueError as e:
+                        raise ConfigError(f"Field 'site.outage_emails[{i}].email_reminders': {e}")
 
         # Validate optional site.outage_webhooks
         if 'outage_webhooks' in site:
@@ -336,6 +375,11 @@ def print_and_exit_on_bad_config(config):
             if not isinstance(site['max_try_secs'], int) or site['max_try_secs'] < 1:
                 raise ConfigError("Field 'site.max_try_secs' must be a positive integer")
 
+        # Validate optional site.check_every_n_secs
+        if 'check_every_n_secs' in site:
+            if not isinstance(site['check_every_n_secs'], int) or site['check_every_n_secs'] < 1:
+                raise ConfigError("Field 'site.check_every_n_secs' must be a positive integer")
+
         # Validate optional site.notify_every_n_secs
         if 'notify_every_n_secs' in site:
             if not isinstance(site['notify_every_n_secs'], int) or site['notify_every_n_secs'] < 1:
@@ -349,7 +393,7 @@ def print_and_exit_on_bad_config(config):
         # Check for unrecognized site-level parameters
         valid_site_params = {
             'name', 'email_server', 'outage_emails', 'outage_webhooks', 'max_threads', 'max_retries',
-            'max_try_secs', 'notify_every_n_secs', 'after_every_n_notifications'
+            'max_try_secs', 'check_every_n_secs', 'notify_every_n_secs', 'after_every_n_notifications'
         }
         unrecognized_site = set(site.keys()) - valid_site_params
         if unrecognized_site:
@@ -401,7 +445,7 @@ def print_and_exit_on_bad_config(config):
             monitor_names.add(name)
 
             # Validate type field
-            valid_types = ['ping', 'http', 'https']
+            valid_types = ['ping', 'http', 'quic']
             if monitor['type'] not in valid_types:
                 raise ConfigError(f"Monitor {i} (name: {monitor.get('name', 'unknown')}): invalid type '{monitor['type']}', must be one of {valid_types}")
 
@@ -434,12 +478,10 @@ def print_and_exit_on_bad_config(config):
 
             # Validate optional email flag
             if 'email' in monitor:
-                val = monitor['email']
-                if isinstance(val, str):
-                    if val.lower() not in ['true', 'yes', 'on', '1', 'false', 'no', 'off', '0']:
-                        raise ConfigError(f"Monitor {i} (name: {name}): 'email' must be a boolean or one of: true/yes/on/1/false/no/off/0")
-                elif not isinstance(val, (bool, int)):
-                    raise ConfigError(f"Monitor {i} (name: {name}): 'email' must be a boolean, integer, or string")
+                try:
+                    to_natural_language_boolean(monitor['email'])
+                except ValueError as e:
+                    raise ConfigError(f"Monitor {i} (name: {name}): 'email' field: {e}")
 
             monitor_type = monitor['type']
             address = monitor['address']
@@ -455,19 +497,19 @@ def print_and_exit_on_bad_config(config):
 
                 # 'expect' not allowed for ping
                 if 'expect' in monitor:
-                    raise ConfigError(f"Monitor {i} (name: {name}): 'expect' field is only valid for 'http' and 'https' monitors")
+                    raise ConfigError(f"Monitor {i} (name: {name}): 'expect' field is only valid for 'http' and 'quic' monitors")
 
                 # 'ssl_fingerprint' not allowed for ping
                 if 'ssl_fingerprint' in monitor:
-                    raise ConfigError(f"Monitor {i} (name: {name}): 'ssl_fingerprint' field is only valid for 'http' and 'https' monitors")
+                    raise ConfigError(f"Monitor {i} (name: {name}): 'ssl_fingerprint' field is only valid for 'http' and 'quic' monitors")
 
-            elif monitor_type in ['http', 'https']:
+            elif monitor_type in ['http', 'quic']:
                 # Validate URL/URI
                 parsed = urlparse(address)
                 if not parsed.scheme or not parsed.netloc:
                     raise ConfigError(f"Monitor {i} (name: {name}): 'address' must be a valid URL with scheme and host, got '{address}'")
 
-                # Validate 'expect' if present
+                # Validate 'expect' if present - must be a string
                 if 'expect' in monitor:
                     if not isinstance(monitor['expect'], str):
                         raise ConfigError(f"Monitor {i} (name: {name}): 'expect' must be a string")
@@ -509,36 +551,29 @@ def print_and_exit_on_bad_config(config):
 
             # Validate optional ignore_ssl_expiry
             if 'ignore_ssl_expiry' in monitor:
-                if monitor_type not in ['http', 'https']:
-                    raise ConfigError(f"Monitor {i} (name: {name}): 'ignore_ssl_expiry' field is only valid for 'http' and 'https' monitors")
-                # Accept various truthy values (case-insensitive)
-                if not isinstance(monitor['ignore_ssl_expiry'], (bool, int, str)):
-                    raise ConfigError(f"Monitor {i} (name: {name}): 'ignore_ssl_expiry' must be a boolean, integer, or string")
+                if monitor_type not in ['http', 'quic']:
+                    raise ConfigError(f"Monitor {i} (name: {name}): 'ignore_ssl_expiry' field is only valid for 'http' and 'quic' monitors")
+                try:
+                    to_natural_language_boolean(monitor['ignore_ssl_expiry'])
+                except ValueError as e:
+                    raise ConfigError(f"Monitor {i} (name: {name}): 'ignore_ssl_expiry' field: {e}")
 
     except ConfigError as e:
         print(str(e), file=sys.stderr)
         sys.exit(1)
 
 
-def check_url_resource(resource):
+def check_http_url(url, name, expect, ssl_fingerprint, ignore_ssl_expiry):
     """Perform HTTP/S request and return None if OK, error message if failed."""
-    url = resource['address']
-    name = resource['name']
-    expect = resource.get('expect')
-    ssl_fingerprint = resource.get('ssl_fingerprint')
-    ignore_ssl_expiry = resource.get('ignore_ssl_expiry', False)
     error_msg = None
 
     # Normalize ignore_ssl_expiry to boolean
-    if isinstance(ignore_ssl_expiry, str):
-        ignore_ssl_expiry = ignore_ssl_expiry.lower() in ['true', 'yes', 'ok', '1']
-    elif isinstance(ignore_ssl_expiry, int):
-        ignore_ssl_expiry = bool(ignore_ssl_expiry)
+    ignore_ssl_expiry = to_natural_language_boolean(ignore_ssl_expiry)
 
-    # parse the url and don't proceed if it's not pure HTTP/S (e.g., QUIC)
+    # parse the url and don't proceed if it's not pure HTTP/S
     parsed = urlparse(url)
     if parsed.scheme not in ('http', 'https'):
-        error_msg = f"{parsed.scheme.upper()} protocol not supported, use http or https"
+        error_msg = f"{parsed.scheme.upper()} protocol not supported for HTTP, use http or https"
         print(f"HTTP/S check FAILED for '{name}' at '{url}': {error_msg}", file=sys.stderr)
         return error_msg
 
@@ -621,25 +656,8 @@ def check_url_resource(resource):
     try:
         response = requests.get(url, timeout=MAX_TRY_SECS, verify=verify_ssl)
 
-        if response.status_code == 200:
-            # If 'expect' is specified, check content
-            if expect:
-                if expect in response.text:
-                    if VERBOSE:
-                        print(f"HTTP/S check SUCCESS for '{name}' at '{url}' (expected content found)")
-                    return None
-                else:
-                    error_msg = "expected content not found"
-                    print(f"HTTP/S check FAILED for '{name}' at '{url}': {error_msg}", file=sys.stderr)
-                    return error_msg
-            else:
-                if VERBOSE:
-                    print(f"HTTP/S check SUCCESS {response.status_code} for '{name}' at '{url}'")
-                return None
-        else:
-            error_msg = f"error response code {response.status_code} returned by server at {parsed.netloc}"
-            print(f"HTTP/S check FAILED for '{name}' at '{url}': {error_msg}", file=sys.stderr)
-            return error_msg
+        # Return response details for expect checking
+        return None, response.status_code, response.headers, response.text
 
     except requests.exceptions.RequestException as e:
         # Extract the root cause from nested exceptions (check both __cause__ and __context__)
@@ -652,7 +670,285 @@ def check_url_resource(resource):
 
         error_msg = f"{type(root_cause).__name__}: {root_cause}"
         print(f"HTTP/S check FAILED for '{name}' at '{url}': {error_msg}", file=sys.stderr)
+        return error_msg, None, None, None
+
+
+def check_quic_url(url, name, expect, ssl_fingerprint, ignore_ssl_expiry):
+    """Perform QUIC/HTTP3 request and return None if OK, error message if failed."""
+    import asyncio
+
+    async def _check_quic_url_async():
+        """Async implementation of QUIC/HTTP3 check."""
+        from aioquic.asyncio.client import connect
+        from aioquic.asyncio.protocol import QuicConnectionProtocol
+        from aioquic.h3.connection import H3_ALPN
+        from aioquic.h3.events import HeadersReceived, DataReceived, H3Event
+        from aioquic.quic.configuration import QuicConfiguration
+        from aioquic.quic.events import QuicEvent
+        import OpenSSL.crypto
+
+        error_msg = None
+
+        # Normalize ignore_ssl_expiry to boolean
+        nonlocal_ignore_ssl_expiry = to_natural_language_boolean(ignore_ssl_expiry)
+
+        # Parse the URL and check scheme
+        parsed = urlparse(url)
+        if parsed.scheme not in ('https', 'quic'):
+            error_msg = f"{parsed.scheme.upper()} protocol not supported for QUIC, use https or quic"
+            print(f"QUIC check FAILED for '{name}' at '{url}': {error_msg}", file=sys.stderr)
+            return error_msg, None, None, None
+
+        hostname = parsed.hostname
+        port = parsed.port or 443
+        path = parsed.path or '/'
+        if parsed.query:
+            path = f"{path}?{parsed.query}"
+
+        # Configure QUIC connection with timeout
+        configuration = QuicConfiguration(
+            alpn_protocols=H3_ALPN,
+            is_client=True,
+            verify_mode=ssl.CERT_NONE if (ssl_fingerprint or nonlocal_ignore_ssl_expiry) else ssl.CERT_REQUIRED,
+            idle_timeout=MAX_TRY_SECS
+        )
+
+        # Storage for response
+        response_headers = None
+        response_data = b""
+        response_complete = asyncio.Event()
+
+        # Custom protocol to handle HTTP/3 events
+        class HttpClientProtocol(QuicConnectionProtocol):
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+                from aioquic.h3.connection import H3Connection
+                self._http = H3Connection(self._quic)
+
+            def quic_event_received(self, event: QuicEvent):
+                nonlocal response_headers, response_data
+
+                # Pass QUIC event to HTTP/3 layer
+                for h3_event in self._http.handle_event(event):
+                    if isinstance(h3_event, HeadersReceived):
+                        response_headers = h3_event.headers
+                        if VERBOSE > 2:
+                            print(f"DEBUG: Received headers: {response_headers}")
+
+                    elif isinstance(h3_event, DataReceived):
+                        response_data += h3_event.data
+                        if VERBOSE > 2:
+                            print(f"DEBUG: Received {len(h3_event.data)} bytes, stream_ended={h3_event.stream_ended}, total={len(response_data)}")
+                        if h3_event.stream_ended:
+                            response_complete.set()
+
+        try:
+            # Establish QUIC connection with custom protocol and timeout
+            async with asyncio.timeout(MAX_TRY_SECS):
+                async with connect(
+                        hostname,
+                        port,
+                        configuration=configuration,
+                        create_protocol=HttpClientProtocol,
+                ) as protocol:
+
+                    # Get the peer certificate
+                    quic = protocol._quic
+                    tls = quic.tls
+
+                    # Extract certificate from TLS connection
+                    if tls and hasattr(tls, 'peer_certificate'):
+                        peer_cert_der = tls.peer_certificate
+
+                        if peer_cert_der:
+                            # Check fingerprint if provided
+                            if ssl_fingerprint:
+                                server_fingerprint = hashlib.sha256(peer_cert_der).hexdigest()
+                                expected_fingerprint = ssl_fingerprint.replace(':', '').lower()
+
+                                if server_fingerprint != expected_fingerprint:
+                                    error_msg = f"SSL fingerprint mismatch"
+                                    if VERBOSE:
+                                        print(f"SSL fingerprint check FAILED for '{name}': expected {expected_fingerprint}, got {server_fingerprint}")
+                                    print(f"QUIC check FAILED for '{name}' at '{url}': {error_msg}", file=sys.stderr)
+                                    return error_msg, None, None, None
+
+                                if VERBOSE:
+                                    print(f"SSL fingerprint check PASSED for '{name}'")
+
+                            # Check certificate expiry unless ignored
+                            if not nonlocal_ignore_ssl_expiry:
+                                try:
+                                    # Convert DER to PEM for OpenSSL
+                                    cert_pem = ssl.DER_cert_to_PEM_cert(peer_cert_der)
+                                    x509 = OpenSSL.crypto.load_certificate(OpenSSL.crypto.FILETYPE_PEM, cert_pem)
+                                    not_after_asn1 = x509.get_notAfter()
+
+                                    if VERBOSE > 1:
+                                        print(f"DEBUG: notAfter raw (ASN1) = {not_after_asn1}")
+
+                                    if not not_after_asn1:
+                                        error_msg = "Certificate has no expiry date"
+                                        print(f"QUIC check FAILED for '{name}' at '{url}': {error_msg}", file=sys.stderr)
+                                        return error_msg, None, None, None
+
+                                    not_after_str = not_after_asn1.decode('ascii')
+                                    not_after = datetime.strptime(not_after_str, '%Y%m%d%H%M%SZ')
+
+                                    if datetime.now() > not_after:
+                                        error_msg = f"SSL certificate expired on {not_after}"
+                                        if VERBOSE:
+                                            print(f"SSL certificate expiry check FAILED for '{name}': expired on {not_after}")
+                                        print(f"QUIC check FAILED for '{name}' at '{url}': SSL certificate expired", file=sys.stderr)
+                                        return error_msg, None, None, None
+
+                                    if VERBOSE:
+                                        print(f"SSL certificate expiry check PASSED for '{name}': valid until {not_after}")
+
+                                except Exception as e:
+                                    error_msg = f"Certificate parsing error: {e}"
+                                    print(f"QUIC check FAILED for '{name}' at '{url}': {error_msg}", file=sys.stderr)
+                                    return error_msg, None, None, None
+                            elif VERBOSE:
+                                print(f"SSL certificate expiry check SKIPPED for '{name}' (ignore_ssl_expiry=True)")
+
+                    # Access HTTP/3 connection from protocol
+                    http = protocol._http
+
+                    # Get next available stream ID
+                    stream_id = quic.get_next_available_stream_id()
+
+                    # Send HTTP request
+                    headers = [
+                        (b":method", b"GET"),
+                        (b":scheme", b"https"),
+                        (b":authority", hostname.encode()),
+                        (b":path", path.encode()),
+                        (b"user-agent", b"APMonitor/1.0"),
+                    ]
+
+                    http.send_headers(stream_id=stream_id, headers=headers, end_stream=True)
+
+                    # Transmit the request
+                    protocol.transmit()
+
+                    # Wait for response with timeout
+                    await response_complete.wait()
+
+                    # Parse response status
+                    status_code = None
+                    if response_headers:
+                        for name_bytes, value_bytes in response_headers:
+                            if name_bytes == b":status":
+                                status_code = int(value_bytes.decode())
+                                break
+
+                    if status_code is None:
+                        error_msg = "no status code in response"
+                        print(f"QUIC check FAILED for '{name}' at '{url}': {error_msg}", file=sys.stderr)
+                        return error_msg, None, None, None
+
+                    # Convert headers to dict for easier checking
+                    headers_dict = {}
+                    if response_headers:
+                        for name_bytes, value_bytes in response_headers:
+                            headers_dict[name_bytes.decode('utf-8', errors='ignore')] = value_bytes.decode('utf-8', errors='ignore')
+
+                    # Decode response text
+                    response_text = response_data.decode('utf-8', errors='ignore')
+
+                    # Return response details for expect checking
+                    return None, status_code, headers_dict, response_text
+
+        except asyncio.TimeoutError:
+            error_msg = "timeout"
+            print(f"QUIC check FAILED for '{name}' at '{url}': {error_msg}", file=sys.stderr)
+            return error_msg, None, None, None
+
+        except Exception as e:
+            # Extract the root cause from nested exceptions
+            root_cause = e
+            while True:
+                next_cause = getattr(root_cause, '__cause__', None) or getattr(root_cause, '__context__', None)
+                if next_cause is None or next_cause == root_cause:
+                    break
+                root_cause = next_cause
+
+            error_msg = f"{type(root_cause).__name__}: {root_cause}"
+
+            # Add traceback in verbose mode
+            if VERBOSE > 1:
+                import traceback
+                print(f"DEBUG: Full traceback:", file=sys.stderr)
+                traceback.print_exc(file=sys.stderr)
+
+            print(f"QUIC check FAILED for '{name}' at '{url}': {error_msg}", file=sys.stderr)
+            return error_msg, None, None, None
+
+    # Outer function execution
+    try:
+        # Run with timeout
+        result = asyncio.run(_check_quic_url_async())
+        return result
+    except Exception as e:
+        error_msg = f"{type(e).__name__}: {e}"
+
+        # Add traceback in verbose mode
+        if VERBOSE > 1:
+            import traceback
+            print(f"DEBUG: Full outer traceback:", file=sys.stderr)
+            traceback.print_exc(file=sys.stderr)
+
+        print(f"QUIC check FAILED for '{name}' at '{url}': {error_msg}", file=sys.stderr)
+        return error_msg, None, None, None
+
+
+def check_url_resource(resource):
+    """Check URL resource (HTTP or QUIC) and return None if OK, error message if failed."""
+    resource_type = resource['type']
+    url = resource['address']
+    name = resource['name']
+    expect = resource.get('expect')
+    ssl_fingerprint = resource.get('ssl_fingerprint')
+    ignore_ssl_expiry = resource.get('ignore_ssl_expiry', False)
+
+    # Call the appropriate check function
+    if resource_type == 'http':
+        error_msg, status_code, headers, response_text = check_http_url(url, name, expect, ssl_fingerprint, ignore_ssl_expiry)
+    elif resource_type == 'quic':
+        error_msg, status_code, headers, response_text = check_quic_url(url, name, expect, ssl_fingerprint, ignore_ssl_expiry)
+    else:
+        error_msg = f"Unknown URL resource type: {resource_type}"
+        print(f"URL check FAILED for '{name}': {error_msg}", file=sys.stderr)
         return error_msg
+
+    # If there was a connection/SSL error, return it immediately
+    if error_msg is not None:
+        return error_msg
+
+    # Handle expect checking - simple string-only approach
+    if expect:
+        # Check if expected content is in response
+        if expect in response_text:
+            if VERBOSE:
+                print(f"{resource_type.upper()} check SUCCESS for '{name}' at '{url}' (expected content found)")
+            return None
+        else:
+            error_msg = f"expected content not found: '{expect}'"
+            if VERBOSE:
+                print(f"{resource_type.upper()} check FAILED for '{name}': expected '{expect}' not found in response")
+            print(f"{resource_type.upper()} check FAILED for '{name}' at '{url}': {error_msg}", file=sys.stderr)
+            return error_msg
+    else:
+        # No expect specified - just check for 200 OK
+        if status_code == 200:
+            if VERBOSE:
+                print(f"{resource_type.upper()} check SUCCESS {status_code} for '{name}' at '{url}'")
+            return None
+        else:
+            error_msg = f"error response code {status_code}"
+            print(f"{resource_type.upper()} check FAILED for '{name}' at '{url}': {error_msg}", file=sys.stderr)
+            return error_msg
 
 
 def check_ping_resource(resource):
@@ -696,7 +992,7 @@ def check_resource(resource):
 
         if resource['type'] == 'ping':
             error_msg = check_ping_resource(resource)
-        elif resource['type'] == 'http' or resource['type'] == 'https':
+        elif resource['type'] in ('http', 'quic'):
             error_msg = check_url_resource(resource)
         else:
             raise ConfigError(f"Unknown resource type: {resource['type']} for monitor {resource['name']}")
@@ -840,19 +1136,10 @@ def notify_resource_outage_with_email(email_entry, site_name, error_reason, site
 
     email_server = site_config['email_server']
 
-    # Normalize email control flags to boolean
-    def normalize_bool(val):
-        if isinstance(val, str):
-            return val.lower() in ['true', 'yes', 'on', '1']
-        elif isinstance(val, int):
-            return bool(val)
-        else:
-            return bool(val)
-
     # Check notification type control flags (default: true for all)
-    email_outages = normalize_bool(email_entry.get('email_outages', True))
-    email_recoveries = normalize_bool(email_entry.get('email_recoveries', True))
-    email_reminders = normalize_bool(email_entry.get('email_reminders', True))
+    email_outages = to_natural_language_boolean(email_entry.get('email_outages', True))
+    email_recoveries = to_natural_language_boolean(email_entry.get('email_recoveries', True))
+    email_reminders = to_natural_language_boolean(email_entry.get('email_reminders', True))
 
     # Check if this notification type should be sent
     if notification_type == 'outage' and not email_outages:
@@ -876,11 +1163,6 @@ def notify_resource_outage_with_email(email_entry, site_name, error_reason, site
     from_address = email_server['from_address']
     use_tls = email_server.get('use_tls', True)
     to_address = email_entry['email']
-
-    # Build email message
-    import smtplib
-    from email.mime.text import MIMEText
-    from email.mime.multipart import MIMEMultipart
 
     # Determine subject based on notification type
     if notification_type == 'recovery':
@@ -950,15 +1232,23 @@ def calc_next_notification_delay_secs(notify_every_n_secs, after_every_n_notific
               )
     return secs_between_alarms
 
+
 def check_and_heartbeat(resource, site_config):
     """Check resource and ping heartbeat if up."""
+
+    # Calculate checksum of resource configuration
+    import hashlib
+    resource_json = json.dumps(resource, sort_keys=True)
+    resource_checksum = hashlib.sha256(resource_json.encode()).hexdigest()
 
     # Get previous state for this resource
     with STATE_LOCK:
         prev_state = STATE.get(resource['name'], {})
         prev_last_checked = prev_state.get('last_checked')
+        prev_config_checksum = prev_state.get('last_config_checksum')
 
     # Determine if we should check this resource
+    config_changed = prev_config_checksum and prev_config_checksum != resource_checksum
     check_every_n_secs = resource.get('check_every_n_secs', DEFAULT_CHECK_EVERY_N_SECS)
     should_check = True
 
@@ -971,7 +1261,8 @@ def check_and_heartbeat(resource, site_config):
         except:
             should_check = True
 
-    if not should_check:
+    # Skip only if timing says no AND config hasn't changed
+    if not should_check and not config_changed:
         if VERBOSE:
             if not seconds_since_check:
                 print(f"  - skipping {resource['name']} (checked {format_time_ago(prev_last_checked)} ago)")
@@ -980,8 +1271,10 @@ def check_and_heartbeat(resource, site_config):
                 print(f"  - skipping {resource['name']} for {format_time_ago(time_until_next_check)} (checked {format_time_ago(prev_last_checked)} ago)")
         return
 
-    if VERBOSE:
-        print(f"  - checking {resource}")
+    if VERBOSE and config_changed:
+        print(f"  - configuration changed for {resource['name']}, checking immediately: {resource}")
+    elif VERBOSE:
+        print(f"  - checking: {resource}")
 
     # Get previous state for this resource
     with STATE_LOCK:
@@ -1033,15 +1326,7 @@ def check_and_heartbeat(resource, site_config):
             print(f"##### RECOVERY: {recovery_message} #####", file=sys.stderr)
 
             # Check monitor-level email override
-            monitor_email_enabled = True
-            if 'email' in resource:
-                val = resource['email']
-                if isinstance(val, str):
-                    monitor_email_enabled = val.lower() in ['true', 'yes', 'on', '1']
-                elif isinstance(val, int):
-                    monitor_email_enabled = bool(val)
-                else:
-                    monitor_email_enabled = bool(val)
+            monitor_email_enabled = to_natural_language_boolean(resource.get('email', True))
 
             if monitor_email_enabled and 'outage_emails' in site_config:
                 for email_entry in site_config['outage_emails']:
@@ -1100,15 +1385,7 @@ def check_and_heartbeat(resource, site_config):
 
         if should_notify:
             # Check monitor-level email override
-            monitor_email_enabled = True
-            if 'email' in resource:
-                val = resource['email']
-                if isinstance(val, str):
-                    monitor_email_enabled = val.lower() in ['true', 'yes', 'on', '1']
-                elif isinstance(val, int):
-                    monitor_email_enabled = bool(val)
-                else:
-                    monitor_email_enabled = bool(val)
+            monitor_email_enabled = to_natural_language_boolean(resource.get('email', True))
 
             # Determine notification type (first notification is 'outage', subsequent are 'reminder')
             notification_type = 'outage' if prev_notified_count == 0 else 'reminder'
@@ -1148,7 +1425,8 @@ def check_and_heartbeat(resource, site_config):
             'last_notified': last_notified,
             'last_successful_heartbeat': last_successful_heartbeat,
             'notified_count': notified_count,
-            'error_reason': error_reason
+            'error_reason': error_reason,
+            'last_config_checksum': resource_checksum
         }
     })
 
@@ -1211,7 +1489,7 @@ def create_pid_file_or_exit_on_unix(config_path):
 
 
 def main():
-    global VERBOSE, MAX_THREADS, STATEFILE, STATE, MAX_RETRIES, MAX_TRY_SECS, DEFAULT_NOTIFY_EVERY_N_SECS, DEFAULT_AFTER_EVERY_N_NOTIFICATIONS
+    global VERBOSE, MAX_THREADS, STATEFILE, STATE, MAX_RETRIES, MAX_TRY_SECS, DEFAULT_CHECK_EVERY_N_SECS, DEFAULT_NOTIFY_EVERY_N_SECS, DEFAULT_AFTER_EVERY_N_NOTIFICATIONS
 
     parser = argparse.ArgumentParser(description='Network resource availability monitor')
     parser.add_argument('config', help='Path to configuration file (JSON or YAML)')
@@ -1276,6 +1554,8 @@ def main():
             MAX_RETRIES = config['site']['max_retries']
         if 'max_try_secs' in config['site']:
             MAX_TRY_SECS = config['site']['max_try_secs']
+        if 'check_every_n_secs' in config['site']:
+            DEFAULT_CHECK_EVERY_N_SECS = config['site']['check_every_n_secs']
         if 'notify_every_n_secs' in config['site']:
             DEFAULT_NOTIFY_EVERY_N_SECS = config['site']['notify_every_n_secs']
         if 'after_every_n_notifications' in config['site']:

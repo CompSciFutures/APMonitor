@@ -125,6 +125,7 @@ site:
   max_threads: 1
   max_retries: 3
   max_try_secs: 20
+  check_every_n_secs: 60
   notify_every_n_secs: 600
   after_every_n_notifications: 1
 
@@ -146,7 +147,7 @@ monitors:
     after_every_n_notifications: 5
     email: yes
 
-  - type: https
+  - type: http
     name: nvr0
     address: "https://192.168.1.12/api/system"
     expect: "nvr0"
@@ -155,6 +156,12 @@ monitors:
     email: false
     heartbeat_url: "https://plus.site24x7.com/hb/uuid/nvr0"
     heartbeat_every_n_secs: 60
+
+  - type: quic
+    name: fast-api
+    address: "https://192.168.1.50/api/health"
+    expect: "ok"
+    check_every_n_secs: 30
 ```
 
 ## site: configuration options
@@ -246,6 +253,13 @@ max_retries: 3
 max_try_secs: 20
 ```
 
+- **`check_every_n_secs`** (integer, optional): Default seconds between checks for all monitors. Individual monitors can override this with their own `check_every_n_secs` setting. Must be ≥ 1. Default: 60
+```yaml
+check_every_n_secs: 300
+```
+
+**Note**: This sets the baseline check interval for all monitors. Can be overridden per-monitor for resources requiring different check frequencies. When a monitor's configuration changes (detected via SHA-256 checksum), it is checked immediately regardless of this interval.
+
 - **`notify_every_n_secs`** (integer, optional): Default minimum seconds between outage notifications for all monitors. Individual monitors can override this with their own `notify_every_n_secs` setting. Must be ≥ 1. Default: 600
 ```yaml
 notify_every_n_secs: 1800
@@ -268,21 +282,23 @@ The `monitors` section is a list of resources to monitor. Each monitor defines w
 
 - **`type`** (string): Type of check to perform. Must be one of:
   - `ping`: ICMP ping check
-  - `http`: HTTP endpoint check (supports HTTP/S, follows and checks redirect chain for errors)
-  - `https`: HTTPS endpoint check (deprecated)
+  - `http`: HTTP/HTTPS endpoint check (supports both HTTP and HTTPS schemes, follows and checks redirect chain for errors)
+  - `quic`: HTTP/3 over QUIC endpoint check (UDP-based, faster than HTTP/HTTPS for high-latency networks)
 
 - **`name`** (string): Unique identifier for this monitor. Must be unique across all monitors in the configuration. Used in notifications and state tracking.
 
 - **`address`** (string): Resource to check. Format depends on monitor type:
   - For `ping`: Valid hostname, IPv4, or IPv6 address
-  - For `http`/`https`: Full URL with scheme and host
+  - For `http`/`quic`: Full URL with scheme and host
 
 ### Optional Fields (All Monitor Types)
 
-- **`check_every_n_secs`** (integer, optional): Seconds between checks for this resource. Must be ≥ 1. Default: 60
+- **`check_every_n_secs`** (integer, optional): Seconds between checks for this resource. Overrides site-level `check_every_n_secs`. Must be ≥ 1. Default: 60 (or site-level setting if configured)
 ```yaml
 check_every_n_secs: 300
 ```
+
+**Note**: When a monitor's configuration changes (any field modification), the monitor is checked immediately on the next run regardless of this interval. Configuration changes are detected via SHA-256 checksum stored in the state file.
 
 - **`notify_every_n_secs`** (integer, optional): Minimum seconds between outage notifications while resource remains down. Must be ≥ 1 and ≥ `check_every_n_secs`. Default: 600
 ```yaml
@@ -314,21 +330,23 @@ heartbeat_url: "https://hc-ping.com/your-uuid-here"
 heartbeat_every_n_secs: 300
 ```
 
-### HTTP/HTTPS Monitor Specific Fields
+### HTTP/QUIC Monitor Specific Fields
 
-These fields are only valid for monitors with `type: http` or `type: https`:
+These fields are only valid for monitors with `type: http` or `type: quic`:
 
-- **`expect`** (string, optional): Substring that must appear in the HTTP response body for the check to succeed. If not present, any 200 OK response is considered successful.
+- **`expect`** (string, optional): Substring that must appear in the HTTP response body for the check to succeed. If not present, any 200 OK response is considered successful. The check performs a simple string search—if the expected content appears anywhere in the response body, the check passes.
 ```yaml
 expect: "System Name: <b>HomeLab</b>"
 ```
 
-- **`ssl_fingerprint`** (string, optional): SHA-256 fingerprint of the expected SSL certificate (with or without colons). Enables certificate pinning for self-signed certificates. When specified, the certificate is verified before making the HTTP request.
+**Note**: The `expect` field is string-only for simplicity. It performs exact substring matching (case-sensitive). For complex validation scenarios requiring status code checks, header validation, or regex matching, consider using external monitoring tools or extending APMonitor.
+
+- **`ssl_fingerprint`** (string, optional): SHA-256 fingerprint of the expected SSL/TLS certificate (with or without colons). Enables certificate pinning for self-signed certificates. When specified, the certificate is verified before making the HTTP request.
 ```yaml
 ssl_fingerprint: "e85260e8f8e85629cfa4d023ea0ae8dd3ce8ccc0040b054a4753c2a5ab269296"
 ```
 
-- **`ignore_ssl_expiry`** (boolean/integer/string, optional): Skip SSL certificate expiration checking. Accepts: `true`/`1`/`"yes"`/`"ok"` (case-insensitive) for true, or `false`/`0`/`"no"` for false. Useful for development environments or when certificate renewal is managed separately.
+- **`ignore_ssl_expiry`** (boolean/integer/string, optional): Skip SSL/TLS certificate expiration checking. Accepts: `true`/`1`/`"yes"`/`"ok"` (case-insensitive) for true, or `false`/`0`/`"no"` for false. Useful for development environments or when certificate renewal is managed separately.
 ```yaml
 ignore_ssl_expiry: true
 ```
@@ -356,7 +374,7 @@ ignore_ssl_expiry: true
 
 **HTTPS Monitor with Certificate Pinning:**
 ```yaml
-- type: https
+- type: http
   name: nvr0
   address: "https://192.168.1.12/api/system"
   expect: "nvr0"
@@ -366,6 +384,18 @@ ignore_ssl_expiry: true
   heartbeat_every_n_secs: 60
 ```
 
+**QUIC Monitor (HTTP/3):**
+```yaml
+- type: quic
+  name: fast-api
+  address: "https://api.example.com/health"
+  expect: "healthy"
+  check_every_n_secs: 30
+  ssl_fingerprint: "a1b2c3d4e5f67890abcdef1234567890abcdef1234567890abcdef1234567890"
+```
+
+**Note**: QUIC monitoring uses HTTP/3 over UDP (port 443 by default) and is particularly effective for high-latency networks or when monitoring resources over unreliable connections. QUIC provides built-in connection migration and improved performance compared to TCP-based HTTP/2.
+
 ### Validation Rules
 
 The configuration validator enforces these rules:
@@ -373,28 +403,31 @@ The configuration validator enforces these rules:
 1. Monitor names must be unique across all monitors
 2. `notify_every_n_secs` must be ≥ `check_every_n_secs` if both specified
 3. `heartbeat_every_n_secs` can only be specified if `heartbeat_url` exists
-4. `expect`, `ssl_fingerprint`, and `ignore_ssl_expiry` are only valid for HTTP/HTTPS monitors
-5. All URLs must include both scheme (http/https) and hostname
-6. Email addresses must match standard email format (RFC 5322 simplified)
-7. SSL fingerprints must be valid hexadecimal strings with length that's a power of two
-8. `after_every_n_notifications` can only be specified if `notify_every_n_secs` is present
-9. `outage_emails` can only be specified if `email_server` is configured
-10. If `email_server` is present, `smtp_host`, `smtp_port`, and `from_address` are required
-11. `smtp_username` and `smtp_password` are optional (for servers without authentication)
-12. Email control flags (`email_outages`, `email_recoveries`, `email_reminders`) accept boolean or string values
-13. Monitor-level `email` flag accepts boolean or string values
+4. `expect`, `ssl_fingerprint`, and `ignore_ssl_expiry` are only valid for HTTP/QUIC monitors
+5. `expect` must be a non-empty string if specified
+6. All URLs must include both scheme (http/https) and hostname
+7. Email addresses must match standard email format (RFC 5322 simplified)
+8. SSL fingerprints must be valid hexadecimal strings with length that's a power of two
+9. `after_every_n_notifications` can only be specified if `notify_every_n_secs` is present
+10. `outage_emails` can only be specified if `email_server` is configured
+11. If `email_server` is present, `smtp_host`, `smtp_port`, and `from_address` are required
+12. `smtp_username` and `smtp_password` are optional (for servers without authentication)
+13. Email control flags (`email_outages`, `email_recoveries`, `email_reminders`) accept boolean or string values
+14. Monitor-level `email` flag accepts boolean or string values
 
 # Dependencies
 
 Install system-wide for production use:
 ```
-sudo pip3 install PyYAML requests pyOpenSSL urllib3
+sudo pip3 install PyYAML requests pyOpenSSL urllib3 aioquic
 ```
 
 Or on Debian 12+ systems:
 ```
-sudo pip3 install --break-system-packages PyYAML requests pyOpenSSL urllib3
+sudo pip3 install --break-system-packages PyYAML requests pyOpenSSL urllib3 aioquic
 ```
+
+**Note**: The `aioquic` package is required for QUIC/HTTP3 monitoring support. If you don't plan to use `type: quic` monitors, you can omit this dependency.
 
 # Example invocation:
 ```
@@ -633,16 +666,19 @@ APMonitor uses a JSON state file to persist monitoring data across runs:
 
 The state file tracks:
 - `is_up`: Current resource status
-- `last_checked`: When resource was last checked
+- `last_checked`: When resource was last checked (ISO 8601 timestamp)
 - `last_response_time_ms`: Response time in milliseconds for successful checks
-- `last_notified`: When last notification was sent
-- `last_alarm_started`: When current/last outage began
-- `last_successful_heartbeat`: When heartbeat URL last succeeded
+- `last_notified`: When last notification was sent (ISO 8601 timestamp)
+- `last_alarm_started`: When current/last outage began (ISO 8601 timestamp)
+- `last_successful_heartbeat`: When heartbeat URL last succeeded (ISO 8601 timestamp)
 - `down_count`: Consecutive failed checks
 - `notified_count`: Number of notifications sent for current outage
 - `error_reason`: Last error message
+- `last_config_checksum`: SHA-256 hash of monitor configuration (detects config changes)
 
 **Note**: If using `/tmp/statefile.json`, the state file is cleared on system reboot. This resets all monitoring history but doesn't affect functionality—monitoring resumes normally on first run.
+
+**Configuration Change Detection**: The `last_config_checksum` field stores a SHA-256 hash of the entire monitor configuration (all fields including `type`, `name`, `address`, `expect`, etc.). When APMonitor detects a configuration change (checksum mismatch), it immediately checks that monitor regardless of `check_every_n_secs` timing. This ensures configuration changes take effect on the next run without waiting for the scheduled check interval.
 
 
 ## Execution Flow
@@ -655,11 +691,13 @@ Each invocation of APMonitor:
 2. Loads and validates configuration file
 3. Loads previous state from state file (if exists)
 4. For each monitor:
-   - Checks if `check_every_n_secs` has elapsed since `last_checked`
+   - Calculates SHA-256 checksum of monitor configuration
+   - Checks if configuration changed (checksum mismatch) or `check_every_n_secs` elapsed since `last_checked`
+   - If config changed: checks immediately (bypasses timing)
    - If due: performs resource check
    - If down and `notify_every_n_secs` elapsed: sends notifications
    - If up and heartbeat configured: pings heartbeat URL if due
-   - Updates state atomically
+   - Updates state atomically with new checksum
 5. Saves state file with execution timing
 6. Cleans up the PID file if possible.
 7. Exits
@@ -728,12 +766,12 @@ sudo apt install python3 python3-pip -y
 
 Install dependencies globally (required for systemd service):
 ```
-sudo pip3 install --break-system-packages PyYAML requests pyOpenSSL urllib3
+sudo pip3 install --break-system-packages PyYAML requests pyOpenSSL urllib3 aioquic
 ```
 
 **Note**: On Debian 12+, the `--break-system-packages` flag is required. On older systems, omit this flag:
 ```
-sudo pip3 install PyYAML requests pyOpenSSL urllib3
+sudo pip3 install PyYAML requests pyOpenSSL urllib3 aioquic
 ```
 
 **Dependencies installed**:
@@ -741,6 +779,7 @@ sudo pip3 install PyYAML requests pyOpenSSL urllib3
 - `requests` - HTTP/HTTPS resource checking and webhook notifications
 - `pyOpenSSL` - SSL certificate verification and fingerprint checking
 - `urllib3` - HTTP connection pooling (dependency of requests)
+- `aioquic` - QUIC/HTTP3 protocol support (required for `type: quic` monitors)
 
 ## Step 3: Create Monitoring User
 
@@ -875,12 +914,12 @@ sudo systemctl is-enabled apmonitor.service
 
 ## Updating Configuration
 
-After modifying `/usr/local/etc/apmonitor-config.yaml`, restart the service:
+After modifying `/usr/local/etc/apmonitor-config.yaml`, the changes take effect automatically on the next monitoring cycle (typically within 30 seconds). APMonitor detects configuration changes via SHA-256 checksums and immediately checks any modified monitors, so you don't need to restart the service unless you want immediate effect.
+
+To force immediate checking of all monitors after config changes:
 ```
 sudo systemctl restart apmonitor.service
 ```
-
-Configuration changes take effect on the next monitoring cycle (within 30 seconds).
 
 ## Uninstallation
 
@@ -903,14 +942,13 @@ sudo rm /var/tmp/apmonitor-statefile.json*
 sudo userdel -r monitoring
 
 # Optionally remove Python dependencies
-sudo pip3 uninstall -y PyYAML requests pyOpenSSL urllib3
+sudo pip3 uninstall -y PyYAML requests pyOpenSSL urllib3 aioquic
 ```
 
 # TODO
 
 - Add additional monitors:
-  - TCP & UDP
-  - Add `quic` UDP monitoring resource type to replace deprecated `https`
+  - TCP & UDP port monitoring
 
 - Aggregated root cause alerting:
   - Specify parent dependencies using config option `parent_name` so we have a network topology graph
@@ -926,11 +964,12 @@ sudo pip3 uninstall -y PyYAML requests pyOpenSSL urllib3
 
 - Update docs to provide examples for Pushover & Slack
 
+
 # Licensing & Versioning
 
 APMonitor.py is licensed under the [GNU General Public License version 3](LICENSE.txt).
 ```
-Software: APMonitor 1.0.0
+Software: APMonitor 1.1.0
 License: GNU General Public License version 3
 Licensor: Andrew (AP) Prendergast, ap@andrewprendergast.com -- FSF Member
 ```

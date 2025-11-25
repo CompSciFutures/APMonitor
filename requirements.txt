@@ -1,11 +1,17 @@
+aioquic==1.3.0
+attrs==25.4.0
 certifi==2025.11.12
 cffi==2.0.0
 charset-normalizer==3.4.4
 cryptography==46.0.3
 idna==3.11
+pyasn1==0.6.1
+pyasn1_modules==0.4.2
 pycparser==2.23
+pylsqpack==0.3.23
 pyOpenSSL==25.3.0
 PyYAML==6.0.3
 requests==2.32.5
+service-identity==24.2.0
 typing_extensions==4.15.0
 urllib3==2.5.0

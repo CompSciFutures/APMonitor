@@ -9,6 +9,14 @@ Runs on RPi to enterprise systems.<br />
 Thread safe, reentrant, easily modifiable Python.<br />
 GPL 3.0 licensed.<br/>
 
+## Release 1.0.1 (25-Nov-2025): Implemented QUIC
+
+- Removed deprecated `https` monitor type and replaced with (prototyped) `quic` monitor type
+- Added support for `type: quic` (HTTP/3 over UDP).
+- Refactored repetitive boolean checking logic into `to_natural_language_boolean`
+- Add option to set the default `check_every_n_secs` to global `site` config to maintain consistency with monitored resources
+- Add `last_config_checksum` to statefile so when a monitored resource changes it's checked immediately
+
 ## Release 1.0.0 (24-Nov-2025): Email now works
 
 - Implemented per site server email_server configuration
