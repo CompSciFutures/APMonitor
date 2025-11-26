@@ -949,6 +949,12 @@ sudo pip3 uninstall -y PyYAML requests pyOpenSSL urllib3 aioquic
 
 - Add additional monitors:
   - TCP & UDP port monitoring
+  - SNMP w/defaults for managed switches and system performance tuning
+  - Update docs to provide webhook examples for Pushover, Slack & Diwscord
+
+- Add additional outputs: 
+  - MRTG compatible logfiles
+  - MRTG compatible graph generation w/index.html
 
 - Aggregated root cause alerting:
   - Specify parent dependencies using config option `parent_name` so we have a network topology graph
@@ -962,7 +968,7 @@ sudo pip3 uninstall -y PyYAML requests pyOpenSSL urllib3 aioquic
   - Add a Mercator + `APTree.c` `#InfoRec` inspired/styled priority queue for handling large numbers of monitored resources with proper realtime programming guarantees
   - Test if we are `root` when doing a `ping` syscall and fallback to direct `SOCK_RAW` if we are for high performance
 
-- Update docs to provide examples for Pushover & Slack
+
 
 
 # Licensing & Versioning
