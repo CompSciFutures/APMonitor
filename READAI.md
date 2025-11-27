@@ -1,200 +1,160 @@
-# APMONITOR.PY - ON-PREMISES AVAILABILITY MONITORING WITH ALERT GUARANTEES
+# APMONITOR.PY - THREADED OUTPUT BUFFERING FIX & LOG LINE PREFIXING
 
-Hello! I need your help working on APMonitor.py, an on-premises monitoring tool I've built. Let me bring you up to speed on the latest version.
+Hey! Welcome back to APMonitor.py. We just completed a critical debugging session fixing output buffering issues in multi-threaded execution, and now we're adding thread-aware log prefixing. Let me get you oriented on the latest state.
 
 ## Purpose
 
-APMonitor monitors network resources (ping/HTTP/HTTPS/QUIC) on your LAN and integrates with external heartbeat services like Site24x7. When resources are down, APMonitor stops pinging heartbeats, triggering external alerts—guaranteeing notifications even if the monitoring host fails completely.
+APMonitor monitors network resources (ping/HTTP/HTTPS/QUIC) on-premises, integrates with external heartbeat services, and guarantees alert delivery even if the monitoring host fails. Designed for repeated cron/systemd invocation rather than daemon mode.
 
 ## What APMonitor Does
 
-- Loads YAML/JSON configuration defining site name, monitors, email/webhook notifications, and timing parameters
-- Validates configuration structure, types, URL formats, SSL fingerprints, email addresses, and monitor name uniqueness
-- Checks each monitor's availability (ICMP ping, HTTP/HTTPS, or QUIC/HTTP3 with optional content matching)
-- Enforces per-monitor check intervals (`check_every_n_secs`) with site-level defaults to prevent unnecessary checks
-- Detects configuration changes via SHA-256 checksum and immediately checks modified monitors regardless of timing
-- Tracks resource state (up/down status, outage duration, notification history, config checksum) in persistent JSON statefile
+- Loads YAML/JSON configuration defining site name, monitors, email/webhook notifications, timing parameters
+- Validates configuration structure, types, URL formats, SSL fingerprints, email addresses, monitor name uniqueness
+- Checks resource availability via ICMP ping, HTTP/HTTPS, or QUIC/HTTP3 with optional content matching
+- Enforces per-monitor check intervals with site-level defaults and configuration change detection via SHA-256 checksums
+- Tracks persistent state in JSON statefile with atomic rotation to prevent corruption
 - Sends email notifications via SMTP with per-recipient control flags (outages/recoveries/reminders)
-- Sends webhook notifications (GET/POST with URL/HTML/JSON/CSVQUOTED encoding) when resources go down or recover
-- Enforces notification throttling with escalating delays via quadratic Bezier curve (`after_every_n_notifications`)
-- Notification intervals start short, gradually increase over first N notifications, then plateau at `notify_every_n_secs`
-- Pings heartbeat URLs when resources are up, with configurable heartbeat intervals (`heartbeat_every_n_secs`)
-- Supports SSL certificate pinning via SHA-256 fingerprints for self-signed certificates
-- Validates SSL certificate expiration unless `ignore_ssl_expiry=True` (for HTTP and QUIC)
-- Uses natural language boolean parsing for config flags (true/yes/on/1 vs false/no/off/0)
-- Uses PID lockfiles (per-config) to prevent duplicate instances when invoked via cron
-- Runs multi-threaded for concurrent monitoring of many resources
-- Uses atomic file rotation (.new → .old) to prevent state corruption on crashes
-- Designed for repeated invocation (via cron or systemd loop) rather than long-running daemon mode
+- Sends webhook notifications (GET/POST with URL/HTML/JSON/CSVQUOTED encoding)
+- Enforces notification throttling with escalating delays via quadratic Bezier curve
+- Pings heartbeat URLs when resources are up with configurable intervals
+- Validates SSL certificates via SHA-256 fingerprints and expiration checks
+- Uses PID lockfiles to prevent duplicate instances per config file
+- Runs multi-threaded with explicit stdout flushing for proper log ordering under systemd
+- Prefixes all thread output with thread ID and context for debugging and audit trails
 
 ## Key Architecture
 
-**Stateless Execution Model**: Each invocation loads state, performs checks, saves state, and exits. No persistent daemon process—safer for crashes and easier to manage.
+**Output Buffering Solution**: Python stdout is line-buffered for terminals but fully buffered for pipes. Systemd captures output via pipes, causing interleaved thread output to appear out-of-order or delayed. Solution: explicit `sys.stdout.flush()` after welcome banner, startup messages, and critically inside `update_state()` after every state write. The `update_state()` flush is the key insight—it's called by every thread after completing work, ensuring thread output becomes visible atomically after state updates.
 
-**Per-Config PID Locking**: Creates `/tmp/apmonitor-{hash}.lock` where hash = SHA256(config_path)[:16]. Prevents duplicate processes per config file, allows concurrent monitoring of different sites. Stale lockfile detection via `os.kill(pid, 0)`. Unix-only feature (Linux/Darwin/BSD).
+**Thread-Aware Log Prefixing**: New `prefix_logline(site_name, resource_name)` function generates `[T#XXXX Site/Resource]` prefix where XXXX is `threading.get_ident()`. Applied to all output from worker threads. Main thread output (banner, startup messages, execution time) remains unprefixed. Enables tracing which thread generated which log line, critical for debugging race conditions or understanding concurrent execution patterns.
 
-**Thread-Safe State Management**: Global `STATE` dict protected by `STATE_LOCK`. Updates written immediately to `.new` file, rotated atomically on exit.
+**Stateless Execution with Flush Discipline**: Each invocation loads state, performs checks, flushes output explicitly at synchronization points, saves state atomically, and exits. No persistent daemon—output ordering guaranteed by strategic flush placement rather than hoping for line-buffering behavior.
 
-**Configuration Change Detection**: SHA-256 checksum of entire monitor config (JSON serialized with sorted keys) stored as `last_config_checksum`. On mismatch, monitor checked immediately bypassing `check_every_n_secs`. Enables rapid response to config changes without restart.
+**Per-Config PID Locking**: Creates `/tmp/apmonitor-{hash}.lock` where hash = SHA256(config_path)[:16]. Prevents duplicate processes per config, allows concurrent monitoring of different sites. Stale lockfile detection via `os.kill(pid, 0)`. Unix-only.
 
-**Interval-Based Scheduling**: Each monitor tracks `last_checked`, `last_notified`, `last_successful_heartbeat` timestamps. Decisions made by comparing elapsed time against configured intervals—enables sub-minute execution without redundant work.
+**Thread-Safe State Management**: Global `STATE` dict protected by `STATE_LOCK`. Updates written immediately to `.new` file inside lock, flushed immediately after lock release. Atomic rotation on exit prevents corruption.
 
-**Site-Level Defaults with Monitor Overrides**: Site config provides `check_every_n_secs`, `notify_every_n_secs`, `after_every_n_notifications` as global defaults. Individual monitors override via same-named fields. Enables consistent policy with per-resource exceptions.
+**Configuration Change Detection**: SHA-256 checksum of JSON-serialized monitor config triggers immediate checks when configuration changes, bypassing normal timing intervals.
 
-**Bezier Curve Notification Escalation**: Notification timing follows quadratic Bezier curve over first `after_every_n_notifications` alerts. Formula: `t = (1/N) * index`, `delay = (1-t)² * 0 + 2(1-t)t * notify_every_n_secs + t² * notify_every_n_secs`. After N notifications, delay plateaus at `notify_every_n_secs`.
+**Interval-Based Scheduling**: Each monitor tracks last_checked, last_notified, last_successful_heartbeat timestamps. Decisions made by comparing elapsed time against configured intervals.
 
-**Separation of Concerns**: Configuration validation happens once at startup. Check logic is type-specific (ping vs HTTP/S vs QUIC). Notification logic is protocol-specific (webhook vs email). State management is centralized. PID locking is isolated in dedicated function.
-
-**Natural Language Boolean Handling**: Unified `to_natural_language_boolean()` accepts bool/int/str, normalizes to lowercase, maps common boolean representations. Used for `email`, `ignore_ssl_expiry`, `email_outages`, `email_recoveries`, `email_reminders`, `use_tls`.
+**Bezier Curve Notification Escalation**: Notification delays follow quadratic Bezier curve over first N notifications, then plateau. Formula: `t = (1/N) * index`, `delay = (1-t)² * 0 + 2(1-t)t * base + t² * base`.
 
 ## Important Modules & Communication
 
+**Output Flushing Strategy** (multiple locations):
+- After welcome banner in `main()`: Ensures version info visible immediately
+- After startup messages in `main()`: Ensures config summary visible before threads start
+- Inside `update_state()`: **Critical location**—ensures thread output visible after state mutation
+- In `main()` finally block: Ensures all buffered output written before exit
+- Why `update_state()` matters: Every thread calls it after doing work, making it the natural synchronization point for output visibility
+
+**Log Line Prefixing** (`prefix_logline`):
+- Generates `[T#XXXX Site/Resource]` prefix using `threading.get_ident()`
+- Handles None values gracefully for site_name or resource_name
+- Thread ID formatted as 4-digit zero-padded decimal
+- Context built from available names: "Site/Resource", "Site", "Resource", or "unknown"
+- Applied to ALL output from `check_and_heartbeat()` and functions it calls
+- Main thread output (banner, startup, execution time) intentionally unprefixed for clarity
+
+**Thread Output Functions** (require prefix parameter):
+- `check_and_heartbeat()`: Creates prefix once, passes to all subfunctions
+- `check_resource()`: Accepts prefix, passes to protocol-specific checkers
+- `check_ping_resource()`, `check_http_url()`, `check_quic_url()`: Accept and use prefix
+- `ping_heartbeat_url()`: Accepts prefix for heartbeat success/failure messages
+- `notify_resource_outage_with_email()`: Accepts prefix for email notification status
+- `notify_resource_outage_with_webhook()`: Accepts prefix for webhook notification status
+- All VERBOSE output and stderr output from threads includes prefix
+
 **PID Lock Management** (`create_pid_file_or_exit_on_unix`):
-- Platform detection—only runs on Unix-like systems (Linux/Darwin/BSD)
-- Generates deterministic hash from config path: `SHA256(config_path)[:16]`
+- Platform detection—only runs on Unix-like systems
+- Generates deterministic hash: `SHA256(config_path)[:16]`
 - Lockfile path: `/tmp/apmonitor-{hash}.lock`
-- Reads existing lockfile, checks if PID alive via `os.kill(pid, 0)`
-- Exits with error if another instance running same config
-- Removes stale lockfiles from dead processes
+- Checks process liveness via `os.kill(pid, 0)`
 - Returns lockfile path for cleanup in `main()`'s finally block
-- Critical for cron use case—prevents job pileup
+- Critical for cron—prevents job pileup
 
 **Boolean Parsing** (`to_natural_language_boolean`):
-- Accepts bool, int, str, or None
-- False: false/no/fail/0/bad/negative/off/n/f (case-insensitive)
-- True: true/yes/ok/1/good/positive/on/y/t (case-insensitive)
+- Unified handler for bool/int/str/None
+- False: false/no/fail/0/bad/negative/off/n/f/none/null/never/nein
+- True: true/yes/ok/1/good/positive/on/y/t
+- Case-insensitive matching
 - Raises ValueError on unrecognized strings
-- Used throughout validation and runtime for consistent boolean handling
-- Replaces scattered boolean checking logic
+- Used throughout for consistent boolean handling
 
 **Configuration Loading & Validation** (`load_config`, `print_and_exit_on_bad_config`):
 - Loads YAML/JSON into dict
-- Validates all fields, types, formats, constraints including site-level `check_every_n_secs`, `notify_every_n_secs`, `after_every_n_notifications`
-- Validates email_server settings (smtp_host, smtp_port, from_address, optional auth)
-- Validates outage_emails with per-recipient flags (email_outages, email_recoveries, email_reminders)
-- Validates monitor-level `email` flag and `after_every_n_notifications`
+- Comprehensive validation of all fields, types, formats, constraints
 - Exits with clear error messages on invalid config
 - No config state passed between invocations—reloaded fresh each run
 
 **State Management** (`load_state`, `save_state`, `update_state`):
-- `load_state`: Reads JSON from disk at startup
-- `update_state`: Thread-safe in-memory update + immediate write to `.new` file
-- `save_state`: Atomic rotation (current → `.old`, `.new` → current) on exit
-- Per-monitor state: `is_up`, `last_checked`, `last_response_time_ms`, `down_count`, `last_alarm_started`, `last_notified`, `last_successful_heartbeat`, `notified_count`, `error_reason`, `last_config_checksum`
-- Global state: `execution_time`, `execution_ms`
+- `load_state`: Reads JSON at startup
+- `update_state`: Thread-safe in-memory update + immediate write to `.new` + **immediate flush**
+- `save_state`: Atomic rotation (current → `.old`, `.new` → current)
+- Per-monitor state includes: is_up, last_checked, last_response_time_ms, down_count, last_alarm_started, last_notified, last_successful_heartbeat, notified_count, error_reason, last_config_checksum
 
-**Resource Checking** (`check_resource`, `check_ping_resource`, `check_url_resource`, `check_http_url`, `check_quic_url`):
-- Returns tuple: `(error_msg, response_time_ms)` where error_msg is None if up
-- Retries `MAX_RETRIES` times with `MAX_TRY_SECS` timeout per attempt
-- HTTP/S: Validates SSL fingerprint before request, checks certificate expiry unless `ignore_ssl_expiry=True`, validates expected content substring, returns status/headers/text for expect checking
-- QUIC: Async implementation using aioquic, validates SSL fingerprint and expiry, parses HTTP/3 headers/data, validates expected content substring
-- Ping: Platform-specific command construction (Linux/Darwin/Windows)
-- `check_url_resource`: Common wrapper for HTTP/QUIC that handles expect logic
-
-**Configuration Checksum & Change Detection** (`check_and_heartbeat`):
-- Calculates SHA-256 of JSON-serialized monitor config (sorted keys)
-- Loads `prev_config_checksum` from state
-- If mismatch: sets `config_changed=True`, bypasses timing logic, checks immediately
-- If match: follows normal `check_every_n_secs` interval logic
-- Updates `last_config_checksum` in state after every check
-- Verbose output announces config changes
-
-**Heartbeat Management** (`ping_heartbeat_url`):
-- Called only when resource is up and heartbeat URL configured
-- Respects `heartbeat_every_n_secs` interval to prevent excessive pings
-- Returns boolean success, updates `last_successful_heartbeat` timestamp
-
-**Email Notifications** (`notify_resource_outage_with_email`):
-- Accepts notification_type: 'outage', 'recovery', or 'reminder'
-- Checks per-recipient flags (email_outages, email_recoveries, email_reminders) via `to_natural_language_boolean()`
-- Skips notification if recipient disabled that type
-- Connects to SMTP server, uses STARTTLS if `use_tls=True`
-- Authenticates if smtp_username/smtp_password provided
-- Sends email with appropriate subject prefix ([OUTAGE]/[RECOVERY]/[REMINDER])
-- Returns boolean success
-
-**Webhook Notifications** (`notify_resource_outage_with_webhook`):
-- Encodes message per `request_encoding` (URL/HTML/JSON/CSVQUOTED)
-- Adds `request_prefix` and `request_suffix` to final payload
-- Webhooks: GET appends to URL, POST uses appropriate Content-Type header
-- Returns boolean success
-
-**Notification Timing** (`calc_next_notification_delay_secs`):
-- Computes next notification delay using quadratic Bezier curve
-- Parameters: `notify_every_n_secs`, `after_every_n_notifications`, `secs_since_first_notification`, `current_notification_index`
-- Returns escalating delay for first N notifications, then constant `notify_every_n_secs`
-- Debug output gated by `VERBOSE > 1`
+**Resource Checking** (`check_resource`, protocol-specific functions):
+- Returns tuple: `(error_msg, response_time_ms)`
+- Retries with configurable attempts and timeouts
+- HTTP/S: Validates SSL fingerprint, checks certificate expiry, validates content
+- QUIC: Async implementation using aioquic, validates SSL fingerprint/expiry
+- Ping: Platform-specific command construction
+- All accept and use prefix parameter for output
 
 **Main Orchestration** (`check_and_heartbeat`, `main`):
-- `main`: Acquires PID lock first (exits if duplicate detected), loads config/state, applies site-level defaults (including `DEFAULT_CHECK_EVERY_N_SECS`), spawns thread pool, records execution time, saves state, releases PID lock in finally block
-- `check_and_heartbeat`: Per-monitor logic—calculate config checksum, load prev state, decide if config changed or check/notify/heartbeat due, execute actions, update state with new checksum
-- State transitions: down→up triggers recovery notification (respects `email_recoveries` flag), up→down starts new outage (sets `last_alarm_started`), ongoing down increments `down_count` and `notified_count`
-
-**Time Formatting** (`format_time_ago`):
-- Accepts ISO timestamps or raw seconds (int/float)
-- Returns human-readable duration strings
-- Used for verbose output showing time until next check/notification and time since last action
+- `main`: Acquires PID lock, loads config/state, spawns thread pool, waits for completion with explicit result retrieval, flushes output, records execution time, saves state, releases lock
+- `check_and_heartbeat`: Creates prefix once at start, passes to all operations, handles state transitions with proper notification types
+- Thread pool uses `executor.submit()` to launch threads, then `future.result()` in sequential loop to wait for ALL threads and propagate exceptions
 
 ## Technical Tactics
 
-**Configuration Change Detection**: JSON-serialize monitor config with `sort_keys=True` for determinism. Compute SHA-256 hash. Store as `last_config_checksum`. On load, compare checksums—mismatch forces immediate check. Detects any field change (address, expect, intervals, etc.). Bypasses `check_every_n_secs` only when checksum differs.
+**Explicit Flush for Pipe-Captured Output**: Systemd captures stdout/stderr via pipes, which are fully buffered (not line-buffered). Without explicit flush, thread output accumulates in buffer and appears out-of-order or delayed. Strategic flush after state updates ensures output visibility aligns with state mutations. The `update_state()` flush is the critical discovery—it's called by every thread, making it the natural synchronization point.
 
-**PID Lockfile Strategy**: Hash config path to enable per-site locking. Use `/tmp` for tempfs performance. Check process liveness before claiming lock. Clean stale locks automatically. Remove lock in outermost finally block to handle all exit paths (normal, exception, sys.exit). Deterministic hash ensures same config always gets same lockfile.
+**Thread ID in Log Prefixes**: Using `threading.get_ident()` instead of `threading.current_thread().name` because thread names in ThreadPoolExecutor are generic. Thread ID is guaranteed unique per thread and provides sufficient differentiation for debugging. Four-digit zero-padding ensures visual alignment in logs.
 
-**Atomic State File Rotation**: Write to `.new`, then atomically rename to prevent corruption if killed mid-write. Keep `.old` as backup. This ensures state consistency even with kill -9.
+**Prefix Parameter Threading**: Rather than calling `prefix_logline()` repeatedly, create prefix once in `check_and_heartbeat()` and pass as parameter to all subfunctions. Reduces redundant `threading.get_ident()` calls and ensures consistent prefix format throughout execution chain. All thread-originated output functions accept prefix parameter.
 
-**Timestamp Comparison for Scheduling**: Store ISO 8601 timestamps, convert to datetime, calculate `total_seconds()` delta. Compare against interval thresholds. Allows flexible intervals without complex scheduling logic.
+**Future Result Retrieval Pattern**: After submitting all jobs to thread pool, loop through futures calling `future.result()`. This blocks until each future completes AND re-raises any exceptions from worker threads. Without explicit result retrieval, thread exceptions are silently swallowed. Sequential result retrieval ensures proper exception propagation while maintaining concurrency during execution.
 
-**SSL Certificate Pinning**: Fetch cert with `ssl.get_server_certificate()`, convert PEM→DER, compute SHA-256 hash, compare to configured fingerprint. Enables trust of self-signed certs without CA validation. Works for both HTTP and QUIC.
+**Flush After State Lock Release**: `update_state()` acquires STATE_LOCK, mutates STATE dict, writes `.new` file, releases lock, then immediately flushes stdout. This ensures output from thread appears in logs after state is safely persisted but while still holding logical "atomicity" of the operation.
 
-**SSL Certificate Expiry Validation**: Use OpenSSL.crypto to parse cert, extract `notAfter` ASN.1 timestamp, parse to datetime, compare to now. Skip if `ignore_ssl_expiry=True` (via `to_natural_language_boolean()`). Works for both HTTP and QUIC.
+**Subprocess Timeout Coordination**: `subprocess.run()` timeout set to `MAX_TRY_SECS + 2` to allow subprocess termination before thread timeout. Prevents orphaned processes outliving parent thread. Ensures cleanup even in worst-case scenarios.
 
-**QUIC/HTTP3 Implementation**: Async function using aioquic library. Custom protocol class extends QuicConnectionProtocol, handles HTTP/3 events (HeadersReceived, DataReceived). Wraps in `asyncio.run()` for sync interface. Timeout via `asyncio.timeout()`. Peer certificate extracted from TLS layer for fingerprint/expiry validation.
+**Configuration Change Detection**: JSON-serialize monitor config with `sort_keys=True`, compute SHA-256, store as `last_config_checksum`. Compare on load—mismatch forces immediate check bypassing timing intervals. Detects any field change.
 
-**Simplified Expect Logic**: String-only content matching. If `expect` present, checks if substring appears in response text. If absent, any 200 OK passes. Separate handling in `check_url_resource()` after protocol-specific code returns status/headers/text.
+**Atomic State File Rotation**: Write to `.new`, atomically rename to current. Keep `.old` as backup. Ensures state consistency even with kill -9.
 
-**Email Control Flags**: Per-recipient dict with optional `email_outages`, `email_recoveries`, `email_reminders` flags. Each flag parsed via `to_natural_language_boolean()` with default=True. Notification type determined by state transition and `notified_count`. Email function checks appropriate flag before sending.
+**SSL Certificate Pinning**: Fetch cert, convert PEM→DER, compute SHA-256, compare to configured fingerprint. Works for both HTTP and QUIC. Enables trust of self-signed certs.
 
-**Variable Retry Logic**: `MAX_RETRIES` and `MAX_TRY_SECS` configurable per-site. Sleep `MAX_TRY_SECS` between retries. All check functions follow same pattern for consistency.
-
-**Lazy Checking**: Skip checks when `check_every_n_secs` hasn't elapsed UNLESS config changed. Skip heartbeats when `heartbeat_every_n_secs` hasn't elapsed. Skip notifications when calculated Bezier delay hasn't elapsed. Minimizes work and external API calls.
-
-**Platform-Appropriate Defaults**: State file location varies by OS—`/var/tmp` (persistent across reboots) on Unix-like, `%TEMP%` on Windows, `./` as fallback. PID locking only on Unix-like systems where `/tmp` exists.
-
-**Global Configuration Override**: Site-level settings (`max_retries`, `max_try_secs`, `check_every_n_secs`, `notify_every_n_secs`, `after_every_n_notifications`) override module-level constants using `global` declaration in `main()`.
+**QUIC/HTTP3 Implementation**: Async function using aioquic. Custom protocol class handles HTTP/3 events. Wraps in `asyncio.run()` for sync interface. Timeout via `asyncio.timeout()`. Peer certificate from TLS layer.
 
 ## Engineering Principles for This Code
 
-**Config Checksums Enable Immediate Response**: Store SHA-256 of entire monitor dict. Compare on load. Mismatch bypasses timing—check immediately. Critical for rapid config deployment without waiting for scheduled intervals.
+**Flush at Synchronization Points**: Don't rely on line-buffering when output is pipe-captured. Flush after banner (startup visibility), after config messages (pre-thread visibility), inside `update_state()` (post-thread-work visibility), and in finally block (exit visibility). The `update_state()` flush is the key insight—it's where threads naturally synchronize.
 
-**PID Lock Cleanup is Critical**: Lockfile must be removed in outermost finally block to handle all exit paths. Never use multiple cleanup locations (once and only once). Hash-based naming prevents collisions between different configs while enabling duplicate detection for same config.
+**Prefix Consistency in Threads**: ALL output from worker threads must include prefix. Main thread output (banner, startup, execution time) stays unprefixed for clarity. Pass prefix as parameter rather than regenerating—once and only once principle applies to prefix creation per execution chain.
 
-**State Transitions Are Critical**: `last_alarm_started` must only be set on first down detection (transition from up→down), never on subsequent down states. `notified_count` increments only when notifications actually sent. Recovery notifications require previous `last_alarm_started` to exist. Get these wrong and alert timing breaks.
+**Thread Pool Exception Handling**: Always call `future.result()` on all futures to propagate exceptions. Without explicit result retrieval, thread exceptions are silently lost. Wrap each result retrieval in try/except to handle exceptions gracefully rather than crashing main thread.
 
-**Boolean Handling Must Be Consistent**: Use `to_natural_language_boolean()` everywhere. Never scatter boolean checks. Handles bool/int/str uniformly. Provides clear error messages on invalid values. Maps common human-friendly terms (yes/no, on/off, good/bad).
+**State Transitions Require Prefix**: Outage and recovery messages include prefix for audit trails. Makes it clear which thread detected which state transition. Critical for debugging timing issues or understanding concurrent execution.
 
-**Email Flags Control Notification Types**: Three independent flags per recipient: outages, recoveries, reminders. Check appropriate flag based on `notification_type` parameter. Default all to True for backward compatibility. Enables fine-grained control per recipient.
+**Output Before State vs After State**: Thread prints diagnostic output (SSL checks, HTTP success) BEFORE calling `update_state()`. State update happens last, with flush immediately after. This ordering ensures output appears chronologically correct relative to state mutations.
 
-**Expect Field Is String-Only**: Removed complex bool/int/dict handling. Simple substring search. If present, must find in response text. If absent, 200 OK sufficient. Protocol-specific code returns text, common wrapper does expect check.
+**Verbose Output Levels**: `-v` shows thread prefixes, check results, skip decisions. `-vv` adds Bezier curve calculations, DEBUG lines. Design for progressive detail—prefix format aids in filtering by thread when debugging specific resources.
 
-**QUIC Requires Async Wrapper**: aioquic is async-only. Wrap in sync function using `asyncio.run()`. Custom protocol class to handle HTTP/3 events. Timeout via `asyncio.timeout()` context manager. Extract cert from TLS layer, not HTTP layer.
+**PID Lock Cleanup in Finally**: Lockfile removal must be in outermost finally block to handle all exit paths. Never use multiple cleanup locations. Hash-based naming prevents collisions while enabling duplicate detection.
 
-**Site Defaults Cascade to Monitors**: Global `DEFAULT_*` constants set from site config in `main()`. Monitors use `.get(field, DEFAULT_*)` pattern. Enables consistent policy with per-monitor overrides. Check interval defaults particularly important for new monitors.
+**Boolean Handling Uniformity**: Use `to_natural_language_boolean()` everywhere. Never scatter boolean checks. Provides consistent behavior and clear error messages.
 
-**Interval Comparisons Need Null Handling**: Always check if timestamp exists before parsing. Use try/except around `datetime.fromisoformat()`. Default to "should perform action" on parse failures to ensure monitoring continues.
+**State Must Survive Flush**: `update_state()` writes state to disk BEFORE flushing. Ensures state persistence happens before output visibility. Critical ordering for crash recovery—state must be durable before announcing completion.
 
-**Thread Safety on State**: All reads/writes to global `STATE` dict must hold `STATE_LOCK`. Write to `.new` file inside lock to ensure consistency between memory and disk.
+**Subprocess vs Thread Timeout**: Subprocess timeout must be ≤ thread operation timeout. Set subprocess timeout to `MAX_TRY_SECS` (not `+2`), ensure subprocess killed before thread completes. Prevents orphaned processes.
 
-**Verbosity Levels Matter**: `-v` shows check results, `-vv` shows skip decisions, heartbeat activity, config changes, and Bezier curve calculations. Design output for progressive detail, not noise.
+**Email Flags Control Types**: Three independent flags per recipient: email_outages, email_recoveries, email_reminders. Check appropriate flag based on notification_type. Default all to True. Enables fine-grained control.
 
-**Error Messages Include Context**: Always include monitor name, address, and specific error reason in messages. Site name in notifications helps when monitoring multiple sites. Timestamp format includes AM/PM for human readability. PID lock errors show config path and conflicting PID.
+**Validation Before Execution**: Config validation must be comprehensive and fail-fast. Better to exit with clear error than silently ignore invalid config. Validate types, formats, constraints, cross-field dependencies.
 
-**Validation Before Execution**: Config validation must be comprehensive and fail-fast. Better to exit with clear error than silently ignore invalid config. Validate types, formats, constraints, and cross-field dependencies (e.g., `heartbeat_every_n_secs` requires `heartbeat_url`, `after_every_n_notifications` requires `notify_every_n_secs`, `outage_emails` requires `email_server`).
-
-**Retry Logic Consistency**: All external operations (HTTP requests, pings, heartbeats, webhooks, emails) follow same retry pattern—loop `MAX_RETRIES`, sleep between attempts, return success/failure. Never retry infinitely.
-
-**Preserve Historical State**: After recovery, keep `last_alarm_started` and `notified_count` from previous outage. Provides useful forensic data without affecting current monitoring state. Config checksum updates every check regardless of up/down status.
-
-**Notification Index is Zero-Based**: `current_notification_index` passed to Bezier calculation represents notification about to be sent. First notification has index 0. `prev_notified_count` increments after sending, making it correct as current index before increment.
+**Thread ID Formatting**: Zero-pad to 4 digits for visual alignment. Use decimal, not hex. Thread IDs are process-local and reset on restart, so no need for global uniqueness—just local differentiation.
 
 Would you like to see the code?

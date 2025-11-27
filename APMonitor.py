@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """
 APMonitor - On-Premises Network Resource Availability Monitor
-Version 1.0.1
 """
 
-__version__ = "1.1.0"
+__version__ = "1.1.2"
 __app_name__ = "APMonitor"
 
 import argparse
@@ -28,6 +27,7 @@ import hashlib
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+import traceback
 
 # Hush insecure SSL warnings
 import urllib3
@@ -47,6 +47,9 @@ DEFAULT_CHECK_EVERY_N_SECS = 60
 DEFAULT_NOTIFY_EVERY_N_SECS = 600
 DEFAULT_AFTER_EVERY_N_NOTIFICATIONS = 1
 
+# Global thread-local storage
+thread_local = threading.local()
+thread_local.prefix = None
 
 def to_natural_language_boolean(value):
     """Convert various representations to boolean.
@@ -163,6 +166,9 @@ def update_state(updates):
                 json.dump(STATE, f, indent=2)
         except Exception as e:
             print(f"Error: Could not write state to '{new_path}': {e}", file=sys.stderr)
+
+    # keep console logging atomic as well
+    sys.stdout.flush()
 
 
 def save_state(state):
@@ -573,6 +579,7 @@ def print_and_exit_on_bad_config(config):
 
 def check_http_url(url, name, expect, ssl_fingerprint, ignore_ssl_expiry):
     """Perform HTTP/S request and return None if OK, error message if failed."""
+    prefix = getattr(thread_local, 'prefix', '')
     error_msg = None
 
     # Normalize ignore_ssl_expiry to boolean
@@ -582,8 +589,8 @@ def check_http_url(url, name, expect, ssl_fingerprint, ignore_ssl_expiry):
     parsed = urlparse(url)
     if parsed.scheme not in ('http', 'https'):
         error_msg = f"{parsed.scheme.upper()} protocol not supported for HTTP, use http or https"
-        print(f"HTTP/S check FAILED for '{name}' at '{url}': {error_msg}", file=sys.stderr)
-        return error_msg
+        print(f"{prefix}HTTP/S check FAILED for '{name}' at '{url}': {error_msg}", file=sys.stderr)
+        return error_msg, None, None, None
 
     # calculate is_ssl
     is_ssl = parsed.scheme == 'https'
@@ -606,12 +613,12 @@ def check_http_url(url, name, expect, ssl_fingerprint, ignore_ssl_expiry):
                 if server_fingerprint != expected_fingerprint:
                     error_msg = f"SSL fingerprint mismatch"
                     if VERBOSE:
-                        print(f"SSL fingerprint check FAILED for '{name}': expected {expected_fingerprint}, got {server_fingerprint}")
-                    print(f"HTTP/S check FAILED for '{name}' at '{url}': {error_msg}", file=sys.stderr)
-                    return error_msg
+                        print(f"{prefix}SSL fingerprint check FAILED for '{name}': expected {expected_fingerprint}, got {server_fingerprint}")
+                    print(f"{prefix}HTTP/S check FAILED for '{name}' at '{url}': {error_msg}", file=sys.stderr)
+                    return error_msg, None, None, None
 
                 if VERBOSE:
-                    print(f"SSL fingerprint check PASSED for '{name}'")
+                    print(f"{prefix}SSL fingerprint check PASSED for '{name}'")
 
             # Check certificate expiry unless ignored
             if not ignore_ssl_expiry:
@@ -620,12 +627,12 @@ def check_http_url(url, name, expect, ssl_fingerprint, ignore_ssl_expiry):
                     not_after_asn1 = x509.get_notAfter()
 
                     if VERBOSE > 1:
-                        print(f"DEBUG: notAfter raw (ASN1) = {not_after_asn1}")
+                        print(f"{prefix}DEBUG: notAfter raw (ASN1) = {not_after_asn1}")
 
                     if not not_after_asn1:
                         error_msg = "Certificate has no expiry date"
-                        print(f"HTTP/S check FAILED for '{name}' at '{url}': {error_msg}", file=sys.stderr)
-                        return error_msg
+                        print(f"{prefix}HTTP/S check FAILED for '{name}' at '{url}': {error_msg}", file=sys.stderr)
+                        return error_msg, None, None, None
 
                     not_after_str = not_after_asn1.decode('ascii')
                     not_after = datetime.strptime(not_after_str, '%Y%m%d%H%M%SZ')
@@ -633,24 +640,24 @@ def check_http_url(url, name, expect, ssl_fingerprint, ignore_ssl_expiry):
                     if datetime.now() > not_after:
                         error_msg = f"SSL certificate expired on {not_after}"
                         if VERBOSE:
-                            print(f"SSL certificate expiry check FAILED for '{name}': expired on {not_after}")
-                        print(f"HTTP/S check FAILED for '{name}' at '{url}': SSL certificate expired", file=sys.stderr)
-                        return error_msg
+                            print(f"{prefix}SSL certificate expiry check FAILED for '{name}': expired on {not_after}")
+                        print(f"{prefix}HTTP/S check FAILED for '{name}' at '{url}': SSL certificate expired", file=sys.stderr)
+                        return error_msg, None, None, None
 
                     if VERBOSE:
-                        print(f"SSL certificate expiry check PASSED for '{name}': valid until {not_after}")
+                        print(f"{prefix}SSL certificate expiry check PASSED for '{name}': valid until {not_after}")
 
                 except Exception as e:
                     error_msg = f"Certificate parsing error: {e}"
-                    print(f"HTTP/S check FAILED for '{name}' at '{url}': {error_msg}", file=sys.stderr)
-                    return error_msg
+                    print(f"{prefix}HTTP/S check FAILED for '{name}' at '{url}': {error_msg}", file=sys.stderr)
+                    return error_msg, None, None, None
             elif VERBOSE:
-                print(f"SSL certificate expiry check SKIPPED for '{name}' (ignore_ssl_expiry=True)")
+                print(f"{prefix}SSL certificate expiry check SKIPPED for '{name}' (ignore_ssl_expiry=True)")
 
         except Exception as e:
             error_msg = f"{type(e).__name__}: {e}"
-            print(f"HTTP/S check FAILED for '{name}' at '{url}': {error_msg}", file=sys.stderr)
-            return error_msg
+            print(f"{prefix}HTTP/S check FAILED for '{name}' at '{url}': {error_msg}", file=sys.stderr)
+            return error_msg, None, None, None
 
         # Certificate checks passed, proceed with verification disabled (we already validated)
         verify_ssl = False
@@ -677,13 +684,14 @@ def check_http_url(url, name, expect, ssl_fingerprint, ignore_ssl_expiry):
             root_cause = next_cause
 
         error_msg = f"{type(root_cause).__name__}: {root_cause}"
-        print(f"HTTP/S check FAILED for '{name}' at '{url}': {error_msg}", file=sys.stderr)
+        print(f"{prefix}HTTP/S check FAILED for '{name}' at '{url}': {error_msg}", file=sys.stderr)
         return error_msg, None, None, None
 
 
 def check_quic_url(url, name, expect, ssl_fingerprint, ignore_ssl_expiry):
     """Perform QUIC/HTTP3 request and return None if OK, error message if failed."""
     import asyncio
+    prefix = getattr(thread_local, 'prefix', '')
 
     async def _check_quic_url_async():
         """Async implementation of QUIC/HTTP3 check."""
@@ -704,7 +712,7 @@ def check_quic_url(url, name, expect, ssl_fingerprint, ignore_ssl_expiry):
         parsed = urlparse(url)
         if parsed.scheme not in ('https', 'quic'):
             error_msg = f"{parsed.scheme.upper()} protocol not supported for QUIC, use https or quic"
-            print(f"QUIC check FAILED for '{name}' at '{url}': {error_msg}", file=sys.stderr)
+            print(f"{prefix}QUIC check FAILED for '{name}' at '{url}': {error_msg}", file=sys.stderr)
             return error_msg, None, None, None
 
         hostname = parsed.hostname
@@ -741,12 +749,12 @@ def check_quic_url(url, name, expect, ssl_fingerprint, ignore_ssl_expiry):
                     if isinstance(h3_event, HeadersReceived):
                         response_headers = h3_event.headers
                         if VERBOSE > 2:
-                            print(f"DEBUG: Received headers: {response_headers}")
+                            print(f"{prefix}DEBUG: Received headers: {response_headers}")
 
                     elif isinstance(h3_event, DataReceived):
                         response_data += h3_event.data
                         if VERBOSE > 2:
-                            print(f"DEBUG: Received {len(h3_event.data)} bytes, stream_ended={h3_event.stream_ended}, total={len(response_data)}")
+                            print(f"{prefix}DEBUG: Received {len(h3_event.data)} bytes, stream_ended={h3_event.stream_ended}, total={len(response_data)}")
                         if h3_event.stream_ended:
                             response_complete.set()
 
@@ -777,12 +785,12 @@ def check_quic_url(url, name, expect, ssl_fingerprint, ignore_ssl_expiry):
                                 if server_fingerprint != expected_fingerprint:
                                     error_msg = f"SSL fingerprint mismatch"
                                     if VERBOSE:
-                                        print(f"SSL fingerprint check FAILED for '{name}': expected {expected_fingerprint}, got {server_fingerprint}")
-                                    print(f"QUIC check FAILED for '{name}' at '{url}': {error_msg}", file=sys.stderr)
+                                        print(f"{prefix}SSL fingerprint check FAILED for '{name}': expected {expected_fingerprint}, got {server_fingerprint}")
+                                    print(f"{prefix}QUIC check FAILED for '{name}' at '{url}': {error_msg}", file=sys.stderr)
                                     return error_msg, None, None, None
 
                                 if VERBOSE:
-                                    print(f"SSL fingerprint check PASSED for '{name}'")
+                                    print(f"{prefix}SSL fingerprint check PASSED for '{name}'")
 
                             # Check certificate expiry unless ignored
                             if not nonlocal_ignore_ssl_expiry:
@@ -793,11 +801,11 @@ def check_quic_url(url, name, expect, ssl_fingerprint, ignore_ssl_expiry):
                                     not_after_asn1 = x509.get_notAfter()
 
                                     if VERBOSE > 1:
-                                        print(f"DEBUG: notAfter raw (ASN1) = {not_after_asn1}")
+                                        print(f"{prefix}DEBUG: notAfter raw (ASN1) = {not_after_asn1}")
 
                                     if not not_after_asn1:
                                         error_msg = "Certificate has no expiry date"
-                                        print(f"QUIC check FAILED for '{name}' at '{url}': {error_msg}", file=sys.stderr)
+                                        print(f"{prefix}QUIC check FAILED for '{name}' at '{url}': {error_msg}", file=sys.stderr)
                                         return error_msg, None, None, None
 
                                     not_after_str = not_after_asn1.decode('ascii')
@@ -806,19 +814,19 @@ def check_quic_url(url, name, expect, ssl_fingerprint, ignore_ssl_expiry):
                                     if datetime.now() > not_after:
                                         error_msg = f"SSL certificate expired on {not_after}"
                                         if VERBOSE:
-                                            print(f"SSL certificate expiry check FAILED for '{name}': expired on {not_after}")
-                                        print(f"QUIC check FAILED for '{name}' at '{url}': SSL certificate expired", file=sys.stderr)
+                                            print(f"{prefix}SSL certificate expiry check FAILED for '{name}': expired on {not_after}")
+                                        print(f"{prefix}QUIC check FAILED for '{name}' at '{url}': SSL certificate expired", file=sys.stderr)
                                         return error_msg, None, None, None
 
                                     if VERBOSE:
-                                        print(f"SSL certificate expiry check PASSED for '{name}': valid until {not_after}")
+                                        print(f"{prefix}SSL certificate expiry check PASSED for '{name}': valid until {not_after}")
 
                                 except Exception as e:
                                     error_msg = f"Certificate parsing error: {e}"
-                                    print(f"QUIC check FAILED for '{name}' at '{url}': {error_msg}", file=sys.stderr)
+                                    print(f"{prefix}QUIC check FAILED for '{name}' at '{url}': {error_msg}", file=sys.stderr)
                                     return error_msg, None, None, None
                             elif VERBOSE:
-                                print(f"SSL certificate expiry check SKIPPED for '{name}' (ignore_ssl_expiry=True)")
+                                print(f"{prefix}SSL certificate expiry check SKIPPED for '{name}' (ignore_ssl_expiry=True)")
 
                     # Access HTTP/3 connection from protocol
                     http = protocol._http
@@ -853,7 +861,7 @@ def check_quic_url(url, name, expect, ssl_fingerprint, ignore_ssl_expiry):
 
                     if status_code is None:
                         error_msg = "no status code in response"
-                        print(f"QUIC check FAILED for '{name}' at '{url}': {error_msg}", file=sys.stderr)
+                        print(f"{prefix}QUIC check FAILED for '{name}' at '{url}': {error_msg}", file=sys.stderr)
                         return error_msg, None, None, None
 
                     # Convert headers to dict for easier checking
@@ -870,7 +878,7 @@ def check_quic_url(url, name, expect, ssl_fingerprint, ignore_ssl_expiry):
 
         except asyncio.TimeoutError:
             error_msg = "timeout"
-            print(f"QUIC check FAILED for '{name}' at '{url}': {error_msg}", file=sys.stderr)
+            print(f"{prefix}QUIC check FAILED for '{name}' at '{url}': {error_msg}", file=sys.stderr)
             return error_msg, None, None, None
 
         except Exception as e:
@@ -886,11 +894,10 @@ def check_quic_url(url, name, expect, ssl_fingerprint, ignore_ssl_expiry):
 
             # Add traceback in verbose mode
             if VERBOSE > 1:
-                import traceback
-                print(f"DEBUG: Full traceback:", file=sys.stderr)
+                print(f"{prefix}DEBUG: Full traceback:", file=sys.stderr)
                 traceback.print_exc(file=sys.stderr)
 
-            print(f"QUIC check FAILED for '{name}' at '{url}': {error_msg}", file=sys.stderr)
+            print(f"{prefix}QUIC check FAILED for '{name}' at '{url}': {error_msg}", file=sys.stderr)
             return error_msg, None, None, None
 
     # Outer function execution
@@ -904,15 +911,16 @@ def check_quic_url(url, name, expect, ssl_fingerprint, ignore_ssl_expiry):
         # Add traceback in verbose mode
         if VERBOSE > 1:
             import traceback
-            print(f"DEBUG: Full outer traceback:", file=sys.stderr)
+            print(f"{prefix}DEBUG: Full outer traceback:", file=sys.stderr)
             traceback.print_exc(file=sys.stderr)
 
-        print(f"QUIC check FAILED for '{name}' at '{url}': {error_msg}", file=sys.stderr)
+        print(f"{prefix}QUIC check FAILED for '{name}' at '{url}': {error_msg}", file=sys.stderr)
         return error_msg, None, None, None
 
 
 def check_url_resource(resource):
     """Check URL resource (HTTP or QUIC) and return None if OK, error message if failed."""
+    prefix = getattr(thread_local, 'prefix', '')
     resource_type = resource['type']
     url = resource['address']
     name = resource['name']
@@ -927,7 +935,7 @@ def check_url_resource(resource):
         error_msg, status_code, headers, response_text = check_quic_url(url, name, expect, ssl_fingerprint, ignore_ssl_expiry)
     else:
         error_msg = f"Unknown URL resource type: {resource_type}"
-        print(f"URL check FAILED for '{name}': {error_msg}", file=sys.stderr)
+        print(f"{prefix}URL check FAILED for '{name}': {error_msg}", file=sys.stderr)
         return error_msg
 
     # If there was a connection/SSL error, return it immediately
@@ -939,28 +947,29 @@ def check_url_resource(resource):
         # Check if expected content is in response
         if expect in response_text:
             if VERBOSE:
-                print(f"{resource_type.upper()} check SUCCESS for '{name}' at '{url}' (expected content found)")
+                print(f"{prefix}{resource_type.upper()} check SUCCESS for '{name}' at '{url}' (expected content found)")
             return None
         else:
             error_msg = f"expected content not found: '{expect}'"
             if VERBOSE:
-                print(f"{resource_type.upper()} check FAILED for '{name}': expected '{expect}' not found in response")
-            print(f"{resource_type.upper()} check FAILED for '{name}' at '{url}': {error_msg}", file=sys.stderr)
+                print(f"{prefix}{resource_type.upper()} check FAILED for '{name}': expected '{expect}' not found in response")
+            print(f"{prefix}{resource_type.upper()} check FAILED for '{name}' at '{url}': {error_msg}", file=sys.stderr)
             return error_msg
     else:
         # No expect specified - just check for 200 OK
         if status_code == 200:
             if VERBOSE:
-                print(f"{resource_type.upper()} check SUCCESS {status_code} for '{name}' at '{url}'")
+                print(f"{prefix}{resource_type.upper()} check SUCCESS {status_code} for '{name}' at '{url}'")
             return None
         else:
             error_msg = f"error response code {status_code}"
-            print(f"{resource_type.upper()} check FAILED for '{name}' at '{url}': {error_msg}", file=sys.stderr)
+            print(f"{prefix}{resource_type.upper()} check FAILED for '{name}' at '{url}': {error_msg}", file=sys.stderr)
             return error_msg
 
 
 def check_ping_resource(resource):
     """Ping host and return None if up, error message if down."""
+    prefix = getattr(thread_local, 'prefix', '')
     address = resource['address']
     name = resource['name']
 
@@ -979,15 +988,15 @@ def check_ping_resource(resource):
         result = subprocess.run(cmd, capture_output=True, timeout=MAX_TRY_SECS + 2)
         if result.returncode == 0:
             if VERBOSE:
-                print(f"PING check SUCCESS for '{name}' at '{address}'")
+                print(f"{prefix}PING check SUCCESS for '{name}' at '{address}'")
             return None
         else:
             error_msg = "host unreachable"
-            print(f"PING check FAILED for '{name}' at '{address}': {error_msg}", file=sys.stderr)
+            print(f"{prefix}PING check FAILED for '{name}' at '{address}': {error_msg}", file=sys.stderr)
             return error_msg
     except subprocess.TimeoutExpired:
         error_msg = "timeout"
-        print(f"PING check FAILED for '{name}' at '{address}': {error_msg}", file=sys.stderr)
+        print(f"{prefix}PING check FAILED for '{name}' at '{address}': {error_msg}", file=sys.stderr)
         return error_msg
 
 
@@ -1024,19 +1033,20 @@ def check_resource(resource):
 # fetch a heartbeat URL - tries 5 times and returns True if 200 OK
 def ping_heartbeat_url(heartbeat_url, monitor_name, site_name):
     """Fetch a heartbeat URL - tries MAX_RETRIES times and returns True if 200 OK."""
+    prefix = getattr(thread_local, 'prefix', '')
     for attempt in range(1, MAX_RETRIES + 1):
         try:
             response = requests.get(heartbeat_url, timeout=MAX_TRY_SECS)
             if response.status_code == 200:
                 if VERBOSE:
-                    print(f"[{site_name}/{monitor_name}] Heartbeat ping SUCCESS to '{heartbeat_url}'")
+                    print(f"{prefix}Heartbeat ping SUCCESS to '{heartbeat_url}'")
                 return True
             else:
-                print(f"[{site_name}/{monitor_name}] Heartbeat ping FAILED to '{heartbeat_url}': status {response.status_code}", file=sys.stderr)
+                print(f"{prefix}Heartbeat ping FAILED to '{heartbeat_url}': status {response.status_code}", file=sys.stderr)
                 if attempt < MAX_RETRIES:
                     time.sleep(MAX_TRY_SECS)
         except requests.exceptions.RequestException as e:
-            print(f"[{site_name}/{monitor_name}] Heartbeat ping FAILED to '{heartbeat_url}': {e}", file=sys.stderr)
+            print(f"{prefix}Heartbeat ping FAILED to '{heartbeat_url}': {e}", file=sys.stderr)
             if attempt < MAX_RETRIES:
                 time.sleep(MAX_TRY_SECS)
 
@@ -1045,6 +1055,7 @@ def ping_heartbeat_url(heartbeat_url, monitor_name, site_name):
 
 def notify_resource_outage_with_webhook(outage_notifier, site_name, error_reason):
     """Send outage notification via webhook."""
+    prefix = getattr(thread_local, 'prefix', '')
     endpoint_url = outage_notifier['endpoint_url']
     request_method = outage_notifier['request_method']
     request_encoding = outage_notifier['request_encoding']
@@ -1079,16 +1090,16 @@ def notify_resource_outage_with_webhook(outage_notifier, site_name, error_reason
             full_url = f"{endpoint_url}{message}"
 
             if VERBOSE:
-                print(f"Webhook GET: {full_url}")
+                print(f"{prefix}Webhook GET: {full_url}")
 
             response = requests.get(full_url, timeout=MAX_TRY_SECS)
 
             if response.status_code == 200:
                 if VERBOSE:
-                    print(f"Webhook notification SUCCESS to '{endpoint_url}'")
+                    print(f"{prefix}Webhook notification SUCCESS to '{endpoint_url}'")
                 return True
             else:
-                print(f"Webhook notification FAILED to '{endpoint_url}': status {response.status_code}", file=sys.stderr)
+                print(f"{prefix}Webhook notification FAILED to '{endpoint_url}': status {response.status_code}", file=sys.stderr)
                 return False
 
         elif request_method == 'POST':
@@ -1106,22 +1117,22 @@ def notify_resource_outage_with_webhook(outage_notifier, site_name, error_reason
                 body = message
 
             if VERBOSE:
-                print(f"Webhook POST: {endpoint_url}")
-                print(f"  Headers: {headers}")
-                print(f"  Body: {body[:200]}...")
+                print(f"{prefix}Webhook POST: {endpoint_url}")
+                print(f"{prefix}  Headers: {headers}")
+                print(f"{prefix}  Body: {body[:200]}...")
 
             response = requests.post(endpoint_url, data=body, headers=headers, timeout=MAX_TRY_SECS)
 
             if response.status_code in [200, 201]:
                 if VERBOSE:
-                    print(f"Webhook notification SUCCESS to '{endpoint_url}'")
+                    print(f"{prefix}Webhook notification SUCCESS to '{endpoint_url}'")
                 return True
             else:
-                print(f"Webhook notification FAILED to '{endpoint_url}': status {response.status_code}", file=sys.stderr)
+                print(f"{prefix}Webhook notification FAILED to '{endpoint_url}': status {response.status_code}", file=sys.stderr)
                 return False
 
     except requests.exceptions.RequestException as e:
-        print(f"Webhook notification FAILED to '{endpoint_url}': {e}", file=sys.stderr)
+        print(f"{prefix}Webhook notification FAILED to '{endpoint_url}': {e}", file=sys.stderr)
         return False
 
 
@@ -1135,11 +1146,12 @@ def notify_resource_outage_with_email(email_entry, site_name, error_reason, site
         site_config: Full site configuration dict (needed for email_server)
         notification_type: One of 'outage', 'recovery', or 'reminder'
     """
+    prefix = getattr(thread_local, 'prefix', '')
 
     # Check if email_server is configured
     if 'email_server' not in site_config:
         if VERBOSE:
-            print(f"Email notification skipped: no email_server configured")
+            print(f"{prefix}Email notification skipped: no email_server configured")
         return False
 
     email_server = site_config['email_server']
@@ -1152,15 +1164,15 @@ def notify_resource_outage_with_email(email_entry, site_name, error_reason, site
     # Check if this notification type should be sent
     if notification_type == 'outage' and not email_outages:
         if VERBOSE:
-            print(f"Email notification skipped for {email_entry['email']}: email_outages=false")
+            print(f"{prefix}Email notification skipped for {email_entry['email']}: email_outages=false")
         return False
     elif notification_type == 'recovery' and not email_recoveries:
         if VERBOSE:
-            print(f"Email notification skipped for {email_entry['email']}: email_recoveries=false")
+            print(f"{prefix}Email notification skipped for {email_entry['email']}: email_recoveries=false")
         return False
     elif notification_type == 'reminder' and not email_reminders:
         if VERBOSE:
-            print(f"Email notification skipped for {email_entry['email']}: email_reminders=false")
+            print(f"{prefix}Email notification skipped for {email_entry['email']}: email_reminders=false")
         return False
 
     # Extract SMTP configuration
@@ -1209,18 +1221,18 @@ def notify_resource_outage_with_email(email_entry, site_name, error_reason, site
         server.quit()
 
         if VERBOSE:
-            print(f"Email notification SUCCESS to '{to_address}' via {smtp_host}:{smtp_port}")
+            print(f"{prefix}Email notification SUCCESS to '{to_address}' via {smtp_host}:{smtp_port}")
 
         return True
 
     except smtplib.SMTPAuthenticationError as e:
-        print(f"Email notification FAILED to '{to_address}': SMTP authentication error: {e}", file=sys.stderr)
+        print(f"{prefix}Email notification FAILED to '{to_address}': SMTP authentication error: {e}", file=sys.stderr)
         return False
     except smtplib.SMTPException as e:
-        print(f"Email notification FAILED to '{to_address}': SMTP error: {e}", file=sys.stderr)
+        print(f"{prefix}Email notification FAILED to '{to_address}': SMTP error: {e}", file=sys.stderr)
         return False
     except Exception as e:
-        print(f"Email notification FAILED to '{to_address}': {type(e).__name__}: {e}", file=sys.stderr)
+        print(f"{prefix}Email notification FAILED to '{to_address}': {type(e).__name__}: {e}", file=sys.stderr)
         return False
 
 
@@ -1232,7 +1244,8 @@ def calc_next_notification_delay_secs(notify_every_n_secs, after_every_n_notific
     # By_t = notify_every_n_secs # This is default behaviour with fixed intervals
     secs_between_alarms = By_t if t <= 1 else notify_every_n_secs
     if VERBOSE > 1:
-        print(f"##### DEBUG: calc_next_notification_delay_secs(" +
+        prefix = getattr(thread_local, 'prefix', '')
+        print(f"{prefix}##### DEBUG: calc_next_notification_delay_secs(" +
               f"notify_every_n_secs={notify_every_n_secs}, " +
               f"after_every_n_notifications={after_every_n_notifications}, " +
               f"secs_since_first_notification={secs_since_first_notification}, " +
@@ -1241,8 +1254,37 @@ def calc_next_notification_delay_secs(notify_every_n_secs, after_every_n_notific
     return secs_between_alarms
 
 
+def prefix_logline(site_name, resource_name):
+    """Generate log line prefix with thread ID and context.
+
+    Args:
+        site_name: Name of the site (or None)
+        resource_name: Name of the resource (or None)
+
+    Returns:
+        String prefix in format "[T#XXXX Site/Resource]" where XXXX is thread ID
+    """
+    #thread_id = threading.get_ident()
+    thread_id = threading.get_native_id()
+
+    # Build context string
+    context_parts = []
+    if site_name:
+        context_parts.append(site_name)
+    if resource_name:
+        context_parts.append(resource_name)
+
+    context = "/".join(context_parts) if context_parts else "unknown"
+
+    return f"[T#{thread_id:04d} {context}] "
+
+
 def check_and_heartbeat(resource, site_config):
     """Check resource and ping heartbeat if up."""
+
+    # Store prefix in thread-local storage at start of thread execution
+    thread_local.prefix = prefix_logline(site_config['name'], resource['name'])
+    prefix = thread_local.prefix
 
     # Calculate checksum of resource configuration
     import hashlib
@@ -1273,16 +1315,16 @@ def check_and_heartbeat(resource, site_config):
     if not should_check and not config_changed:
         if VERBOSE:
             if not seconds_since_check:
-                print(f"  - skipping {resource['name']} (checked {format_time_ago(prev_last_checked)} ago)")
+                print(f"{prefix}skipping {resource['name']} (checked {format_time_ago(prev_last_checked)} ago)")
             else:
                 time_until_next_check = check_every_n_secs - seconds_since_check
-                print(f"  - skipping {resource['name']} for {format_time_ago(time_until_next_check)} (checked {format_time_ago(prev_last_checked)} ago)")
+                print(f"{prefix}skipping {resource['name']} for {format_time_ago(time_until_next_check)} (checked {format_time_ago(prev_last_checked)} ago)")
         return
 
     if VERBOSE and config_changed:
-        print(f"  - configuration changed for {resource['name']}, checking immediately: {resource}")
+        print(f"{prefix}configuration changed for {resource['name']}, checking immediately: {resource}")
     elif VERBOSE:
-        print(f"  - checking: {resource}")
+        print(f"{prefix}checking: {resource}")
 
     # Get previous state for this resource
     with STATE_LOCK:
@@ -1320,7 +1362,7 @@ def check_and_heartbeat(resource, site_config):
             if ping_heartbeat_url(resource['heartbeat_url'], resource['name'], site_config['name']):
                 last_successful_heartbeat = datetime.now().isoformat()
         elif VERBOSE:
-            print(f"  - skipping heartbeat for {resource['name']} (heartbeat sent {format_time_ago(prev_last_successful_heartbeat)} ago)")
+            print(f"{prefix}skipping heartbeat for {resource['name']} (heartbeat sent {format_time_ago(prev_last_successful_heartbeat)} ago)")
 
     # Calculate new down_count, last_alarm_started, and last_notified
     if is_up:
@@ -1331,7 +1373,7 @@ def check_and_heartbeat(resource, site_config):
 
             # Send recovery notification
             recovery_message = f"{resource['name']} in {site_config['name']} is UP ({resource['address']}) at {timestamp_str}, outage lasted {outage_duration}"
-            print(f"##### RECOVERY: {recovery_message} #####", file=sys.stderr)
+            print(f"{prefix}##### RECOVERY: {recovery_message} #####", file=sys.stderr)
 
             # Check monitor-level email override
             monitor_email_enabled = to_natural_language_boolean(resource.get('email', True))
@@ -1364,7 +1406,7 @@ def check_and_heartbeat(resource, site_config):
 
         error_message = f"{resource['name']} in {site_config['name']} is down: {error_reason} ({resource['address']}) at {timestamp_str}, down for {format_time_ago(last_alarm_started)}"
 
-        print(f"##### OUTAGE: {error_message} #####", file=sys.stderr)
+        print(f"{prefix}##### OUTAGE: {error_message} #####", file=sys.stderr)
 
         # Determine if we should send notifications
         notify_every_n_secs = resource.get('notify_every_n_secs', DEFAULT_NOTIFY_EVERY_N_SECS)
@@ -1413,10 +1455,10 @@ def check_and_heartbeat(resource, site_config):
         else:
             if VERBOSE:
                 if not seconds_since_notify:
-                    print(f"  - skipping {resource['name']} notification (notified {format_time_ago(prev_last_notified)} ago)")
+                    print(f"{prefix}skipping {resource['name']} notification (notified {format_time_ago(prev_last_notified)} ago)")
                 else:
                     time_until_next_secs = next_notification_delay_secs - seconds_since_notify
-                    print(f"  - skipping {resource['name']} notification for {format_time_ago(time_until_next_secs)} (notified {format_time_ago(prev_last_notified)} ago)")
+                    print(f"{prefix}skipping {resource['name']} notification for {format_time_ago(time_until_next_secs)} (notified {format_time_ago(prev_last_notified)} ago)")
 
             # Keep previous notification time and count
             last_notified = prev_last_notified
@@ -1594,6 +1636,8 @@ def main():
                   f"default_notify_every_n_secs={DEFAULT_NOTIFY_EVERY_N_SECS}, default_after_every_n_notifications={DEFAULT_AFTER_EVERY_N_NOTIFICATIONS}")
             print(f"Loaded {len(config['monitors'])} resources to monitor for " + config['site']['name'])
 
+        sys.stdout.flush()
+
         # check availability of each resource in config using thread pool
         try:
             with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_THREADS) as executor:
@@ -1604,7 +1648,10 @@ def main():
                     try:
                         future.result()  # Blocks until this specific future completes, re-raises exceptions
                     except Exception as e:
-                        print(f"Thread exception: {e}", file=sys.stderr)
+                        print(f"Thread exception in barrier: {e}", file=sys.stderr)
+                        if VERBOSE > 1:
+                            print(f"DEBUG: Full traceback:", file=sys.stderr)
+                            traceback.print_exc(file=sys.stderr)
 
         finally:
             # All threads guaranteed complete at this point

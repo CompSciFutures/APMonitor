@@ -9,6 +9,10 @@ Runs on RPi to enterprise systems.<br />
 Thread safe, reentrant, easily modifiable Python.<br />
 GPL 3.0 licensed.<br/>
 
+# Release 1.1.2 (27-Nov-2025): Threaded Instrumentation
+- Added atomic flushing of threaded console logs so things appear in the right order.
+- Added thread local telemetry & improved systemd journal output. 
+
 ## Release 1.1.1 (27-Nov-2025): Concurrency & Statefulness Fixes
 - Fixed concurrency issue with exiting before all state data was written (needed a proper barrier before the final save).
 - Added some basic instrumentation so the logs show when a critical section is entered and left.
