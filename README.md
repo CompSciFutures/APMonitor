@@ -955,6 +955,7 @@ sudo pip3 uninstall -y PyYAML requests pyOpenSSL urllib3 aioquic
 - Add additional outputs: 
   - MRTG compatible logfiles
   - MRTG compatible graph generation w/index.html
+  - Use loess regression on MRTG compatible logfiles for outlier & drop/increase detection
 
 - Aggregated root cause alerting:
   - Specify parent dependencies using config option `parent_name` so we have a network topology graph
@@ -975,7 +976,7 @@ sudo pip3 uninstall -y PyYAML requests pyOpenSSL urllib3 aioquic
 
 APMonitor.py is licensed under the [GNU General Public License version 3](LICENSE.txt).
 ```
-Software: APMonitor 1.1.0
+Software: APMonitor 1.1.1
 License: GNU General Public License version 3
 Licensor: Andrew (AP) Prendergast, ap@andrewprendergast.com -- FSF Member
 ```

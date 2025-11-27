@@ -1,4 +1,12 @@
 #!/usr/bin/env python3
+"""
+APMonitor - On-Premises Network Resource Availability Monitor
+Version 1.0.1
+"""
+
+__version__ = "1.1.0"
+__app_name__ = "APMonitor"
+
 import argparse
 import json
 import re
@@ -1504,6 +1512,9 @@ def main():
     MAX_THREADS = args.threads
     STATEFILE = args.statefile
 
+    if VERBOSE:
+        print(f"-    - --=[ {__app_name__} v{__version__} ]=--- -     -")
+
     if MAX_THREADS < 1:
         print("Error: threads must be a positive integer greater than 0", file=sys.stderr)
         sys.exit(1)
@@ -1587,8 +1598,20 @@ def main():
         try:
             with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_THREADS) as executor:
                 futures = [executor.submit(check_and_heartbeat, resource, config['site']) for resource in config['monitors']]
-                concurrent.futures.wait(futures)
+
+                # Wait for ALL futures to complete AND retrieve results to ensure exceptions propagate
+                for future in futures:
+                    try:
+                        future.result()  # Blocks until this specific future completes, re-raises exceptions
+                    except Exception as e:
+                        print(f"Thread exception: {e}", file=sys.stderr)
+
         finally:
+            # All threads guaranteed complete at this point
+            # Flush all output buffers to ensure thread output is written
+            sys.stdout.flush()
+            sys.stderr.flush()
+
             # Calculate execution time
             end_time = datetime.now()
             end_ms = int(end_time.timestamp() * 1000)
@@ -1601,7 +1624,8 @@ def main():
             })
 
             if VERBOSE:
-                print(f"Execution time: {execution_ms}ms")
+                print(f"_ ___ ________  {'.' * len(str(execution_ms))} .. .")
+                print(f"Execution time: {execution_ms} ms")
 
             # Save state atomically
             save_state(STATE)

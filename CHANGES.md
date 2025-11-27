@@ -9,6 +9,10 @@ Runs on RPi to enterprise systems.<br />
 Thread safe, reentrant, easily modifiable Python.<br />
 GPL 3.0 licensed.<br/>
 
+## Release 1.1.1 (27-Nov-2025): Concurrency & Statefulness Fixes
+- Fixed concurrency issue with exiting before all state data was written (needed a proper barrier before the final save).
+- Added some basic instrumentation so the logs show when a critical section is entered and left.
+
 ## Release 1.0.1 (25-Nov-2025): Implemented QUIC
 
 - Removed deprecated `https` monitor type and replaced with (prototyped) `quic` monitor type
