@@ -9,7 +9,10 @@ Runs on RPi to enterprise systems.<br />
 Thread safe, reentrant, easily modifiable Python.<br />
 GPL 3.0 licensed.<br/>
 
-# Release 1.1.2 (27-Nov-2025): Threaded Instrumentation
+# Release 1.1.3 (28-Nov-2025): Fixed repeating recovery alarms
+- simplified logic for testing recovery of an outage to avoid some weird edge cases 
+
+# Release 1.1.2 (27-Nov-2025): Better Threaded Instrumentation & Telemetry
 - Added atomic flushing of threaded console logs so things appear in the right order.
 - Added thread local telemetry & improved systemd journal output. 
 

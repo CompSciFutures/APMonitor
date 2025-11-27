@@ -3,7 +3,7 @@
 APMonitor - On-Premises Network Resource Availability Monitor
 """
 
-__version__ = "1.1.2"
+__version__ = "1.1.3"
 __app_name__ = "APMonitor"
 
 import argparse
@@ -1367,7 +1367,7 @@ def check_and_heartbeat(resource, site_config):
     # Calculate new down_count, last_alarm_started, and last_notified
     if is_up:
         # Check if this is a transition from down to up
-        if not prev_is_up and prev_last_alarm_started:
+        if not prev_is_up:
             # Calculate outage duration
             outage_duration = format_time_ago(prev_last_alarm_started)
 
