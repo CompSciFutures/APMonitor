@@ -24,6 +24,24 @@ APMonitor is a neat way to guarantee your on-prem availability monitoring will a
 
 ap
 
+# Design Philosophy
+
+Once upon a time, I was well known in data center circles along Highway 101 in Silicon Valley for carrying in my back pocket a super lightweight pure C/libc cross-platform availability monitoring tool with no dependencies whatsoever called `APMonitor.c`. I'd graciously provide the source code to anyone who asked.
+
+This is a rebuild of that project with enhanced features, starting with a Python prototype.
+
+The design philosophy centers on simplicity and elegance: a single, unified source file containing the main execution flow for a 100% on-premises/LAN availability monitoring tool with guaranteed alerts and intelligent pacing.
+
+Key Features:
+
+- Multithreaded high-speed availability checking for PING and HTTP(S) resources
+- Integration with Site24x7/PagerDuty heartbeat monitoring for high-availability second-opinion and failover alerting
+- Integration with Slack and Pushover webhooks for notifications, plus standard email support
+- Smart notification pacing: rapid alerts initially, then gradually decreasing frequency for extended outages
+- Runs on everything from Raspberry Pi to enterprise systems
+- Thread-safe, reentrant, and easily modifiable
+- GPL 3.0 free open source always, so you know there are no backdoors
+
 # Recommended configuration for real-time environments
 
 To put APMonitor into near-realtime mode so that it checks resources multiple times per second, use these global settings:
@@ -969,7 +987,7 @@ sudo pip3 uninstall -y PyYAML requests pyOpenSSL urllib3 aioquic
   - Add a Mercator + `APTree.c` `#InfoRec` inspired/styled priority queue for handling large numbers of monitored resources with proper realtime programming guarantees
   - Test if we are `root` when doing a `ping` syscall and fallback to direct `SOCK_RAW` if we are for high performance
 
-
+- Add network segment monitoring for detecting new hosts with `nmap`.
 
 
 # Licensing & Versioning
