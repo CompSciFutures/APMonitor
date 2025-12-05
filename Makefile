@@ -75,7 +75,7 @@ install: check-root
 	@echo "" >> $(SERVICE_DIR)/apmonitor.service
 	@echo "[Service]" >> $(SERVICE_DIR)/apmonitor.service
 	@echo "Type=simple" >> $(SERVICE_DIR)/apmonitor.service
-	@echo "ExecStart=/bin/bash -c 'while true; do $(INSTALL_DIR)/APMonitor.py -vv -s $(STATE_DIR)/apmonitor-statefile.json $(CONFIG_DIR)/apmonitor-config.yaml; sleep 15; done'" >> $(SERVICE_DIR)/apmonitor.service
+	@echo "ExecStart=/bin/bash -c 'while true; do $(INSTALL_DIR)/APMonitor.py -vv -s $(STATE_DIR)/apmonitor-statefile.json $(CONFIG_DIR)/apmonitor-config.yaml; sleep 10; done'" >> $(SERVICE_DIR)/apmonitor.service
 	@echo "Restart=always" >> $(SERVICE_DIR)/apmonitor.service
 	@echo "RestartSec=10" >> $(SERVICE_DIR)/apmonitor.service
 	@echo "User=$(USER)" >> $(SERVICE_DIR)/apmonitor.service
