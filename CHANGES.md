@@ -9,6 +9,9 @@ Runs on RPi to enterprise systems.<br />
 Thread safe, reentrant, easily modifiable Python.<br />
 GPL 3.0 licensed.<br/>
 
+# Release 1.1.4 (05-Dec-2025): Tuned defaults for heartbeat monitoring tolerances 
+- Changed default Makefile install to be within the +/- 10 secs of Site24x7 & PagerDuty 
+
 # Release 1.1.3 (28-Nov-2025): Fixed repeating recovery alarms
 - simplified logic for testing recovery of an outage to avoid some weird edge cases 
 
