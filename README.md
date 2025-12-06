@@ -22,9 +22,10 @@ APMonitor also integrates well with [Slack](https://slack.com/) and [Pushover](h
 
 APMonitor is a neat way to guarantee your on-prem availability monitoring will always let you know about an outage and to avoid putting resources onto the net that don't need to be.
 
-ap
+Andrew (AP) Prendergast<br />
+Ex ServerMasters, ex-Googler, ex-Xerox PARC/PARK, ex Chief Scientist @ Clemenger BBDO / Omnicom.
 
-# Design Philosophy
+# Design Philosophy &amp; Provenance
 
 Once upon a time, I was well known in data center circles along Highway 101 in Silicon Valley for carrying in my back pocket a super lightweight pure C/libc cross-platform availability monitoring tool with no dependencies whatsoever called `APMonitor.c`. I'd graciously provide the source code to anyone who asked.
 
@@ -994,7 +995,7 @@ sudo pip3 uninstall -y PyYAML requests pyOpenSSL urllib3 aioquic
 
 APMonitor.py is licensed under the [GNU General Public License version 3](LICENSE.txt).
 ```
-Software: APMonitor 1.1.3
+Software: APMonitor 1.1.5
 License: GNU General Public License version 3
 Licensor: Andrew (AP) Prendergast, ap@andrewprendergast.com -- FSF Member
 ```

@@ -3,7 +3,7 @@
 APMonitor - On-Premises Network Resource Availability Monitor
 """
 
-__version__ = "1.1.3"
+__version__ = "1.1.5"
 __app_name__ = "APMonitor"
 
 import argparse
@@ -1355,8 +1355,34 @@ def check_and_heartbeat(resource, site_config):
                 last_heartbeat_time = datetime.fromisoformat(prev_last_successful_heartbeat)
                 seconds_since_heartbeat = (now - last_heartbeat_time).total_seconds()
                 should_heartbeat = seconds_since_heartbeat >= heartbeat_every_n_secs
-            except:
+
+                # HIGH-SIGNAL INSTRUMENTATION: Show heartbeat timing decision
+                if VERBOSE:
+                    if should_heartbeat:
+                        print(f"{prefix}Heartbeat DUE for {resource['name']}: "
+                              f"{seconds_since_heartbeat:.1f}s elapsed >= {heartbeat_every_n_secs}s interval "
+                              f"(last: {format_time_ago(prev_last_successful_heartbeat)} ago)")
+                    else:
+                        time_until_next = heartbeat_every_n_secs - seconds_since_heartbeat
+                        print(f"{prefix}Heartbeat SKIP for {resource['name']}: "
+                              f"{seconds_since_heartbeat:.1f}s elapsed < {heartbeat_every_n_secs}s interval "
+                              f"(wait {format_time_ago(time_until_next)}, last: {format_time_ago(prev_last_successful_heartbeat)} ago)")
+
+            except Exception as e:
                 should_heartbeat = True
+                # HIGH-SIGNAL INSTRUMENTATION: Show timestamp parse failure
+                print(f"{prefix}Heartbeat timestamp parse FAILED for {resource['name']}: {e} "
+                      f"(prev_last_successful_heartbeat='{prev_last_successful_heartbeat}'), "
+                      f"defaulting to should_heartbeat=True", file=sys.stderr)
+        else:
+            # HIGH-SIGNAL INSTRUMENTATION: Show why we're sending every check
+            if VERBOSE:
+                if heartbeat_every_n_secs is None:
+                    print(f"{prefix}Heartbeat SEND for {resource['name']}: "
+                          f"heartbeat_every_n_secs not configured (sending every check)")
+                elif not prev_last_successful_heartbeat:
+                    print(f"{prefix}Heartbeat SEND for {resource['name']}: "
+                          f"no previous heartbeat timestamp (first heartbeat)")
 
         if should_heartbeat:
             if ping_heartbeat_url(resource['heartbeat_url'], resource['name'], site_config['name']):
@@ -1398,15 +1424,21 @@ def check_and_heartbeat(resource, site_config):
         last_alarm_started = prev_last_alarm_started
     else:
         down_count = prev_down_count + 1
-        # Set last_alarm_started if not already set
-        if not prev_last_alarm_started:
+        # Set last_alarm_started on fresh DOWN transition, preserve on continued DOWN
+        if prev_is_up:  # Fresh transition from UP to DOWN
             last_alarm_started = now.isoformat()
-        else:
+            prev_last_notified = None
+            prev_notified_count = 0
+        else:  # Resource was already down, preserve existing alarm start time
             last_alarm_started = prev_last_alarm_started
 
-        error_message = f"{resource['name']} in {site_config['name']} is down: {error_reason} ({resource['address']}) at {timestamp_str}, down for {format_time_ago(last_alarm_started)}"
 
-        print(f"{prefix}##### OUTAGE: {error_message} #####", file=sys.stderr)
+        if prev_is_up:
+            error_message = f"{resource['name']} in {site_config['name']} new outage: {error_reason} ({resource['address']}) at {timestamp_str}, down for {format_time_ago(last_alarm_started)}"
+            print(f"{prefix}##### NEW OUTAGE: {error_message} #####", file=sys.stderr)
+        else:
+            error_message = f"{resource['name']} in {site_config['name']} is down: {error_reason} ({resource['address']}) at {timestamp_str}, down for {format_time_ago(last_alarm_started)}"
+            print(f"{prefix}##### DOWN: {error_message} #####", file=sys.stderr)
 
         # Determine if we should send notifications
         notify_every_n_secs = resource.get('notify_every_n_secs', DEFAULT_NOTIFY_EVERY_N_SECS)
