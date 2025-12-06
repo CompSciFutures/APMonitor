@@ -48,12 +48,12 @@ Key Features:
 - Thread-safe, reentrant, and easily modifiable
 - GPL 3.0 free open source always, so you know there are no backdoors
 
-NB: This tool forms the second pillar (Availability) from the 12 Pillars of Information
-Security, for Necessary, Sufficient & Complete Security: 
+NB: This tool is useful for implementing the second &amp; third pillars (Availability &amp; System Integrity)
+from the 12 Pillars of Information Security, for Necessary, Sufficient & Complete Security: 
 
 ![The-Pillars-of-Information-Security.png](images/The-Pillars-of-Information-Security.png)
 
-See DOI [10.13140/RG.2.2.12609.84321](https://doi.org/10.13140/RG.2.2.12609.84321) for more information.
+Also be mindful of the Attack Surface Kill-Switch Riddle. See DOI [10.13140/RG.2.2.12609.84321](https://doi.org/10.13140/RG.2.2.12609.84321) for more information.
 
 # Recommended configuration for real-time environments
 
