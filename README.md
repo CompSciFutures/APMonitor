@@ -22,8 +22,13 @@ APMonitor also integrates well with [Slack](https://slack.com/) and [Pushover](h
 
 APMonitor is a neat way to guarantee your on-prem availability monitoring will always let you know about an outage and to avoid putting resources onto the net that don't need to be.
 
-Andrew (AP) Prendergast<br />
-Ex ServerMasters, ex-Googler, ex-Xerox PARC/PARK, ex Chief Scientist @ Clemenger BBDO / Omnicom.
+<b>Andrew (AP) Prendergast</b><br />
+https://linktr.ee/CompSciFutures
+
+<i>Ex-ServerMasters<br/>
+Ex-Googler<br />
+Ex-Xerox PARC/PARK<br/>
+Ex Chief Scientist @ Clemenger BBDO / Omnicom</i>
 
 # Design Philosophy &amp; Provenance
 
