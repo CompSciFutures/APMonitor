@@ -30,6 +30,9 @@ Ex-Googler<br />
 Ex-Xerox PARC/PARK<br/>
 Ex Chief Scientist @ Clemenger BBDO / Omnicom</i>
 
+[![buy-me-a-coffee.png](images/buy-me-a-coffee.png)](https://buymeacoffee.com/compscifutures)
+
+
 # Design Philosophy &amp; Provenance
 
 Once upon a time, I was well known in data center circles along Highway 101 in Silicon Valley for carrying in my back pocket a super lightweight pure C/libc cross-platform availability monitoring tool with no dependencies whatsoever called `APMonitor.c`. I'd graciously provide the source code to anyone who asked.
