@@ -43,7 +43,9 @@ The design philosophy centers on simplicity and elegance: a single, unified sour
 
 Key Features:
 
-- Multithreaded high-speed availability checking for PING and HTTP(S) resources
+- Near-realtime programming so heartbeats and alerts arrive when they sey they are going to (+/- 10 secs)
+- Multithreaded high-speed availability checking for PING, QUIC and HTTP(S) resources
+- SSL/TLS certificate checking and pinning so you can use self-signed certificates on-lan safely
 - Integration with Site24x7/PagerDuty heartbeat monitoring for high-availability second-opinion and failover alerting
 - Integration with Slack and Pushover webhooks for notifications, plus standard email support
 - Smart notification pacing: rapid alerts initially, then gradually decreasing frequency for extended outages
