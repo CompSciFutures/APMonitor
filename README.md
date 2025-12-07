@@ -68,6 +68,19 @@ Also be mindful of the Attack Surface Kill-Switch Riddle:
 
 See DOI [10.13140/RG.2.2.12609.84321](https://doi.org/10.13140/RG.2.2.12609.84321) for more information.
 
+## Alternatives
+
+If lightweight or realtime guarantees aren't important to you, and you want something more feature packed, 
+consider these on-prem alternatives:
+
+- Uptime Kuma
+- Statping
+- UptimeRobot
+
+APMonitor is simple, elegant and lightweight and comes from a reliable line of heritage so you can spin it up fast
+as a 2nd opinion monitoring tool. If you want something more sophisticated thats less focused on realtime programming,
+take a look at those very capable alternatives.
+
 # Recommended configuration for real-time environments
 
 To put APMonitor into near-realtime mode so that it checks resources multiple times per second, use these global settings:
