@@ -9,6 +9,9 @@ Thread safe, reentrant, easily modifiable Python.<br />
 Runs on RPi to enterprise systems.<br />
 GPL 3.0 licensed.<br/>
 
+# Release 1.1.6 (8-Dec-25): Order of operations fix
+- Trying a different setting of time.now after check_resource() is called
+
 # Release 1.1.5 (06-Dec-2025): Fixed notification edge cases
 - Added telemetry around logic associated with heartbeat timing to systemd journal instrumentation
 - Fixed problem with incorrect alarm duration being reported in recovery messages.

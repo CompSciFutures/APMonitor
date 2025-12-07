@@ -1336,14 +1336,15 @@ def check_and_heartbeat(resource, site_config):
         prev_last_successful_heartbeat = prev_state.get('last_successful_heartbeat')
         prev_notified_count = prev_state.get('notified_count', 0)
 
-    # Get current time with timezone
-    now = datetime.now()
-    timestamp_str = now.strftime('%I:%M %p %Z').lstrip('0').strip()
-
     # Check resource and ping heartbeat URL
     error_reason, last_response_time_ms = check_resource(resource)
     is_up = error_reason is None
     last_successful_heartbeat = prev_last_successful_heartbeat
+
+    # Get current time with timezone
+    now = datetime.now()
+    timestamp_str = now.strftime('%I:%M %p %Z').lstrip('0').strip()
+
     if is_up and 'heartbeat_url' in resource:
 
         # Determine if we should ping heartbeat
