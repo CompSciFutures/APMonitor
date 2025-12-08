@@ -130,6 +130,10 @@ See Site24x7 docs for more info:
 - [Heartbeat Monitoring](https://www.site24x7.com/help/heartbeat/)
 - [Thresholds configuration](https://www.site24x7.com/help/admin/configuration-profiles/threshold-and-availability/server-monitor.html)
 
+NB: "+/- 10 secs" means your errors should be measurable in 10ths of a minute. Once Mercator Queues are added, this will
+drop down to "+/- 1 sec" or possibly "+/- 100 ms", depending on how well Python performs with high-speed realtime
+programming.
+
 
 # Recommended configuration for alarm notification pacing
 
@@ -1033,11 +1037,11 @@ sudo pip3 uninstall -y PyYAML requests pyOpenSSL urllib3 aioquic
 
 - Convert finished version to pure C `APMonitor.c` 
   - Strictly only with `libc`/SVR4 C Systems Programming dependencies for really tiny cross-platform embedded systems application environments 
-  - Add a Mercator + `APTree.c` `#InfoRec` inspired/styled priority queue for handling large numbers of monitored resources with proper realtime programming guarantees
   - Test if we are `root` when doing a `ping` syscall and fallback to direct `SOCK_RAW` if we are for high performance
 
 - Add network segment monitoring for detecting new hosts with `nmap`.
 
+- Add a Mercator + `APTree.c` `#InfoRec` inspired/styled priority queue for handling large numbers of monitored resources with proper realtime programming guarantees
 
 # Licensing & Versioning
 
