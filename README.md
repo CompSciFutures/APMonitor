@@ -78,8 +78,9 @@ consider these on-prem alternatives:
 - UptimeRobot
 
 APMonitor is simple, minimalist, elegant and lightweight and comes from a reliable line of heritage so you can spin 
-it up fast as a 2nd opinion monitoring tool. If you want something more sophisticated that's less focused on 
-realtime programming, take a look at those very capable alternatives.
+it up fast as a 2nd opinion monitoring tool with little more than a `make install`. If you want something more 
+sophisticated that's less focused on realtime programming or elegant simplicity, take a look at those very capable
+alternatives.
 
 # Recommended configuration for real-time environments
 
