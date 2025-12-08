@@ -11,6 +11,7 @@ GPL 3.0 licensed.<br/>
 
 # Release ??? (???): ???
 - Updated docs to match default +/- 10 secs near-realtime tolerance when using `make install`.
+- Updated docs to explain how to monitor for near-realtime performance.
 
 # Release 1.1.6 (8-Dec-25): Order of operations fix
 - Trying a different setting of time.now after check_resource() is called

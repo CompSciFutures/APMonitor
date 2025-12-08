@@ -116,6 +116,16 @@ This ensures availability monitoring will always function, even when one of APMo
 
 This also means you don't need to expose internal LAN network resources to The Internets.
 
+If you want to take advantage of / monitor the near-realtime capabilities of APMonitor (+/- 10 secs), setup at least one 
+Site24x7 heartbeat monitor as follows:
+
+![site24x7-realtime-heartbeat-settings.png](images/site24x7-realtime-heartbeat-settings.png)
+
+This will drop an alarm if a heartbeat does not arrive bang on 5 minutes apart.
+
+You only need one monitored resource like this as the last one in the config file so you get made aware if the 
+near-realtime processing is falling behind schedule.
+
 See Site24x7 docs for more info:
 - [Heartbeat Monitoring](https://www.site24x7.com/help/heartbeat/)
 - [Thresholds configuration](https://www.site24x7.com/help/admin/configuration-profiles/threshold-and-availability/server-monitor.html)
