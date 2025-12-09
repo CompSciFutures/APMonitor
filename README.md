@@ -52,7 +52,7 @@ Key Features:
 - Integration with Slack and Pushover webhooks for notifications, plus standard email support
 - Smart notification pacing: rapid alerts initially, then gradually decreasing frequency for extended outages
 - Runs on everything from Raspberry Pi to enterprise systems
-- Super accurate, high-frequency monitoring for real-time / embedded environments
+- Super accurate, high-frequency monitoring for real-time / embedded / heartbeat monitored environments
 - Thread-safe, reentrant, and easily modifiable
 - GPL 3.0 free open source always, so you know there are no backdoors
 
