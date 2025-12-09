@@ -122,8 +122,8 @@ Site24x7 heartbeat monitor as follows:
 
 ![site24x7-realtime-heartbeat-settings.png](images/site24x7-realtime-heartbeat-settings.png)
 
-This will drop an alarm if a heartbeat does not arrive bang on 5 minutes apart. If the alarm is < 60 seconds out, will only
-Site24x7 will record the error in their dashboard but won't send an alarm out. In this way, you can keep a record
+This will drop an alarm if a heartbeat does not arrive bang on 5 minutes apart. If the alarm is < 60 seconds out, 
+Site24x7 will only record the error in their dashboard but won't send an alarm out. In this way, you can keep a record
 of how accurate the near-realtime heartbeat timing is.
 
 Given the way APMonitor & Site24x7 work together, you will only need one monitored resource like this as the 
