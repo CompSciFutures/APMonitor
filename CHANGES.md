@@ -9,9 +9,12 @@ Thread safe, reentrant, easily modifiable Python.<br />
 Runs on RPi to enterprise systems.<br />
 GPL 3.0 licensed.<br/>
 
-# Release ??? (???): ???
+# Release 1.1.7 (9-Dec-25): Heartbeat Timing Discretisation Error Fix
 - Updated docs to match default +/- 10 secs near-realtime tolerance when using `make install`.
 - Updated docs to explain how to monitor for near-realtime performance.
+- Added VERBOSE status msg around hearbeat timing due-ness.
+- Refactored `check_and_heartbeat` so due-ness logic is in separate `is_heartbeat_due`, `is_check_due`, `calc_config_checksum` functions.
+- fixed problem where discretisation error was causing heartbeats to be missed until the next check.
 
 # Release 1.1.6 (8-Dec-25): Order of operations fix
 - Trying a different setting of time.now after check_resource() is called

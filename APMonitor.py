@@ -3,7 +3,7 @@
 APMonitor - On-Premises Network Resource Availability Monitor
 """
 
-__version__ = "1.1.5"
+__version__ = "1.1.7"
 __app_name__ = "APMonitor"
 
 import argparse
@@ -1279,6 +1279,142 @@ def prefix_logline(site_name, resource_name):
     return f"[T#{thread_id:04d} {context}] "
 
 
+def calc_config_checksum(resource):
+    """Calculate SHA256 checksum of resource configuration.
+
+    Args:
+        resource: Resource configuration dict
+
+    Returns:
+        str: SHA256 hex digest of resource JSON
+    """
+    import hashlib
+    resource_json = json.dumps(resource, sort_keys=True)
+    return hashlib.sha256(resource_json.encode()).hexdigest()
+
+
+def is_check_due(resource, prev_last_checked):
+    """Determine if a resource check is due.
+
+    Args:
+        resource: Resource configuration dict
+        prev_last_checked: ISO timestamp string of last check (or None)
+
+    Returns:
+        tuple: (should_check: bool, seconds_since_check: float or False)
+    """
+    prefix = getattr(thread_local, 'prefix', '')
+
+    # Get check interval
+    check_every_n_secs = resource.get('check_every_n_secs', DEFAULT_CHECK_EVERY_N_SECS)
+
+    # No previous check - first check
+    if not prev_last_checked:
+        return True, False
+
+    # Calculate time since last check
+    try:
+        last_checked_time = datetime.fromisoformat(prev_last_checked)
+        seconds_since_check = (datetime.now() - last_checked_time).total_seconds()
+        should_check = seconds_since_check >= check_every_n_secs
+    except:
+        should_check = True
+        seconds_since_check = False
+
+    # Check is due if timing says yes
+    if should_check:
+        if VERBOSE:
+            print(f"{prefix}checking: {resource}")
+        return True, seconds_since_check
+
+    # Check not due
+    if VERBOSE:
+        if not seconds_since_check:
+            print(f"{prefix}skipping {resource['name']} (checked {format_time_ago(prev_last_checked)} ago)")
+        else:
+            time_until_next_check = check_every_n_secs - seconds_since_check
+            print(f"{prefix}skipping {resource['name']} for {format_time_ago(time_until_next_check)} (checked {format_time_ago(prev_last_checked)} ago)")
+
+    return False, seconds_since_check
+
+
+def is_heartbeat_due(resource, prev_last_successful_heartbeat, now):
+    """Determine if a heartbeat ping is due.
+
+    Args:
+        resource: Resource configuration dict
+        prev_last_successful_heartbeat: ISO timestamp string of last heartbeat (or None)
+        now: datetime object representing current time
+
+    Returns:
+        tuple: (should_heartbeat: bool, seconds_since_heartbeat: float or None)
+    """
+    prefix = getattr(thread_local, 'prefix', '')
+
+    # No heartbeat configured
+    if 'heartbeat_url' not in resource:
+        return False, None
+
+    heartbeat_every_n_secs = resource.get('heartbeat_every_n_secs')
+
+    # No interval configured - heartbeat every check
+    if heartbeat_every_n_secs is None:
+        if VERBOSE:
+            print(f"{prefix}Heartbeat SEND for {resource['name']}: "
+                  f"heartbeat_every_n_secs not configured (sending every check)")
+        return True, None
+
+    # No previous heartbeat - first heartbeat
+    if not prev_last_successful_heartbeat:
+        if VERBOSE:
+            print(f"{prefix}Heartbeat SEND for {resource['name']}: "
+                  f"no previous heartbeat timestamp (first heartbeat)")
+        return True, None
+
+    # Calculate time since last heartbeat
+    try:
+        last_heartbeat_time = datetime.fromisoformat(prev_last_successful_heartbeat)
+        seconds_since_heartbeat = (now - last_heartbeat_time).total_seconds()
+        should_heartbeat = seconds_since_heartbeat >= heartbeat_every_n_secs
+
+        # DIAGNOSTIC: One-line heartbeat timing
+        if VERBOSE:
+            time_till_due = heartbeat_every_n_secs - seconds_since_heartbeat
+            status = "IS DUE" if should_heartbeat else "IS NOT DUE"
+            last_str = format_time_ago(seconds_since_heartbeat)
+
+            if should_heartbeat:
+                overdue_str = format_time_ago(abs(time_till_due))
+                print(f"{prefix}Heartbeat: {status} - last {last_str} ({int(seconds_since_heartbeat * 1000):,} ms) ago, overdue by: {overdue_str} ({int(time_till_due * 1000):,} ms)")
+            else:
+                next_str = format_time_ago(time_till_due)
+                print(f"{prefix}Heartbeat: {status} - last {last_str} ({int(seconds_since_heartbeat * 1000):,} ms) ago, next due in: {next_str} ({int(time_till_due * 1000):,} ms)")
+
+        # HIGH-SIGNAL INSTRUMENTATION: Show heartbeat timing decision
+        if VERBOSE:
+            if should_heartbeat:
+                print(f"{prefix}Heartbeat DUE for {resource['name']}: "
+                      f"{seconds_since_heartbeat:.1f}s elapsed >= {heartbeat_every_n_secs}s interval "
+                      f"(last: {format_time_ago(prev_last_successful_heartbeat)} ago)")
+            else:
+                time_until_next = heartbeat_every_n_secs - seconds_since_heartbeat
+                print(f"{prefix}Heartbeat SKIP for {resource['name']}: "
+                      f"{seconds_since_heartbeat:.1f}s elapsed < {heartbeat_every_n_secs}s interval "
+                      f"(wait {format_time_ago(time_until_next)}, last: {format_time_ago(prev_last_successful_heartbeat)} ago)")
+
+        return should_heartbeat, seconds_since_heartbeat
+
+    except Exception as e:
+        # HIGH-SIGNAL INSTRUMENTATION: Show timestamp parse failure
+        print(f"{prefix}Heartbeat timestamp parse FAILED for {resource['name']}: {e} "
+              f"(prev_last_successful_heartbeat='{prev_last_successful_heartbeat}'), "
+              f"defaulting to should_heartbeat=True", file=sys.stderr)
+        return True, None
+
+# def is_due():
+#     return is_check_due() or is_heartbeat_due()
+
+
 def check_and_heartbeat(resource, site_config):
     """Check resource and ping heartbeat if up."""
 
@@ -1286,45 +1422,41 @@ def check_and_heartbeat(resource, site_config):
     thread_local.prefix = prefix_logline(site_config['name'], resource['name'])
     prefix = thread_local.prefix
 
-    # Calculate checksum of resource configuration
-    import hashlib
-    resource_json = json.dumps(resource, sort_keys=True)
-    resource_checksum = hashlib.sha256(resource_json.encode()).hexdigest()
+    # Calculate current config checksum
+    resource_checksum = calc_config_checksum(resource)
 
     # Get previous state for this resource
     with STATE_LOCK:
-        prev_state = STATE.get(resource['name'], {})
+        prev_state = STATE.get(resource['name'], {}) or {}
         prev_last_checked = prev_state.get('last_checked')
         prev_config_checksum = prev_state.get('last_config_checksum')
+        prev_last_successful_heartbeat = prev_state.get('last_successful_heartbeat')
+        prev_last_response_time_ms = prev_state.get('last_response_time_ms') or 0
+
+    # Check if config changed
+    config_changed = prev_config_checksum and prev_config_checksum != resource_checksum
 
     # Determine if we should check this resource
-    config_changed = prev_config_checksum and prev_config_checksum != resource_checksum
-    check_every_n_secs = resource.get('check_every_n_secs', DEFAULT_CHECK_EVERY_N_SECS)
-    should_check = True
+    should_check, seconds_since_check = is_check_due(resource, prev_last_checked)
 
-    seconds_since_check = False
-    if prev_last_checked:
-        try:
-            last_checked_time = datetime.fromisoformat(prev_last_checked)
-            seconds_since_check = (datetime.now() - last_checked_time).total_seconds()
-            should_check = seconds_since_check >= check_every_n_secs
-        except:
-            should_check = True
+    # Determine if heartbeat is due (adjust time by last response time to account for check duration)
+    from datetime import timedelta
+    now_adjusted = datetime.now() + timedelta(milliseconds=prev_last_response_time_ms)
+    should_heartbeat_early, _ = is_heartbeat_due(resource, prev_last_successful_heartbeat, now_adjusted)
 
-    # Skip only if timing says no AND config hasn't changed
-    if not should_check and not config_changed:
+    # Override if config changed or heartbeat due
+    if not should_check and config_changed:
+        should_check = True
         if VERBOSE:
-            if not seconds_since_check:
-                print(f"{prefix}skipping {resource['name']} (checked {format_time_ago(prev_last_checked)} ago)")
-            else:
-                time_until_next_check = check_every_n_secs - seconds_since_check
-                print(f"{prefix}skipping {resource['name']} for {format_time_ago(time_until_next_check)} (checked {format_time_ago(prev_last_checked)} ago)")
-        return
+            print(f"{prefix}configuration changed for {resource['name']}, checking immediately: {resource}")
+    elif not should_check and should_heartbeat_early:
+        should_check = True
+        if VERBOSE:
+            print(f"{prefix}heartbeat due for {resource['name']}, checking immediately")
 
-    if VERBOSE and config_changed:
-        print(f"{prefix}configuration changed for {resource['name']}, checking immediately: {resource}")
-    elif VERBOSE:
-        print(f"{prefix}checking: {resource}")
+    # Skip if check not due
+    if not should_check:
+        return
 
     # Get previous state for this resource
     with STATE_LOCK:
@@ -1346,44 +1478,8 @@ def check_and_heartbeat(resource, site_config):
     timestamp_str = now.strftime('%I:%M %p %Z').lstrip('0').strip()
 
     if is_up and 'heartbeat_url' in resource:
-
         # Determine if we should ping heartbeat
-        heartbeat_every_n_secs = resource.get('heartbeat_every_n_secs')
-        should_heartbeat = True
-
-        if heartbeat_every_n_secs is not None and prev_last_successful_heartbeat:
-            try:
-                last_heartbeat_time = datetime.fromisoformat(prev_last_successful_heartbeat)
-                seconds_since_heartbeat = (now - last_heartbeat_time).total_seconds()
-                should_heartbeat = seconds_since_heartbeat >= heartbeat_every_n_secs
-
-                # HIGH-SIGNAL INSTRUMENTATION: Show heartbeat timing decision
-                if VERBOSE:
-                    if should_heartbeat:
-                        print(f"{prefix}Heartbeat DUE for {resource['name']}: "
-                              f"{seconds_since_heartbeat:.1f}s elapsed >= {heartbeat_every_n_secs}s interval "
-                              f"(last: {format_time_ago(prev_last_successful_heartbeat)} ago)")
-                    else:
-                        time_until_next = heartbeat_every_n_secs - seconds_since_heartbeat
-                        print(f"{prefix}Heartbeat SKIP for {resource['name']}: "
-                              f"{seconds_since_heartbeat:.1f}s elapsed < {heartbeat_every_n_secs}s interval "
-                              f"(wait {format_time_ago(time_until_next)}, last: {format_time_ago(prev_last_successful_heartbeat)} ago)")
-
-            except Exception as e:
-                should_heartbeat = True
-                # HIGH-SIGNAL INSTRUMENTATION: Show timestamp parse failure
-                print(f"{prefix}Heartbeat timestamp parse FAILED for {resource['name']}: {e} "
-                      f"(prev_last_successful_heartbeat='{prev_last_successful_heartbeat}'), "
-                      f"defaulting to should_heartbeat=True", file=sys.stderr)
-        else:
-            # HIGH-SIGNAL INSTRUMENTATION: Show why we're sending every check
-            if VERBOSE:
-                if heartbeat_every_n_secs is None:
-                    print(f"{prefix}Heartbeat SEND for {resource['name']}: "
-                          f"heartbeat_every_n_secs not configured (sending every check)")
-                elif not prev_last_successful_heartbeat:
-                    print(f"{prefix}Heartbeat SEND for {resource['name']}: "
-                          f"no previous heartbeat timestamp (first heartbeat)")
+        should_heartbeat, seconds_since_heartbeat = is_heartbeat_due(resource, prev_last_successful_heartbeat, now)
 
         if should_heartbeat:
             if ping_heartbeat_url(resource['heartbeat_url'], resource['name'], site_config['name']):
@@ -1432,7 +1528,6 @@ def check_and_heartbeat(resource, site_config):
             prev_notified_count = 0
         else:  # Resource was already down, preserve existing alarm start time
             last_alarm_started = prev_last_alarm_started
-
 
         if prev_is_up:
             error_message = f"{resource['name']} in {site_config['name']} new outage: {error_reason} ({resource['address']}) at {timestamp_str}, down for {format_time_ago(last_alarm_started)}"

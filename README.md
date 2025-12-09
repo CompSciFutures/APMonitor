@@ -122,10 +122,12 @@ Site24x7 heartbeat monitor as follows:
 
 ![site24x7-realtime-heartbeat-settings.png](images/site24x7-realtime-heartbeat-settings.png)
 
-This will drop an alarm if a heartbeat does not arrive bang on 5 minutes apart.
+This will drop an alarm if a heartbeat does not arrive bang on 5 minutes apart. If the alarm is < 60 seconds out, will only
+Site24x7 will record the error in their dashboard but won't send an alarm out. In this way, you can keep a record
+of how accurate the near-realtime heartbeat timing is.
 
-You only need one monitored resource like this as the last one in the config file so you get made aware if the 
-near-realtime processing is falling behind schedule.
+Given the way APMonitor & Site24x7 work together, you will only need one monitored resource like this as the 
+last one in the config file so you get made aware if the near-realtime processing is falling behind schedule.
 
 See Site24x7 docs for more info:
 - [Heartbeat Monitoring](https://www.site24x7.com/help/heartbeat/)
@@ -133,7 +135,8 @@ See Site24x7 docs for more info:
 
 NB: "+/- 10 secs" means your errors should be measurable in 10ths of a minute. Once Mercator Queues are added, this will
 drop down to "+/- 1 sec" or possibly "+/- 100 ms", depending on how well Python performs with high-speed realtime
-programming.
+programming. A workaround in the meantime is to make sure your number of threads is equal to the number of monitored
+resources - something that is not necessarily practical or required in most settings.
 
 
 # Recommended configuration for alarm notification pacing
@@ -1048,7 +1051,7 @@ sudo pip3 uninstall -y PyYAML requests pyOpenSSL urllib3 aioquic
 
 APMonitor.py is licensed under the [GNU General Public License version 3](LICENSE.txt).
 ```
-Software: APMonitor 1.1.6
+Software: APMonitor 1.1.7
 License: GNU General Public License version 3
 Licensor: Andrew (AP) Prendergast, ap@andrewprendergast.com -- FSF Member
 ```
