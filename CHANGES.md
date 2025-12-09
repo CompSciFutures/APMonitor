@@ -2,12 +2,16 @@
 
 ## About `APMonitor.py` (APMonitor)
 
-On-prem/LAN availability monitoring tool with guaranteed alerts & decaying alert pacing.<br />
-Multithreaded high speed availability checking for PING, QUIC & HTTP/S resources incl. SSL/TLS cert. pinning.<br />
-Integrates with Site24x7 heartbeat monitoring for failover alerting + Slack & Pushover webhooks.<br />
-Thread safe, reentrant, easily modifiable Python.<br />
-Runs on RPi to enterprise systems.<br />
-GPL 3.0 licensed.<br/>
+Synopsis:
+
+On-prem/LAN availability monitoring with realtime guarantees & decaying alert pacing. 
+Multithreaded high speed availability checking for PING, QUIC & HTTP/S resources incl. SSL/TLS cert. pinning.
+Integrates with Site24x7 heartbeat monitoring for failover alerting + Slack & Pushover webhooks.
+Thread safe, reentrant, easily modifiable.
+
+# Release ??? (???): ???
+- Updated telemetry to show we know how long ago and for how long the last run was
+
 
 # Release 1.1.7 (9-Dec-25): Heartbeat Timing Discretisation Error Fix
 - Updated docs to match default +/- 10 secs near-realtime tolerance when using `make install`.

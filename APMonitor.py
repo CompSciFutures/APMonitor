@@ -1749,8 +1749,9 @@ def main():
             last_execution_time = STATE.get('execution_time')
             last_execution_ms = STATE.get('execution_ms')
             if last_execution_ms and last_execution_time:
-                last_execution_time = datetime.fromisoformat(last_execution_time)
-                print(f"Last execution time: {last_execution_ms}ms, ending at {last_execution_time.strftime('%Y-%m-%d %H:%M:%S')}")
+                last_execution_time_dt = datetime.fromisoformat(last_execution_time)
+                time_since_last_run = format_time_ago(last_execution_time)
+                print(f"Last execution time: {last_execution_ms}ms, ending at {last_execution_time_dt.strftime('%Y-%m-%d %H:%M:%S')} ({time_since_last_run} ago)")
             elif last_execution_ms:
                 print(f"Last execution time: {last_execution_ms}ms")
 
