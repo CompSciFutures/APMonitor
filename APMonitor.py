@@ -3,7 +3,7 @@
 APMonitor - On-Premises Network Resource Availability Monitor
 """
 
-__version__ = "1.1.7"
+__version__ = "1.1.7m"
 __app_name__ = "APMonitor"
 
 import argparse
@@ -12,7 +12,7 @@ import re
 from urllib.parse import urlparse
 import OpenSSL.crypto
 from pathlib import Path
-import yaml # can push into load_config() if this is a dependency problem for you
+import yaml  # can push into load_config() if this is a dependency problem for you
 import requests
 import time
 import platform
@@ -28,6 +28,7 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import traceback
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 # NB: check_quic_url() already has aioquic defined as a function local import so you don't have to lug it around if you don't need it
 
@@ -37,23 +38,24 @@ import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # Configuration constants
-MAX_RETRIES = 3
-MAX_TRY_SECS = 20
-VERBOSE = 0
-IGNORE_SSL_ERRORS = True
-MAX_THREADS = 1
-STATEFILE = "statefile.json"
-STATE = {}
-STATE_LOCK = threading.Lock()
-DEFAULT_CHECK_EVERY_N_SECS = 60
-DEFAULT_NOTIFY_EVERY_N_SECS = 600
-DEFAULT_AFTER_EVERY_N_NOTIFICATIONS = 1
+MAX_RETRIES: int = 3
+MAX_TRY_SECS: int = 20
+VERBOSE: int = 0
+IGNORE_SSL_ERRORS: bool = True
+MAX_THREADS: int = 1
+STATEFILE: str = "statefile.json"
+STATE: Dict[str, Any] = {}
+STATE_LOCK: threading.Lock = threading.Lock()
+DEFAULT_CHECK_EVERY_N_SECS: int = 60
+DEFAULT_NOTIFY_EVERY_N_SECS: int = 600
+DEFAULT_AFTER_EVERY_N_NOTIFICATIONS: int = 1
 
 # Global thread-local storage
-thread_local = threading.local()
+thread_local: threading.local = threading.local()
 thread_local.prefix = None
 
-def to_natural_language_boolean(value):
+
+def to_natural_language_boolean(value: Any) -> bool:
     """Convert various representations to boolean.
 
     False values: false, no, fail, 0, bad, negative, off, n, f (case-insensitive)
@@ -122,7 +124,7 @@ def to_natural_language_boolean(value):
 #     expect: "System Name: <b>HomeLab</b>"
 #     heartbeat_url: "http://google.com/"
 #
-def load_config(config_path):
+def load_config(config_path: str) -> Dict[str, Any]:
     """Load configuration from JSON or YAML file."""
     path = Path(config_path)
 
@@ -140,7 +142,7 @@ def load_config(config_path):
             sys.exit(1)
 
 
-def load_state(statefile_path):
+def load_state(statefile_path: str) -> Dict[str, Any]:
     """Load state from JSON file."""
     path = Path(statefile_path)
     if not path.exists():
@@ -155,7 +157,7 @@ def load_state(statefile_path):
         return {}
 
 
-def update_state(updates):
+def update_state(updates: Dict[str, Any]) -> None:
     """Thread-safely update state and write to .new file."""
     global STATE
 
@@ -173,7 +175,7 @@ def update_state(updates):
     sys.stdout.flush()
 
 
-def save_state(state):
+def save_state(state: Dict[str, Any]) -> None:
     """Rotate state files: current -> .old, .new -> current."""
 
     global STATE
@@ -194,7 +196,7 @@ def save_state(state):
         print(f"Error: Could not rotate state files: {e}", file=sys.stderr)
 
 
-def format_time_ago(timestamp_or_secs):
+def format_time_ago(timestamp_or_secs: Union[str, int, float, None]) -> str:
     """Format time difference in human-readable form."""
     if not timestamp_or_secs:
         return "never"
@@ -232,7 +234,7 @@ class ConfigError(Exception):
     pass
 
 
-def print_and_exit_on_bad_config(config):
+def print_and_exit_on_bad_config(config: Dict[str, Any]) -> None:
     """Validate configuration structure and required fields."""
     try:
         # Check site is present and is a dict
@@ -579,7 +581,13 @@ def print_and_exit_on_bad_config(config):
         sys.exit(1)
 
 
-def check_http_url(url, name, expect, ssl_fingerprint, ignore_ssl_expiry):
+def check_http_url(
+        url: str,
+        name: str,
+        expect: Optional[str],
+        ssl_fingerprint: Optional[str],
+        ignore_ssl_expiry: Any) \
+        -> Tuple[Optional[str], Optional[int], Any, Optional[str]]:
     """Perform HTTP/S request and return None if OK, error message if failed."""
     prefix = getattr(thread_local, 'prefix', '')
     error_msg = None
@@ -690,7 +698,13 @@ def check_http_url(url, name, expect, ssl_fingerprint, ignore_ssl_expiry):
         return error_msg, None, None, None
 
 
-def check_quic_url(url, name, expect, ssl_fingerprint, ignore_ssl_expiry):
+def check_quic_url(
+        url: str,
+        name: str,
+        expect: Optional[str],
+        ssl_fingerprint: Optional[str],
+        ignore_ssl_expiry: Any) \
+        -> Tuple[Optional[str], Optional[int], Any, Optional[str]]:
     """Perform QUIC/HTTP3 request and return None if OK, error message if failed."""
     import asyncio
     prefix = getattr(thread_local, 'prefix', '')
@@ -920,7 +934,7 @@ def check_quic_url(url, name, expect, ssl_fingerprint, ignore_ssl_expiry):
         return error_msg, None, None, None
 
 
-def check_url_resource(resource):
+def check_url_resource(resource: Dict[str, Any]) -> Optional[str]:
     """Check URL resource (HTTP or QUIC) and return None if OK, error message if failed."""
     prefix = getattr(thread_local, 'prefix', '')
     resource_type = resource['type']
@@ -969,7 +983,7 @@ def check_url_resource(resource):
             return error_msg
 
 
-def check_ping_resource(resource):
+def check_ping_resource(resource: Dict[str, Any]) -> Optional[str]:
     """Ping host and return None if up, error message if down."""
     prefix = getattr(thread_local, 'prefix', '')
     address = resource['address']
@@ -1002,7 +1016,7 @@ def check_ping_resource(resource):
         return error_msg
 
 
-def check_resource(resource):
+def check_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Optional[int]]:
     """Check resource with retry logic and response time tracking."""
     last_response_time_ms = None
 
@@ -1032,8 +1046,11 @@ def check_resource(resource):
     return error_msg, None
 
 
-# fetch a heartbeat URL - tries 5 times and returns True if 200 OK
-def ping_heartbeat_url(heartbeat_url, monitor_name, site_name):
+def ping_heartbeat_url(
+        heartbeat_url: str,
+        monitor_name: str,
+        site_name: str) \
+        -> bool:
     """Fetch a heartbeat URL - tries MAX_RETRIES times and returns True if 200 OK."""
     prefix = getattr(thread_local, 'prefix', '')
     for attempt in range(1, MAX_RETRIES + 1):
@@ -1055,7 +1072,11 @@ def ping_heartbeat_url(heartbeat_url, monitor_name, site_name):
     return False
 
 
-def notify_resource_outage_with_webhook(outage_notifier, site_name, error_reason):
+def notify_resource_outage_with_webhook(
+        outage_notifier: Dict[str, Any],
+        site_name: str,
+        error_reason: str) \
+        -> bool:
     """Send outage notification via webhook."""
     prefix = getattr(thread_local, 'prefix', '')
     endpoint_url = outage_notifier['endpoint_url']
@@ -1138,7 +1159,13 @@ def notify_resource_outage_with_webhook(outage_notifier, site_name, error_reason
         return False
 
 
-def notify_resource_outage_with_email(email_entry, site_name, error_reason, site_config, notification_type='outage'):
+def notify_resource_outage_with_email(
+        email_entry: Dict[str, Any],
+        site_name: str,
+        error_reason: str,
+        site_config: Dict[str, Any],
+        notification_type: str = 'outage') \
+        -> bool:
     """Send outage notification via email.
 
     Args:
@@ -1238,11 +1265,18 @@ def notify_resource_outage_with_email(email_entry, site_name, error_reason, site
         return False
 
 
-# Increases the delay between notification messages according to a quadratic bezier curve
-# See devnotes/20151122 Reminder Timing with Quadratic Bezier Curve.xlsx for calculation
-def calc_next_notification_delay_secs(notify_every_n_secs, after_every_n_notifications, secs_since_first_notification, current_notification_index):
-    t = (1 / after_every_n_notifications) * current_notification_index # See D12:D31 in devnote spreadsheet (this is a closed form solution)
-    By_t = (1 - t) * (1 - t) * 0 + 2 * (1 - t) * t * notify_every_n_secs + t * t * notify_every_n_secs # See F13 = (1-$D13)*(1-$D13)*E$39+2*(1-$D13)*$D13*E$40+$D13*$D13*E$41L13 in devnote spreadsheet
+def calc_next_notification_delay_secs(
+        notify_every_n_secs: int,
+        after_every_n_notifications: int,
+        secs_since_first_notification: float,
+        current_notification_index: int) \
+        -> float:
+    """Increases the delay between notification messages according to a quadratic bezier curve.
+
+    See devnotes/20151122 Reminder Timing with Quadratic Bezier Curve.xlsx for calculation
+    """
+    t = (1 / after_every_n_notifications) * current_notification_index  # See D12:D31 in devnote spreadsheet (this is a closed form solution)
+    By_t = (1 - t) * (1 - t) * 0 + 2 * (1 - t) * t * notify_every_n_secs + t * t * notify_every_n_secs  # See F13 = (1-$D13)*(1-$D13)*E$39+2*(1-$D13)*$D13*E$40+$D13*$D13*E$41L13 in devnote spreadsheet
     # By_t = notify_every_n_secs # This is default behaviour with fixed intervals
     secs_between_alarms = By_t if t <= 1 else notify_every_n_secs
     if VERBOSE > 1:
@@ -1256,7 +1290,7 @@ def calc_next_notification_delay_secs(notify_every_n_secs, after_every_n_notific
     return secs_between_alarms
 
 
-def prefix_logline(site_name, resource_name):
+def prefix_logline(site_name: Optional[str], resource_name: Optional[str]) -> str:
     """Generate log line prefix with thread ID and context.
 
     Args:
@@ -1266,7 +1300,7 @@ def prefix_logline(site_name, resource_name):
     Returns:
         String prefix in format "[T#XXXX Site/Resource]" where XXXX is thread ID
     """
-    #thread_id = threading.get_ident()
+    # thread_id = threading.get_ident()
     thread_id = threading.get_native_id()
 
     # Build context string
@@ -1281,7 +1315,7 @@ def prefix_logline(site_name, resource_name):
     return f"[T#{thread_id:04d} {context}] "
 
 
-def calc_config_checksum(resource):
+def calc_config_checksum(resource: Dict[str, Any]) -> str:
     """Calculate SHA256 checksum of resource configuration.
 
     Args:
@@ -1290,12 +1324,11 @@ def calc_config_checksum(resource):
     Returns:
         str: SHA256 hex digest of resource JSON
     """
-    import hashlib
     resource_json = json.dumps(resource, sort_keys=True)
     return hashlib.sha256(resource_json.encode()).hexdigest()
 
 
-def is_check_due(resource, prev_last_checked):
+def is_check_due(resource: Dict[str, Any], prev_last_checked: Optional[str]) -> Tuple[bool, Union[float, bool]]:
     """Determine if a resource check is due.
 
     Args:
@@ -1340,7 +1373,11 @@ def is_check_due(resource, prev_last_checked):
     return False, seconds_since_check
 
 
-def is_heartbeat_due(resource, prev_last_successful_heartbeat, now):
+def is_heartbeat_due(
+        resource: Dict[str, Any],
+        prev_last_successful_heartbeat: Optional[str],
+        now: datetime) \
+        -> Tuple[bool, Optional[float]]:
     """Determine if a heartbeat ping is due.
 
     Args:
@@ -1414,7 +1451,7 @@ def is_heartbeat_due(resource, prev_last_successful_heartbeat, now):
         return True, None
 
 
-def check_and_heartbeat(resource, site_config):
+def check_and_heartbeat(resource: Dict[str, Any], site_config: Dict[str, Any]) -> None:
     """Check resource and ping heartbeat if up."""
 
     # Store prefix in thread-local storage at start of thread execution
@@ -1608,7 +1645,7 @@ def check_and_heartbeat(resource, site_config):
     })
 
 
-def get_default_statefile():
+def get_default_statefile() -> str:
     """Get platform-appropriate default statefile location."""
     system = platform.system().lower()
 
@@ -1624,7 +1661,7 @@ def get_default_statefile():
         return './apmonitor-statefile.json'
 
 
-def create_pid_file_or_exit_on_unix(config_path):
+def create_pid_file_or_exit_on_unix(config_path: str) -> Optional[str]:
     """Create PID lockfile on Unix-like systems. Returns lockfile path or None."""
     system = platform.system().lower()
 
@@ -1665,7 +1702,7 @@ def create_pid_file_or_exit_on_unix(config_path):
     return lockfile_path
 
 
-def main():
+def main() -> None:
     global VERBOSE, MAX_THREADS, STATEFILE, STATE, MAX_RETRIES, MAX_TRY_SECS, DEFAULT_CHECK_EVERY_N_SECS, DEFAULT_NOTIFY_EVERY_N_SECS, DEFAULT_AFTER_EVERY_N_NOTIFICATIONS
 
     parser = argparse.ArgumentParser(description='Network resource availability monitor')
@@ -1728,7 +1765,7 @@ def main():
             print("Email test complete")
             sys.exit(0)
 
-        if args.threads == 1 and 'max_threads' in config['site']: # only if not overridden by command line
+        if args.threads == 1 and 'max_threads' in config['site']:  # only if not overridden by command line
             MAX_THREADS = config['site']['max_threads']
         if 'max_retries' in config['site']:
             MAX_RETRIES = config['site']['max_retries']
