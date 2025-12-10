@@ -1072,9 +1072,9 @@ sudo pip3 uninstall -y PyYAML requests pyOpenSSL urllib3 aioquic
 
 - Add a Mercator + `APTree.c` `#InfoRec` inspired/styled priority queue for handling large numbers of monitored resources with proper realtime programming guarantees
 
-- Do <i>Humanizing Data</i> [https://x.com/CompSciFutures/status/1930974323424321985](https://x.com/CompSciFutures/status/1930974323424321985) on MRTG+AP charts to show regime shifts and correlated sub-graphs over response times & SNMP stats
+- Do <i>Humanizing Data</i> [https://x.com/CompSciFutures/status/1930974323424321985](https://x.com/CompSciFutures/status/1930974323424321985) on MRTG+AP charts to show regime shifts and correlated sub-graphs over response times & SNMP stats<br /><br/>
 
-    <blockquote class="twitter-tweet"><p lang="en" dir="ltr">This is Humanizing Data. Welcome to “the data point you need to know right now”, “when a metric goes critical” and “causality so dense, it almost rips holes in walls”. See my blog for more info. Or this: <a href="https://t.co/Knf4PClgol">https://t.co/Knf4PClgol</a></p>&mdash; Ä̷̬͖̽͗P̷̭̳͔͇̊ on CompSciFutures (∀/∃/acc) (@CompSciFutures) <a href="https://twitter.com/CompSciFutures/status/1930974323424321985?ref_src=twsrc%5Etfw">June 6, 2025</a></blockquote> <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+  [![Humanizing-Data.png](images/Humanizing-Data.png)](https://x.com/CompSciFutures/status/1930974323424321985)
 
 # Licensing & Versioning
 
