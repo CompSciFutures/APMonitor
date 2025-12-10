@@ -1048,7 +1048,7 @@ sudo pip3 uninstall -y PyYAML requests pyOpenSSL urllib3 aioquic
 
 - Add a Mercator + `APTree.c` `#InfoRec` inspired/styled priority queue for handling large numbers of monitored resources with proper realtime programming guarantees
 
-- Do <i>Humanizing Data</i> on MRTG+AP charts to show regime shifts and correlated sub-graphs over response times & SNMP stats
+- Do <i>Humanizing Data</i> [https://x.com/CompSciFutures/status/1930974323424321985](https://x.com/CompSciFutures/status/1930974323424321985) on MRTG+AP charts to show regime shifts and correlated sub-graphs over response times & SNMP stats
 
 # Licensing & Versioning
 
