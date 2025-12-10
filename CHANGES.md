@@ -11,7 +11,7 @@ Thread safe, reentrant, easily modifiable.
 
 # Release ??? (???): ???
 - Updated telemetry to show we know how long ago and for how long the last run was
-- Added `heartbeat_due` = { `before`, `after`, `either` } to config
+- Cleaned up 'Expect:' that tpython #SWE picked up
 
 
 # Release 1.1.7 (9-Dec-25): Heartbeat Timing Discretisation Error Fix
