@@ -1411,9 +1411,6 @@ def is_heartbeat_due(resource, prev_last_successful_heartbeat, now):
               f"defaulting to should_heartbeat=True", file=sys.stderr)
         return True, None
 
-# def is_due():
-#     return is_check_due() or is_heartbeat_due()
-
 
 def check_and_heartbeat(resource, site_config):
     """Check resource and ping heartbeat if up."""

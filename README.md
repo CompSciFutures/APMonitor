@@ -113,22 +113,21 @@ Setup Site24x7 as follows:
 
 ![site24x7-heartbeat-settings.png](images%2Fsite24x7-heartbeat-settings.png)
 
-This will send a heartbeat to [Site24x7](https://site24x7.com) every 5 minutes, and Site24x7 will drop an alarm whenever a heartbeat doesn't arrive or arrives out of sequence +/- 1 minute.
-This ensures availability monitoring will always function, even when one of APMonitor or Site24x7 is down. 
+This will send a heartbeat to [Site24x7](https://site24x7.com) every 5 minutes, and Site24x7 will drop an alarm whenever a heartbeat 
+doesn't arrive or arrives out of sequence +/- 1 minute. This ensures availability monitoring will always function,
+even when one of APMonitor or Site24x7 is down. 
 
 This also means you don't need to expose internal LAN network resources to The Internets.
 
-If you want to take advantage of / monitor the near-realtime capabilities of APMonitor (+/- 10 secs), setup at least one 
-Site24x7 heartbeat monitor as follows:
+APMonitor's near-realtime capabilities will deliver heartbeats+/- 10 secs, so if you want high-precision alerts
+drop an alarm is a heartbeat does not arrive bang on 5 minutes apart +/- 10 secs. If the alarm is < 60 seconds out, 
+
+To see the accuracy, configure Site24x7 as follows:
 
 ![site24x7-realtime-heartbeat-settings.png](images/site24x7-realtime-heartbeat-settings.png)
 
-This will drop an alarm if a heartbeat does not arrive bang on 5 minutes apart. If the alarm is < 60 seconds out, 
-Site24x7 will only record the error in their dashboard but won't send an alarm out. In this way, you can keep a record
-of how accurate the near-realtime heartbeat timing is.
-
-Given the way APMonitor & Site24x7 work together, you will only need one monitored resource like this as the 
-last one in the config file so you get made aware if the near-realtime processing is falling behind schedule.
+Site24x7 will record the error in their dashboard for anything that is more than +/- 1000 ms out, 
+so you can keep a record of how accurate the near-realtime heartbeat timing is.
 
 See Site24x7 docs for more info:
 - [Heartbeat Monitoring](https://www.site24x7.com/help/heartbeat/)
@@ -213,6 +212,7 @@ monitors:
     email: true
     heartbeat_url: "https://hc-ping.com/uuid-here"
     heartbeat_every_n_secs: 300
+    heartbeat_due: either
 
   - type: http
     name: in3245622
