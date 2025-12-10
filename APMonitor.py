@@ -584,7 +584,6 @@ def print_and_exit_on_bad_config(config: Dict[str, Any]) -> None:
 def check_http_url(
         url: str,
         name: str,
-        expect: Optional[str],
         ssl_fingerprint: Optional[str],
         ignore_ssl_expiry: Any) \
         -> Tuple[Optional[str], Optional[int], Any, Optional[str]]:
@@ -701,7 +700,6 @@ def check_http_url(
 def check_quic_url(
         url: str,
         name: str,
-        expect: Optional[str],
         ssl_fingerprint: Optional[str],
         ignore_ssl_expiry: Any) \
         -> Tuple[Optional[str], Optional[int], Any, Optional[str]]:
