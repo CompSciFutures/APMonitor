@@ -944,9 +944,9 @@ def check_url_resource(resource: Dict[str, Any]) -> Optional[str]:
 
     # Call the appropriate check function
     if resource_type == 'http':
-        error_msg, status_code, headers, response_text = check_http_url(url, name, expect, ssl_fingerprint, ignore_ssl_expiry)
+        error_msg, status_code, headers, response_text = check_http_url(url, name, ssl_fingerprint, ignore_ssl_expiry)
     elif resource_type == 'quic':
-        error_msg, status_code, headers, response_text = check_quic_url(url, name, expect, ssl_fingerprint, ignore_ssl_expiry)
+        error_msg, status_code, headers, response_text = check_quic_url(url, name, ssl_fingerprint, ignore_ssl_expiry)
     else:
         error_msg = f"Unknown URL resource type: {resource_type}"
         print(f"{prefix}URL check FAILED for '{name}': {error_msg}", file=sys.stderr)
