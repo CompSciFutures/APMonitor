@@ -12,7 +12,7 @@ import re
 from urllib.parse import urlparse
 import OpenSSL.crypto
 from pathlib import Path
-import yaml
+import yaml # can push into load_config() if this is a dependency problem for you
 import requests
 import time
 import platform
@@ -28,6 +28,8 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import traceback
+
+# NB: check_quic_url() already has aioquic defined as a function local import so you don't have to lug it around if you don't need it
 
 # Hush insecure SSL warnings
 import urllib3

@@ -1048,6 +1048,8 @@ sudo pip3 uninstall -y PyYAML requests pyOpenSSL urllib3 aioquic
 
 - Add a Mercator + `APTree.c` `#InfoRec` inspired/styled priority queue for handling large numbers of monitored resources with proper realtime programming guarantees
 
+- Do <i>Humanizing Data</i> on MRTG+AP charts to show regime shifts and correlated sub-graphs over response times & SNMP stats
+
 # Licensing & Versioning
 
 APMonitor.py is licensed under the [GNU General Public License version 3](LICENSE.txt).
