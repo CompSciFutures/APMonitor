@@ -114,8 +114,8 @@ Setup Site24x7 as follows:
 ![site24x7-heartbeat-settings.png](images%2Fsite24x7-heartbeat-settings.png)
 
 This will send a heartbeat to [Site24x7](https://site24x7.com) every 5 minutes, and Site24x7 will drop an alarm whenever a heartbeat 
-doesn't arrive or arrives out of sequence +/- 1 minute (i.e., if the heartbeat is > 60 seconds out). This ensures
-availability monitoring will always function, even when one of APMonitor or Site24x7 is down. 
+doesn't arrive or arrives out of sequence +/- 1 minute (i.e., if the heartbeat doesn't arrive or is > 60 seconds out).
+This ensures availability monitoring will always function, even when one of APMonitor or Site24x7 is down. 
 
 This also means you don't need to expose internal LAN network resources to The Internets.
 
