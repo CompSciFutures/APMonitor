@@ -9,10 +9,14 @@ Multithreaded high speed availability checking for PING, QUIC & HTTP/S resources
 Integrates with Site24x7 heartbeat monitoring for failover alerting + Slack & Pushover webhooks.
 Thread safe, reentrant, easily modifiable.
 
-# Release ??? (???): ???
+# Release 1.2.0 (17-Dec-25): tpython + tcp/udp
 - Updated telemetry to show we know how long ago and for how long the last run was
+- Implemented tpython
 - Cleaned up 'Expect:' that tpython #SWE picked up
-
+- Added 'send:' to quic/http(s) URLs, prototyped tcp:// & udp:// monitor types
+- refactor check_url_resource() so it passes a bool to ignore_ssl_expiry
+- implemented TCP checking with and without send: data
+- implemented connection oriented UDP checking with send: data (no ICMP SOCK_RAW as root check)
 
 # Release 1.1.7 (9-Dec-25): Heartbeat Timing Discretisation Error Fix
 - Updated docs to match default +/- 10 secs near-realtime tolerance when using `make install`.

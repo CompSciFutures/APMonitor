@@ -3,7 +3,7 @@
 APMonitor - On-Premises Network Resource Availability Monitor
 """
 
-__version__ = "1.1.7m"
+__version__ = "1.2.0"
 __app_name__ = "APMonitor"
 
 import argparse
@@ -446,7 +446,8 @@ def print_and_exit_on_bad_config(config: Dict[str, Any]) -> None:
             valid_monitor_params = {
                 'type', 'name', 'address', 'check_every_n_secs', 'notify_every_n_secs',
                 'notify_on_down_every_n_secs', 'after_every_n_notifications', 'heartbeat_url',
-                'heartbeat_every_n_secs', 'expect', 'ssl_fingerprint', 'ignore_ssl_expiry', 'email'
+                'heartbeat_every_n_secs', 'expect', 'ssl_fingerprint', 'ignore_ssl_expiry', 'email',
+                'send', 'content_type'
             }
             unrecognized_monitor = set(monitor.keys()) - valid_monitor_params
             if unrecognized_monitor:
@@ -463,7 +464,7 @@ def print_and_exit_on_bad_config(config: Dict[str, Any]) -> None:
             monitor_names.add(name)
 
             # Validate type field
-            valid_types = ['ping', 'http', 'quic']
+            valid_types = ['ping', 'http', 'quic', 'tcp', 'udp']
             if monitor['type'] not in valid_types:
                 raise ConfigError(f"Monitor {i} (name: {monitor.get('name', 'unknown')}): invalid type '{monitor['type']}', must be one of {valid_types}")
 
@@ -550,6 +551,40 @@ def print_and_exit_on_bad_config(config: Dict[str, Any]) -> None:
                     if fp_len == 0 or (fp_len & (fp_len - 1)) != 0:
                         raise ConfigError(f"Monitor {i} (name: {name}): 'ssl_fingerprint' length must be a power of two (got {fp_len} hex characters)")
 
+            elif monitor_type in ['tcp', 'udp']:
+                # Validate URL/URI with tcp:// or udp:// scheme
+                parsed = urlparse(address)
+                if monitor_type == 'tcp' and parsed.scheme != 'tcp':
+                    raise ConfigError(f"Monitor {i} (name: {name}): TCP monitor must use 'tcp://' scheme, got '{address}'")
+                if monitor_type == 'udp' and parsed.scheme != 'udp':
+                    raise ConfigError(f"Monitor {i} (name: {name}): UDP monitor must use 'udp://' scheme, got '{address}'")
+                if not parsed.netloc:
+                    raise ConfigError(f"Monitor {i} (name: {name}): 'address' must include hostname/IP and port, got '{address}'")
+
+                # Validate optional 'send'
+                if 'send' in monitor:
+                    if not isinstance(monitor['send'], str):
+                        raise ConfigError(f"Monitor {i} (name: {name}): 'send' must be a string")
+
+                # Validate optional 'content_type'
+                if 'content_type' in monitor:
+                    if 'send' not in monitor:
+                        raise ConfigError(f"Monitor {i} (name: {name}): 'content_type' can only be specified if 'send' is present")
+                    valid_content_types = ['text', 'hex', 'base64']
+                    if monitor['content_type'] not in valid_content_types:
+                        raise ConfigError(f"Monitor {i} (name: {name}): 'content_type' must be one of {valid_content_types}, got '{monitor['content_type']}'")
+
+                # 'expect' is optional for TCP/UDP
+                if 'expect' in monitor:
+                    if not isinstance(monitor['expect'], str):
+                        raise ConfigError(f"Monitor {i} (name: {name}): 'expect' must be a string")
+                    if len(monitor['expect']) == 0:
+                        raise ConfigError(f"Monitor {i} (name: {name}): 'expect' must not be empty")
+
+                # 'ssl_fingerprint' not allowed for TCP/UDP
+                if 'ssl_fingerprint' in monitor:
+                    raise ConfigError(f"Monitor {i} (name: {name}): 'ssl_fingerprint' field is only valid for 'http' and 'quic' monitors")
+
             # Validate heartbeat_url if present (valid for all monitor types)
             if 'heartbeat_url' in monitor:
                 if not isinstance(monitor['heartbeat_url'], str):
@@ -581,18 +616,17 @@ def print_and_exit_on_bad_config(config: Dict[str, Any]) -> None:
         sys.exit(1)
 
 
-def check_http_url(
+def check_http_url_resource(
         url: str,
         name: str,
         ssl_fingerprint: Optional[str],
-        ignore_ssl_expiry: Any) \
+        ignore_ssl_expiry: bool,
+        send_data: Optional[str] = None,
+        content_type: Optional[str] = None) \
         -> Tuple[Optional[str], Optional[int], Any, Optional[str]]:
     """Perform HTTP/S request and return None if OK, error message if failed."""
     prefix = getattr(thread_local, 'prefix', '')
     error_msg = None
-
-    # Normalize ignore_ssl_expiry to boolean
-    ignore_ssl_expiry = to_natural_language_boolean(ignore_ssl_expiry)
 
     # parse the url and don't proceed if it's not pure HTTP/S
     parsed = urlparse(url)
@@ -678,7 +712,22 @@ def check_http_url(
         verify_ssl = False
 
     try:
-        response = requests.get(url, timeout=MAX_TRY_SECS, verify=verify_ssl)
+        # Determine request method and prepare data
+        if send_data:
+            # POST request with data
+            # Send data as UTF-8 encoded bytes
+            data_to_send = send_data.encode('utf-8')
+
+            # Use provided content_type or default to text/plain
+            headers = {'Content-Type': content_type if content_type else 'text/plain; charset=utf-8'}
+
+            if VERBOSE:
+                print(f"{prefix}HTTP/S POST sending {len(data_to_send)} bytes to '{name}' at '{url}' (Content-Type: {headers['Content-Type']})")
+
+            response = requests.post(url, data=data_to_send, headers=headers, timeout=MAX_TRY_SECS, verify=verify_ssl)
+        else:
+            # GET request (original behavior)
+            response = requests.get(url, timeout=MAX_TRY_SECS, verify=verify_ssl)
 
         # Return response details for expect checking
         return None, response.status_code, response.headers, response.text
@@ -697,11 +746,13 @@ def check_http_url(
         return error_msg, None, None, None
 
 
-def check_quic_url(
+def check_quic_url_resource(
         url: str,
         name: str,
         ssl_fingerprint: Optional[str],
-        ignore_ssl_expiry: Any) \
+        ignore_ssl_expiry: bool,
+        send_data: Optional[str] = None,
+        content_type: Optional[str] = None) \
         -> Tuple[Optional[str], Optional[int], Any, Optional[str]]:
     """Perform QUIC/HTTP3 request and return None if OK, error message if failed."""
     import asyncio
@@ -718,9 +769,6 @@ def check_quic_url(
         import OpenSSL.crypto
 
         error_msg = None
-
-        # Normalize ignore_ssl_expiry to boolean
-        nonlocal_ignore_ssl_expiry = to_natural_language_boolean(ignore_ssl_expiry)
 
         # Parse the URL and check scheme
         parsed = urlparse(url)
@@ -739,7 +787,7 @@ def check_quic_url(
         configuration = QuicConfiguration(
             alpn_protocols=H3_ALPN,
             is_client=True,
-            verify_mode=ssl.CERT_NONE if (ssl_fingerprint or nonlocal_ignore_ssl_expiry) else ssl.CERT_REQUIRED,
+            verify_mode=ssl.CERT_NONE if (ssl_fingerprint or ignore_ssl_expiry) else ssl.CERT_REQUIRED,
             idle_timeout=MAX_TRY_SECS
         )
 
@@ -807,7 +855,7 @@ def check_quic_url(
                                     print(f"{prefix}SSL fingerprint check PASSED for '{name}'")
 
                             # Check certificate expiry unless ignored
-                            if not nonlocal_ignore_ssl_expiry:
+                            if not ignore_ssl_expiry:
                                 try:
                                     # Convert DER to PEM for OpenSSL
                                     cert_pem = ssl.DER_cert_to_PEM_cert(peer_cert_der)
@@ -848,16 +896,44 @@ def check_quic_url(
                     # Get next available stream ID
                     stream_id = quic.get_next_available_stream_id()
 
-                    # Send HTTP request
-                    headers = [
-                        (b":method", b"GET"),
-                        (b":scheme", b"https"),
-                        (b":authority", hostname.encode()),
-                        (b":path", path.encode()),
-                        (b"user-agent", b"APMonitor/1.0"),
-                    ]
+                    # Determine method and prepare data
+                    if send_data:
+                        # POST request
+                        method = b"POST"
 
-                    http.send_headers(stream_id=stream_id, headers=headers, end_stream=True)
+                        # Send data as UTF-8 encoded bytes
+                        data_bytes = send_data.encode('utf-8')
+
+                        # Use provided content_type or default to text/plain
+                        content_type_header = (content_type if content_type else 'text/plain; charset=utf-8').encode()
+
+                        if VERBOSE:
+                            print(f"{prefix}QUIC POST sending {len(data_bytes)} bytes to '{name}' at '{url}' (Content-Type: {content_type_header.decode()})")
+
+                        # Send HTTP POST request with body
+                        headers = [
+                            (b":method", method),
+                            (b":scheme", b"https"),
+                            (b":authority", hostname.encode()),
+                            (b":path", path.encode()),
+                            (b"content-type", content_type_header),
+                            (b"content-length", str(len(data_bytes)).encode()),
+                            (b"user-agent", b"APMonitor/1.0"),
+                        ]
+
+                        http.send_headers(stream_id=stream_id, headers=headers, end_stream=False)
+                        http.send_data(stream_id=stream_id, data=data_bytes, end_stream=True)
+                    else:
+                        # GET request (original behavior)
+                        headers = [
+                            (b":method", b"GET"),
+                            (b":scheme", b"https"),
+                            (b":authority", hostname.encode()),
+                            (b":path", path.encode()),
+                            (b"user-agent", b"APMonitor/1.0"),
+                        ]
+
+                        http.send_headers(stream_id=stream_id, headers=headers, end_stream=True)
 
                     # Transmit the request
                     protocol.transmit()
@@ -932,8 +1008,180 @@ def check_quic_url(
         return error_msg, None, None, None
 
 
+def check_tcp_url_resource(
+        url: str,
+        name: str,
+        ssl_fingerprint: Optional[str],
+        ignore_ssl_expiry: bool,
+        send_data: Optional[str] = None,
+        content_type: Optional[str] = None) \
+        -> Tuple[Optional[str], Optional[int], Any, Optional[str]]:
+    """Perform TCP connection check and return None if OK, error message if failed."""
+    import socket
+
+    prefix = getattr(thread_local, 'prefix', '')
+    error_msg = None
+
+    # Parse the URL
+    parsed = urlparse(url)
+    if parsed.scheme != 'tcp':
+        error_msg = f"{parsed.scheme.upper()} protocol not supported for TCP, use tcp"
+        print(f"{prefix}TCP check FAILED for '{name}' at '{url}': {error_msg}", file=sys.stderr)
+        return error_msg, None, None, None
+
+    hostname = parsed.hostname
+    port = parsed.port
+
+    if not port:
+        error_msg = "TCP address must include port"
+        print(f"{prefix}TCP check FAILED for '{name}' at '{url}': {error_msg}", file=sys.stderr)
+        return error_msg, None, None, None
+
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.settimeout(MAX_TRY_SECS)
+
+    try:
+        # Connect
+        sock.connect((hostname, port))
+
+        if VERBOSE:
+            print(f"{prefix}TCP connection SUCCESS for '{name}' at '{hostname}:{port}'")
+
+        response_text = ""
+
+        # Send data if specified
+        if send_data:
+            # Encode based on content_type
+            if content_type == 'hex':
+                hex_clean = send_data.replace(' ', '').replace(':', '')
+                data_to_send = bytes.fromhex(hex_clean)
+            elif content_type == 'base64':
+                import base64
+                data_to_send = base64.b64decode(send_data)
+            else:  # text or raw content-type header
+                data_to_send = send_data.encode('utf-8')
+
+            sock.sendall(data_to_send)
+
+            if VERBOSE:
+                print(f"{prefix}TCP sent {len(data_to_send)} bytes to '{name}'")
+
+        # Always attempt to receive (for server banners like SSH, SMTP, etc.)
+        try:
+            response_data = sock.recv(4096)
+            response_text = response_data.decode('utf-8', errors='ignore')
+
+            if VERBOSE:
+                print(f"{prefix}TCP received {len(response_data)} bytes from '{name}': {response_text[:100]}{'...' if len(response_text) > 100 else ''}")
+        except socket.timeout:
+            # Timeout receiving is only an error if expect is specified
+            if VERBOSE and send_data:
+                print(f"{prefix}TCP receive timeout for '{name}' (no response after sending data)")
+
+        # Return success with response details
+        # status_code=200 for success (HTTP-like convention), headers={} (no headers in TCP)
+        return None, 200, {}, response_text
+
+    except socket.timeout:
+        error_msg = "connection timeout"
+        print(f"{prefix}TCP check FAILED for '{name}' at '{url}': {error_msg}", file=sys.stderr)
+        return error_msg, None, None, None
+    except socket.error as e:
+        error_msg = f"socket error: {e}"
+        print(f"{prefix}TCP check FAILED for '{name}' at '{url}': {error_msg}", file=sys.stderr)
+        return error_msg, None, None, None
+    finally:
+        sock.close()
+
+
+def check_udp_url_resource(
+        url: str,
+        name: str,
+        ssl_fingerprint: Optional[str],
+        ignore_ssl_expiry: bool,
+        send_data: Optional[str] = None,
+        content_type: Optional[str] = None) \
+        -> Tuple[Optional[str], Optional[int], Any, Optional[str]]:
+    """Perform UDP send/receive check and return None if OK, error message if failed.
+
+    Note: UDP is connectionless, so "success" means:
+    - If expect specified: received matching response
+    - If no expect: sendto() succeeded (packet may still be dropped)
+    """
+    import socket
+
+    prefix = getattr(thread_local, 'prefix', '')
+    error_msg = None
+
+    # Parse the URL
+    parsed = urlparse(url)
+    if parsed.scheme != 'udp':
+        error_msg = f"{parsed.scheme.upper()} protocol not supported for UDP, use udp"
+        print(f"{prefix}UDP check FAILED for '{name}' at '{url}': {error_msg}", file=sys.stderr)
+        return error_msg, None, None, None
+
+    hostname = parsed.hostname
+    port = parsed.port
+
+    if not port:
+        error_msg = "UDP address must include port"
+        print(f"{prefix}UDP check FAILED for '{name}' at '{url}': {error_msg}", file=sys.stderr)
+        return error_msg, None, None, None
+
+    # UDP requires sending data to check connectivity
+    if not send_data:
+        error_msg = "UDP monitor requires 'send' parameter"
+        print(f"{prefix}UDP check FAILED for '{name}': {error_msg}", file=sys.stderr)
+        return error_msg, None, None, None
+
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.settimeout(MAX_TRY_SECS)
+
+    try:
+        # Encode based on content_type
+        if content_type == 'hex':
+            hex_clean = send_data.replace(' ', '').replace(':', '')
+            data_to_send = bytes.fromhex(hex_clean)
+        elif content_type == 'base64':
+            import base64
+            data_to_send = base64.b64decode(send_data)
+        else:  # text or raw content-type header
+            data_to_send = send_data.encode('utf-8')
+
+        # Send data
+        sock.sendto(data_to_send, (hostname, port))
+
+        if VERBOSE:
+            print(f"{prefix}UDP sent {len(data_to_send)} bytes to '{name}' at '{hostname}:{port}'")
+
+        response_text = ""
+
+        # Always try to receive response
+        try:
+            response_data, addr = sock.recvfrom(4096)
+            response_text = response_data.decode('utf-8', errors='ignore')
+
+            if VERBOSE:
+                print(f"{prefix}UDP received {len(response_data)} bytes from '{name}': {response_text[:100]}{'...' if len(response_text) > 100 else ''}")
+        except socket.timeout:
+            # Timeout is not an error if no expect specified
+            if VERBOSE:
+                print(f"{prefix}UDP receive timeout for '{name}' (no response)")
+
+        # Return success with response details
+        # status_code=200 for success (HTTP-like convention), headers={} (no headers in UDP)
+        return None, 200, {}, response_text
+
+    except socket.error as e:
+        error_msg = f"socket error: {e}"
+        print(f"{prefix}UDP check FAILED for '{name}' at '{url}': {error_msg}", file=sys.stderr)
+        return error_msg, None, None, None
+    finally:
+        sock.close()
+
+
 def check_url_resource(resource: Dict[str, Any]) -> Optional[str]:
-    """Check URL resource (HTTP or QUIC) and return None if OK, error message if failed."""
+    """Check URL resource (HTTP/QUIC/TCP/UDP) and return None if OK, error message if failed."""
     prefix = getattr(thread_local, 'prefix', '')
     resource_type = resource['type']
     url = resource['address']
@@ -941,14 +1189,26 @@ def check_url_resource(resource: Dict[str, Any]) -> Optional[str]:
     expect = resource.get('expect')
     ssl_fingerprint = resource.get('ssl_fingerprint')
     ignore_ssl_expiry = resource.get('ignore_ssl_expiry', False)
+    send_data = resource.get('send')
+    content_type = resource.get('content_type')
 
     # Call the appropriate check function
-    if resource_type == 'http':
-        error_msg, status_code, headers, response_text = check_http_url(url, name, ssl_fingerprint, ignore_ssl_expiry)
-    elif resource_type == 'quic':
-        error_msg, status_code, headers, response_text = check_quic_url(url, name, ssl_fingerprint, ignore_ssl_expiry)
-    else:
-        error_msg = f"Unknown URL resource type: {resource_type}"
+    ignore_ssl_expiry = to_natural_language_boolean(ignore_ssl_expiry)
+
+    error_msg, status_code, headers, response_text = (
+        check_http_url_resource(url, name, ssl_fingerprint, ignore_ssl_expiry, send_data, content_type)
+        if resource_type == 'http'
+        else check_quic_url_resource(url, name, ssl_fingerprint, ignore_ssl_expiry, send_data, content_type)
+        if resource_type == 'quic'
+        else check_tcp_url_resource(url, name, ssl_fingerprint, ignore_ssl_expiry, send_data, content_type)
+        if resource_type == 'tcp'
+        else check_udp_url_resource(url, name, ssl_fingerprint, ignore_ssl_expiry, send_data, content_type)
+        if resource_type == 'udp'
+        else (f"Unknown URL resource type: {resource_type}", None, None, None)
+    )
+
+    # Handle unknown resource type error
+    if resource_type not in ('http', 'quic', 'tcp', 'udp'):
         print(f"{prefix}URL check FAILED for '{name}': {error_msg}", file=sys.stderr)
         return error_msg
 
@@ -1023,7 +1283,7 @@ def check_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Optional[in
 
         if resource['type'] == 'ping':
             error_msg = check_ping_resource(resource)
-        elif resource['type'] in ('http', 'quic'):
+        elif resource['type'] in ('http', 'quic', 'tcp', 'udp'):
             error_msg = check_url_resource(resource)
         else:
             raise ConfigError(f"Unknown resource type: {resource['type']} for monitor {resource['name']}")

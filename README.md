@@ -229,6 +229,20 @@ monitors:
     expect: "OK"
     check_every_n_secs: 60
     
+  - type: udp
+    name: router-snmp
+    address: "udp://192.168.1.1:161"
+    send: "30260201000406707562...." # SNMP GET request
+    content_type: "hex"
+    expect: "30"  # SNMP response
+    check_every_n_secs: 60
+    
+  - type: udp
+    name: syslog-collector
+    address: "udp://192.168.1.50:514"
+    send: "<134>APMonitor: test message"
+    check_every_n_secs: 300    
+    
   - type: ping
     name: home-fw
     address: "192.168.1.1"
@@ -1080,7 +1094,7 @@ sudo pip3 uninstall -y PyYAML requests pyOpenSSL urllib3 aioquic
 
 APMonitor.py is licensed under the [GNU General Public License version 3](LICENSE.txt).
 ```
-Software: APMonitor 1.1.7
+Software: APMonitor 1.2.0
 License: GNU General Public License version 3
 Licensor: Andrew (AP) Prendergast, ap@andrewprendergast.com -- FSF Member
 ```
