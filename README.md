@@ -46,7 +46,7 @@ The design philosophy centers on simplicity and elegance: a single, unified sour
 Key Features:
 
 - Near-realtime programming so heartbeats and alerts arrive when they say they are going to (+/- 10 secs)
-- Multithreaded high-speed availability checking for PING, QUIC and HTTP(S) resources
+- Multithreaded high-speed availability checking for PING, TCP, UDP, QUIC and HTTP(S) resources
 - SSL/TLS certificate checking and pinning so you can use self-signed certificates on-lan safely
 - Integration with Site24x7/PagerDuty heartbeat monitoring for high-availability second-opinion and failover alerting
 - Integration with Slack and Pushover webhooks for notifications, plus standard email support
@@ -237,6 +237,7 @@ monitors:
     expect: "30"  # SNMP response
     check_every_n_secs: 60
     
+  # UDP send with text data
   - type: udp
     name: syslog-collector
     address: "udp://192.168.1.50:514"
@@ -250,7 +251,6 @@ monitors:
     email: true
     heartbeat_url: "https://hc-ping.com/uuid-here"
     heartbeat_every_n_secs: 300
-    heartbeat_due: either
 
   - type: http
     name: in3245622
@@ -260,6 +260,13 @@ monitors:
     notify_every_n_secs: 3600
     after_every_n_notifications: 5
     email: yes
+
+  - type: http
+    name: json-api
+    address: "https://api.example.com/webhook"
+    send: '{"event": "test", "status": "ok"}'
+    content_type: "application/json"
+    expect: "success"
 
   - type: http
     name: nvr0
@@ -398,12 +405,16 @@ The `monitors` section is a list of resources to monitor. Each monitor defines w
   - `ping`: ICMP ping check
   - `http`: HTTP/HTTPS endpoint check (supports both HTTP and HTTPS schemes, follows and checks redirect chain for errors)
   - `quic`: HTTP/3 over QUIC endpoint check (UDP-based, faster than HTTP/HTTPS for high-latency networks)
+  - `tcp`: TCP port connectivity and protocol check
+  - `udp`: UDP datagram send/receive check
 
 - **`name`** (string): Unique identifier for this monitor. Must be unique across all monitors in the configuration. Used in notifications and state tracking.
 
 - **`address`** (string): Resource to check. Format depends on monitor type:
   - For `ping`: Valid hostname, IPv4, or IPv6 address
   - For `http`/`quic`: Full URL with scheme and host
+  - For `tcp`: URL with `tcp://` scheme, hostname/IP, and port (e.g., `tcp://server.example.com:22`)
+  - For `udp`: URL with `udp://` scheme, hostname/IP, and port (e.g., `udp://192.168.1.1:161`)
 
 ### Optional Fields (All Monitor Types)
 
@@ -465,6 +476,82 @@ ssl_fingerprint: "e85260e8f8e85629cfa4d023ea0ae8dd3ce8ccc0040b054a4753c2a5ab2692
 ignore_ssl_expiry: true
 ```
 
+### HTTP/QUIC POST Request Fields
+
+These optional fields enable HTTP/QUIC monitors to send POST requests with data:
+
+- **`send`** (string, optional): Data to send in HTTP/QUIC POST request body. When specified, the monitor sends a POST request instead of GET. Data is always UTF-8 encoded.
+```yaml
+send: '{"event": "test", "status": "ok"}'
+```
+
+- **`content_type`** (string, optional): MIME type for the Content-Type header. Can only be specified if `send` is present. This is a raw MIME type string (e.g., `application/json`, `application/x-www-form-urlencoded`, `text/plain`). Default: `text/plain; charset=utf-8`
+```yaml
+content_type: "application/json"
+send: '{"event": "test", "status": "ok"}'
+```
+
+**HTTP JSON POST Example:**
+```yaml
+- type: http
+  name: json-api
+  address: "https://api.example.com/webhook"
+  send: '{"event": "test", "status": "ok"}'
+  content_type: "application/json"
+  expect: "success"
+```
+
+**HTTP Form POST Example:**
+```yaml
+- type: http
+  name: form-submit
+  address: "https://example.com/submit"
+  send: "name=test&value=123"
+  content_type: "application/x-www-form-urlencoded"
+  expect: "received"
+```
+
+**QUIC POST Example:**
+```yaml
+- type: quic
+  name: text-endpoint
+  address: "https://fast.example.com/log"
+  send: "Test message"
+  content_type: "text/plain; charset=utf-8"
+```
+
+**Note**: HTTP/QUIC monitors without `send` perform GET requests (original behavior). The `content_type` for HTTP/QUIC is a raw MIME type header, unlike TCP/UDP where it specifies encoding format (text/hex/base64).
+
+### TCP/UDP Monitor Specific Fields
+
+These fields are only valid for monitors with `type: tcp` or `type: udp`:
+
+- **`send`** (string, optional for TCP, **required for UDP**): Data to send to the service. UDP monitors require this parameter because UDP is connectionless and needs application-layer data to verify connectivity.
+```yaml
+send: "EHLO apmonitor\r\n"
+```
+
+- **`content_type`** (string, optional): Encoding format for the `send` data. Can only be specified if `send` is present. Valid values:
+  - `text` (default): UTF-8 encoded string
+  - `hex`: Hexadecimal byte string (spaces and colons are stripped)
+  - `base64`: Base64-encoded binary data
+```yaml
+content_type: hex
+send: "01 02 03 04"
+```
+
+**Note**: TCP monitors without `send` perform connection-only checks. TCP monitors automatically attempt to receive data after connecting (useful for banner protocols like SSH, SMTP, FTP). UDP monitors without `expect` succeed if the packet is sent without socket errors, but cannot verify if the service is actually listening.
+
+- **`expect`** (string, optional): Substring that must appear in the response for the check to succeed. For TCP, this validates the received banner or response. For UDP, this requires a matching response to be received.
+```yaml
+expect: "SSH-2.0"
+```
+
+**UDP Behavior Notes**:
+- **With `expect`**: Real service validation (recommended for SNMP, DNS, NTP) - waits for response and validates content
+- **Without `expect`**: Fire-and-forget (useful for syslog, statsd) - succeeds if packet sends without socket error, cannot detect if port is listening
+- UDP is connectionless, so there's no "connection established" signal like TCP's three-way handshake
+
 ### Example Configurations
 
 **Ping Monitor:**
@@ -510,6 +597,54 @@ ignore_ssl_expiry: true
 
 **Note**: QUIC monitoring uses HTTP/3 over UDP (port 443 by default) and is particularly effective for high-latency networks or when monitoring resources over unreliable connections. QUIC provides built-in connection migration and improved performance compared to TCP-based HTTP/2.
 
+**TCP Banner Check (SSH):**
+```yaml
+- type: tcp
+  name: ssh-server
+  address: "tcp://server.example.com:22"
+  expect: "SSH-2.0"
+  check_every_n_secs: 60
+```
+
+**TCP Send/Receive (SMTP):**
+```yaml
+- type: tcp
+  name: smtp-server
+  address: "tcp://mail.example.com:25"
+  send: "EHLO apmonitor\r\n"
+  content_type: text
+  expect: "250"
+  check_every_n_secs: 60
+```
+
+**TCP Connection-Only Check:**
+```yaml
+- type: tcp
+  name: mysql-db
+  address: "tcp://192.168.1.100:3306"
+  check_every_n_secs: 30
+```
+
+**UDP with Response Validation (SNMP):**
+```yaml
+- type: udp
+  name: router-snmp
+  address: "udp://192.168.1.1:161"
+  send: "30260201000406707562..."  # SNMP GET request
+  content_type: hex
+  expect: "30"  # SNMP response starts with 0x30
+  check_every_n_secs: 60
+```
+
+**UDP Fire-and-Forget (Syslog):**
+```yaml
+- type: udp
+  name: syslog-collector
+  address: "udp://192.168.1.50:514"
+  send: "<134>APMonitor: test message"
+  check_every_n_secs: 300
+```
+
 ### Validation Rules
 
 The configuration validator enforces these rules:
@@ -519,7 +654,7 @@ The configuration validator enforces these rules:
 3. `heartbeat_every_n_secs` can only be specified if `heartbeat_url` exists
 4. `expect`, `ssl_fingerprint`, and `ignore_ssl_expiry` are only valid for HTTP/QUIC monitors
 5. `expect` must be a non-empty string if specified
-6. All URLs must include both scheme (http/https) and hostname
+6. All URLs must include both scheme (http/https/tcp/udp) and hostname
 7. Email addresses must match standard email format (RFC 5322 simplified)
 8. SSL fingerprints must be valid hexadecimal strings with length that's a power of two
 9. `after_every_n_notifications` can only be specified if `notify_every_n_secs` is present
@@ -528,6 +663,12 @@ The configuration validator enforces these rules:
 12. `smtp_username` and `smtp_password` are optional (for servers without authentication)
 13. Email control flags (`email_outages`, `email_recoveries`, `email_reminders`) accept boolean or string values
 14. Monitor-level `email` flag accepts boolean or string values
+15. TCP monitors must use `tcp://` scheme, UDP monitors must use `udp://` scheme
+16. TCP/UDP addresses must include hostname/IP and port
+17. UDP monitors require `send` parameter
+18. `content_type` can only be specified if `send` is present
+19. `content_type` for TCP/UDP must be one of: text, hex, base64 (for HTTP/QUIC it's a raw MIME type string)
+20. `ssl_fingerprint` and `ignore_ssl_expiry` are not allowed for TCP/UDP monitors
 
 # Dependencies
 
@@ -1062,9 +1203,9 @@ sudo pip3 uninstall -y PyYAML requests pyOpenSSL urllib3 aioquic
 # TODO
 
 - Add additional monitors:
-  - TCP & UDP port monitoring
+  - ~~TCP & UDP port monitoring~~ (completed in v1.2.0)
   - SNMP w/defaults for managed switches and system performance tuning
-  - Update docs to provide webhook examples for Pushover, Slack & Diwscord
+  - Update docs to provide webhook examples for Pushover, Slack & Discord
 
 - Add additional outputs: 
   - MRTG compatible logfiles
