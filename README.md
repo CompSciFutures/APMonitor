@@ -24,6 +24,7 @@ APMonitor is a neat way to guarantee your on-prem availability monitoring will a
 
 <b>Andrew (AP) Prendergast</b><br />
 https://linktr.ee/CompSciFutures<br />
+Master of Science<br />
 
 <i>Ex-ServerMasters<br/>
 Ex-Googler<br />
