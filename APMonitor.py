@@ -3214,7 +3214,7 @@ def check_and_heartbeat_r(resource: Dict[str, Any], site_config: Dict[str, Any])
                 notified_count = prev_notified_count
 
     # Update RRD database for MRTG (availability monitors only)
-    if RRD_ENABLED and resource['type'] not in ('snmp', 'port'):
+    if RRD_ENABLED and resource['type'] not in ('snmp'):
         rrd_path = get_rrd_path(resource['name'])
         if VERBOSE > 1:
             print(f"{prefix}updating RRD database for {rrd_path} w/ {now}, {last_response_time_ms}, {is_up}")
@@ -3552,7 +3552,7 @@ def generate_mrtg_index(all_config_files: List[str], index_path: str, site_name:
         "        body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }",
         "        h1 { color: #333; margin-bottom: 10px; }",
         "        h2 { color: #555; margin-top: 40px; margin-bottom: 20px; border-bottom: 2px solid #ddd; padding-bottom: 10px; }",
-        "        .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }",
+        "        .grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 20px; }",
         "        .monitor { background: white; padding: 15px; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }",
         "        .monitor h3 { margin-top: 0; font-size: 18px; color: #555; }",
         "        .monitor a { text-decoration: none; color: inherit; }",
@@ -3563,7 +3563,7 @@ def generate_mrtg_index(all_config_files: List[str], index_path: str, site_name:
         "        .network-cell { background: white; padding: 15px; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }",
         "        .network-cell h4 { margin-top: 0; font-size: 14px; color: #666; text-align: center; }",
         "        @media (max-width: 1400px) { ",
-        "            .grid { grid-template-columns: repeat(2, 1fr); }",
+        "            .grid { grid-template-columns: repeat(3, 1fr); }",
         "            .network-row { grid-template-columns: repeat(2, 1fr); }",
         "        }",
         "        @media (max-width: 768px) { ",

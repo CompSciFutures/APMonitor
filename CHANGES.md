@@ -11,6 +11,8 @@ Thread safe, reentrant, modifiable.
 
 # Release 1.2.13 (???): ???
 - BUGFIX: When monitoring an entire switch, we don't get an availability graph in MRTG #4
+- Changed MRTG to 5 column layout for best use of 14:9 HD screens.
+- BUGFIX: When monitoring an entire switch port, we don't get an availability graph in MRTG #4
 
 # Release 1.2.12 (4-Mar-26): L2 Port Pinning 
 - Implemented individual L2 port pinning
