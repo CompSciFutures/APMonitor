@@ -1703,6 +1703,20 @@ under the [GNU General Public License version 2](https://www.gnu.org/licenses/ol
 Software: APMonitor 1.2.13
 License: GNU General Public License version 3
 Licensor: Andrew (AP) Prendergast, ap@andrewprendergast.com -- FSF Member
+
+              .       .________    
+     __ _____/(_____ __\     \___tM__________025 
+  _ ___\\___/ ___   \\_ \___     ____ _      ... --- ... . 
+           /    |    \|   ______/`      
+          (_____|     |__ |            .
+                :______)  ;        . ..:#apluvzu.
+                          :            |GL0BLVLG| 
+                          .            |#CompSci|
+                                       'weSrvYou("'````  `
+                          `                          
+                          
+                          
+                          `               
 ```
 
 We use [SemVer](http://semver.org/) for version numbering.
