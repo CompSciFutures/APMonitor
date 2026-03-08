@@ -44,7 +44,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-__version__ = "1.2.12"
+__version__ = "1.2.13"
 __app_name__ = "APMonitor"
 
 import argparse
@@ -1610,6 +1610,10 @@ def check_snmp_resource(resource: Dict[str, Any]) -> Optional[str]:
         # Initialize aggregate counters
         total_octets_in = 0
         total_octets_out = 0
+        total_pkts_ucast_in = 0
+        total_pkts_ucast_out = 0
+        total_pkts_bmcast_in = 0   # broadcast + multicast combined
+        total_pkts_bmcast_out = 0
         total_pkts_in = 0
         total_pkts_out = 0
         total_errors_in = 0
@@ -1677,21 +1681,27 @@ def check_snmp_resource(resource: Dict[str, Any]) -> Optional[str]:
             # Input packets (unicast + multicast + broadcast)
             try:
                 item = session.get(f"{OID_IF_HC_IN_UCAST_PKTS}.{if_index}")
-                if_pkts_in += int(item.value)
+                v = int(item.value)
+                if_pkts_in += v
+                total_pkts_ucast_in += v
             except Exception as e:
                 if VERBOSE > 1:
                     print(f"{prefix}SNMP GET {OID_IF_HC_IN_UCAST_PKTS}.{if_index} (ifHCInUcastPkts) FAILED: {e}")
 
             try:
                 item = session.get(f"{OID_IF_HC_IN_MCAST_PKTS}.{if_index}")
-                if_pkts_in += int(item.value)
+                v = int(item.value)
+                if_pkts_in += v
+                total_pkts_bmcast_in += v
             except Exception as e:
                 if VERBOSE > 1:
                     print(f"{prefix}SNMP GET {OID_IF_HC_IN_MCAST_PKTS}.{if_index} (ifHCInMulticastPkts) FAILED: {e}")
 
             try:
                 item = session.get(f"{OID_IF_HC_IN_BCAST_PKTS}.{if_index}")
-                if_pkts_in += int(item.value)
+                v = int(item.value)
+                if_pkts_in += v
+                total_pkts_bmcast_in += v
             except Exception as e:
                 if VERBOSE > 1:
                     print(f"{prefix}SNMP GET {OID_IF_HC_IN_BCAST_PKTS}.{if_index} (ifHCInBroadcastPkts) FAILED: {e}")
@@ -1699,21 +1709,27 @@ def check_snmp_resource(resource: Dict[str, Any]) -> Optional[str]:
             # Output packets (unicast + multicast + broadcast)
             try:
                 item = session.get(f"{OID_IF_HC_OUT_UCAST_PKTS}.{if_index}")
-                if_pkts_out += int(item.value)
+                v = int(item.value)
+                if_pkts_out += v
+                total_pkts_ucast_out += v
             except Exception as e:
                 if VERBOSE > 1:
                     print(f"{prefix}SNMP GET {OID_IF_HC_OUT_UCAST_PKTS}.{if_index} (ifHCOutUcastPkts) FAILED: {e}")
 
             try:
                 item = session.get(f"{OID_IF_HC_OUT_MCAST_PKTS}.{if_index}")
-                if_pkts_out += int(item.value)
+                v = int(item.value)
+                if_pkts_out += v
+                total_pkts_bmcast_out += v
             except Exception as e:
                 if VERBOSE > 1:
                     print(f"{prefix}SNMP GET {OID_IF_HC_OUT_MCAST_PKTS}.{if_index} (ifHCOutMulticastPkts) FAILED: {e}")
 
             try:
                 item = session.get(f"{OID_IF_HC_OUT_BCAST_PKTS}.{if_index}")
-                if_pkts_out += int(item.value)
+                v = int(item.value)
+                if_pkts_out += v
+                total_pkts_bmcast_out += v
             except Exception as e:
                 if VERBOSE > 1:
                     print(f"{prefix}SNMP GET {OID_IF_HC_OUT_BCAST_PKTS}.{if_index} (ifHCOutBroadcastPkts) FAILED: {e}")
@@ -1729,8 +1745,13 @@ def check_snmp_resource(resource: Dict[str, Any]) -> Optional[str]:
         total_bits_in = total_octets_in * 8
         total_bits_out = total_octets_out * 8
 
+        # Unicast vs broadcast+multicast aggregates (in+out combined)
+        total_pkts_ucast  = total_pkts_ucast_in  + total_pkts_ucast_out
+        total_pkts_bmcast = total_pkts_bmcast_in  + total_pkts_bmcast_out
+
         if VERBOSE:
             print(f"{prefix}Aggregate totals: bits_in={total_bits_in:,} bits_out={total_bits_out:,} pkts_in={total_pkts_in:,} pkts_out={total_pkts_out:,} errors_in={total_errors_in:,} errors_out={total_errors_out:,}")
+            print(f"{prefix}Packet type totals: ucast={total_pkts_ucast:,} bmcast={total_pkts_bmcast:,}")
 
         # Get TCP retransmit segments (global counter)
         tcp_retrans = None
@@ -1925,6 +1946,21 @@ def check_snmp_resource(resource: Dict[str, Any]) -> Optional[str]:
             check_every_n_secs = resource.get('check_every_n_secs', DEFAULT_CHECK_EVERY_N_SECS)
             rrd_path = get_rrd_path(name, 'snmp')
 
+            # Delete RRD if DS count is less than required (auto-heals after new metrics are added).
+            # Expected: 2 DS per interface (in/out) + 11 fixed DS.
+            if os.path.exists(rrd_path):
+                expected_ds_count = 2 * len(interfaces) + 11
+                try:
+                    info = rrdtool.info(rrd_path)
+                    actual_ds_count = len([k for k in info if k.startswith('ds[') and k.endswith('].type')])
+                    if actual_ds_count < expected_ds_count:
+                        os.remove(rrd_path)
+                        print(f"{prefix}SNMP RRD deleted for recreation: {rrd_path} "
+                              f"(ds_count={actual_ds_count} < expected={expected_ds_count})")
+                except Exception as e:
+                    print(f"{prefix}SNMP RRD introspection failed for '{rrd_path}': {e}, will recreate", file=sys.stderr)
+                    os.remove(rrd_path)
+
             if not os.path.exists(rrd_path):
                 create_snmp_rrd(rrd_path, check_every_n_secs, interfaces)
                 if VERBOSE:
@@ -1937,7 +1973,8 @@ def check_snmp_resource(resource: Dict[str, Any]) -> Optional[str]:
 
             error_msg = update_snmp_rrd(rrd_path, datetime.now(), interfaces, tcp_retrans,
                                         total_bits_in, total_bits_out, total_pkts_in, total_pkts_out,
-                                        total_errors_in, total_errors_out, cpu_load, memory_pct)
+                                        total_errors_in, total_errors_out, cpu_load, memory_pct,
+                                        total_pkts_ucast, total_pkts_bmcast)
             if error_msg != None:
                 return error_msg
 
@@ -2183,12 +2220,25 @@ def check_port_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Option
         return error_msg, None, None
 
     # IF-MIB OIDs
-    OID_IF_OPER_STATUS = '1.3.6.1.2.1.2.2.1.8'  # IF-MIB::ifOperStatus
-    OID_IF_ADMIN_STATUS = '1.3.6.1.2.1.2.2.1.7'  # IF-MIB::ifAdminStatus
+    OID_IF_DESCR        = '1.3.6.1.2.1.2.2.1.2'   # IF-MIB::ifDescr
+    OID_IF_OPER_STATUS  = '1.3.6.1.2.1.2.2.1.8'   # IF-MIB::ifOperStatus
+    OID_IF_ADMIN_STATUS = '1.3.6.1.2.1.2.2.1.7'   # IF-MIB::ifAdminStatus
+    OID_IF_IN_OCTETS    = '1.3.6.1.2.1.2.2.1.10'  # IF-MIB::ifInOctets
+    OID_IF_OUT_OCTETS   = '1.3.6.1.2.1.2.2.1.16'  # IF-MIB::ifOutOctets
+    OID_IF_IN_ERRORS    = '1.3.6.1.2.1.2.2.1.14'  # IF-MIB::ifInErrors
+    OID_IF_OUT_ERRORS   = '1.3.6.1.2.1.2.2.1.20'  # IF-MIB::ifOutErrors
+
+    # Interface packet counters (high-capacity 64-bit) — same OIDs as check_snmp_resource
+    OID_IF_HC_IN_UCAST_PKTS  = '1.3.6.1.2.1.31.1.1.1.7'   # IF-MIB::ifHCInUcastPkts
+    OID_IF_HC_IN_MCAST_PKTS  = '1.3.6.1.2.1.31.1.1.1.8'   # IF-MIB::ifHCInMulticastPkts
+    OID_IF_HC_IN_BCAST_PKTS  = '1.3.6.1.2.1.31.1.1.1.9'   # IF-MIB::ifHCInBroadcastPkts
+    OID_IF_HC_OUT_UCAST_PKTS = '1.3.6.1.2.1.31.1.1.1.11'  # IF-MIB::ifHCOutUcastPkts
+    OID_IF_HC_OUT_MCAST_PKTS = '1.3.6.1.2.1.31.1.1.1.12'  # IF-MIB::ifHCOutMulticastPkts
+    OID_IF_HC_OUT_BCAST_PKTS = '1.3.6.1.2.1.31.1.1.1.13'  # IF-MIB::ifHCOutBroadcastPkts
 
     # Q-BRIDGE-MIB OIDs (RFC 2674) — same semantics as check_ports_resource
     # OID tail: <vlan_id>.<6 MAC octets>, value = bridge port number (= ifIndex on this switch family)
-    OID_DOT1Q_TP_FDB_PORT = '1.3.6.1.2.1.17.7.1.2.2.1.2'  # dot1qTpFdbPort
+    OID_DOT1Q_TP_FDB_PORT   = '1.3.6.1.2.1.17.7.1.2.2.1.2'  # dot1qTpFdbPort
     OID_DOT1Q_TP_FDB_STATUS = '1.3.6.1.2.1.17.7.1.2.2.1.3'  # dot1qTpFdbStatus - 3=learned
 
     OPER_STATUS = {
@@ -2208,9 +2258,9 @@ def check_port_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Option
             retries=MAX_RETRIES - 1
         )
 
-        oper_raw = session.get(f"{OID_IF_OPER_STATUS}.{if_index}").value
+        oper_raw  = session.get(f"{OID_IF_OPER_STATUS}.{if_index}").value
         admin_raw = session.get(f"{OID_IF_ADMIN_STATUS}.{if_index}").value
-        oper = OPER_STATUS.get(oper_raw, oper_raw)
+        oper  = OPER_STATUS.get(oper_raw, oper_raw)
         admin = ADMIN_STATUS.get(admin_raw, admin_raw)
 
         if VERBOSE:
@@ -2225,7 +2275,7 @@ def check_port_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Option
     # dot1dTpFdbTable returns 0 entries on VLAN-aware switches; Q-BRIDGE-MIB is correct
     current_mac = None
     try:
-        fdb_port_items = session.walk(OID_DOT1Q_TP_FDB_PORT)
+        fdb_port_items   = session.walk(OID_DOT1Q_TP_FDB_PORT)
         fdb_status_items = session.walk(OID_DOT1Q_TP_FDB_STATUS)
 
         # Index status by 7-octet OID tail for O(1) lookup
@@ -2235,9 +2285,9 @@ def check_port_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Option
         }
 
         for item in fdb_port_items:
-            oid_tail = '.'.join(item.oid.split('.')[-7:])  # e.g. "1.36.90.76.31.80.156"
-            mac_octets = oid_tail.split('.')[1:]  # strip vlan_id, keep 6 MAC octets
-            port_ifindex = item.value  # = ifIndex directly on this switch family
+            oid_tail     = '.'.join(item.oid.split('.')[-7:])  # e.g. "1.36.90.76.31.80.156"
+            mac_octets   = oid_tail.split('.')[1:]             # strip vlan_id, keep 6 MAC octets
+            port_ifindex = item.value                          # = ifIndex directly on this switch family
 
             if port_ifindex != if_index:
                 continue
@@ -2269,6 +2319,102 @@ def check_port_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Option
         # always_up=False: alarm only when a non-pinned MAC is present on the port
         if current_mac is not None and current_mac != pinned_mac:
             return f"port ifIndex={if_index} wrong MAC: expected {pinned_mac}, got {current_mac}", oper, current_mac
+
+    # Collect SNMP metrics for this single interface and update RRD (identical schema to snmp monitor)
+    if RRD_ENABLED:
+        check_every_n_secs = resource.get('check_every_n_secs', DEFAULT_CHECK_EVERY_N_SECS)
+        rrd_path = get_rrd_path(name, 'snmp')
+
+        # Single-entry interfaces dict — reuses create/update_snmp_rrd unchanged
+        try:
+            if_name = session.get(f"{OID_IF_DESCR}.{if_index}").value
+        except Exception:
+            if_name = f"if{if_index}"
+        interfaces = {if_index: {'name': if_name}}
+
+        # Poll byte counters
+        try:
+            octets_in = int(session.get(f"{OID_IF_IN_OCTETS}.{if_index}").value)
+            interfaces[if_index]['in_octets'] = octets_in
+        except Exception:
+            interfaces[if_index]['in_octets'] = None
+            octets_in = 0
+
+        try:
+            octets_out = int(session.get(f"{OID_IF_OUT_OCTETS}.{if_index}").value)
+            interfaces[if_index]['out_octets'] = octets_out
+        except Exception:
+            interfaces[if_index]['out_octets'] = None
+            octets_out = 0
+
+        try:
+            interfaces[if_index]['in_errors'] = int(session.get(f"{OID_IF_IN_ERRORS}.{if_index}").value)
+        except Exception:
+            interfaces[if_index]['in_errors'] = None
+
+        try:
+            interfaces[if_index]['out_errors'] = int(session.get(f"{OID_IF_OUT_ERRORS}.{if_index}").value)
+        except Exception:
+            interfaces[if_index]['out_errors'] = None
+
+        # Packet counters — accumulate ucast/bmcast in/out separately for aggregate DS
+        ucast_in = bmcast_in = ucast_out = bmcast_out = 0
+        for oid, bucket in [
+            (OID_IF_HC_IN_UCAST_PKTS,  'ucast_in'),
+            (OID_IF_HC_IN_MCAST_PKTS,  'bmcast_in'),
+            (OID_IF_HC_IN_BCAST_PKTS,  'bmcast_in'),
+            (OID_IF_HC_OUT_UCAST_PKTS, 'ucast_out'),
+            (OID_IF_HC_OUT_MCAST_PKTS, 'bmcast_out'),
+            (OID_IF_HC_OUT_BCAST_PKTS, 'bmcast_out'),
+        ]:
+            try:
+                v = int(session.get(f"{oid}.{if_index}").value)
+                if   bucket == 'ucast_in':   ucast_in   += v
+                elif bucket == 'bmcast_in':  bmcast_in  += v
+                elif bucket == 'ucast_out':  ucast_out  += v
+                else:                        bmcast_out += v
+            except Exception:
+                pass
+
+        total_bits_in  = octets_in  * 8
+        total_bits_out = octets_out * 8
+        total_pkts_in  = ucast_in  + bmcast_in
+        total_pkts_out = ucast_out + bmcast_out
+        total_pkts_ucast  = ucast_in  + ucast_out
+        total_pkts_bmcast = bmcast_in + bmcast_out
+
+        if VERBOSE:
+            print(f"{prefix}PORT metrics ifIndex={if_index}: bits_in={total_bits_in:,} bits_out={total_bits_out:,} "
+                  f"pkts_in={total_pkts_in:,} pkts_out={total_pkts_out:,} "
+                  f"ucast={total_pkts_ucast:,} bmcast={total_pkts_bmcast:,}")
+
+        # Auto-heal: 1 interface → expected DS = 2*1 + 11 = 13
+        if os.path.exists(rrd_path):
+            expected_ds_count = 2 * len(interfaces) + 11
+            try:
+                info = rrdtool.info(rrd_path)
+                actual_ds_count = len([k for k in info if k.startswith('ds[') and k.endswith('].type')])
+                if actual_ds_count < expected_ds_count:
+                    os.remove(rrd_path)
+                    print(f"{prefix}PORT RRD deleted for recreation: {rrd_path} "
+                          f"(ds_count={actual_ds_count} < expected={expected_ds_count})")
+            except Exception as e:
+                print(f"{prefix}PORT RRD introspection failed for '{rrd_path}': {e}, will recreate", file=sys.stderr)
+                os.remove(rrd_path)
+
+        if not os.path.exists(rrd_path):
+            create_snmp_rrd(rrd_path, check_every_n_secs, interfaces)
+            if VERBOSE:
+                print(f"{prefix}Created PORT RRD: {rrd_path}")
+
+        rrd_err = update_snmp_rrd(
+            rrd_path, datetime.now(), interfaces, None,
+            total_bits_in, total_bits_out, total_pkts_in, total_pkts_out,
+            0, 0, None, None,
+            total_pkts_ucast, total_pkts_bmcast,
+        )
+        if rrd_err and VERBOSE:
+            print(f"{prefix}PORT RRD update failed: {rrd_err}", file=sys.stderr)
 
     return None, oper, current_mac
 
@@ -2820,6 +2966,8 @@ def create_snmp_rrd(rrd_path: str, step_secs: int, interfaces: Dict[str, Dict[st
         rrd_path: Full path to RRD file to create
         step_secs: Update interval in seconds
         interfaces: Dict mapping interface index to interface data (with 'name' key)
+
+    NB: existing SNMP RRDs must be deleted before next run whenever DS layout changes.
     """
     prefix = getattr(thread_local, 'prefix', '')
 
@@ -2851,6 +2999,10 @@ def create_snmp_rrd(rrd_path: str, step_secs: int, interfaces: Dict[str, Dict[st
     data_sources.append(f'DS:total_errors_in:COUNTER:{heartbeat}:0:U')
     data_sources.append(f'DS:total_errors_out:COUNTER:{heartbeat}:0:U')
 
+    # Unicast vs broadcast+multicast packet type split (in+out combined)
+    data_sources.append(f'DS:total_pkts_ucast:COUNTER:{heartbeat}:0:U')
+    data_sources.append(f'DS:total_pkts_bmcast:COUNTER:{heartbeat}:0:U')
+
     # Add system resource metrics (GAUGE for instantaneous values)
     data_sources.append(f'DS:cpu_load:GAUGE:{heartbeat}:0:100')  # Percentage 0-100
     data_sources.append(f'DS:memory_pct:GAUGE:{heartbeat}:0:100')  # Percentage 0-100
@@ -2876,8 +3028,9 @@ def create_snmp_rrd(rrd_path: str, step_secs: int, interfaces: Dict[str, Dict[st
 def update_snmp_rrd(rrd_path: str, timestamp: datetime, interfaces: Dict[str, Dict[str, Any]],
                     tcp_retrans: Optional[int], total_bits_in: int, total_bits_out: int,
                     total_pkts_in: int, total_pkts_out: int,
-                    total_errors_in: int, total_errors_out: int, cpu_load: Optional[float],
-                    memory_pct: Optional[float]) -> Optional[str]:
+                    total_errors_in: int, total_errors_out: int,
+                    cpu_load: Optional[float], memory_pct: Optional[float],
+                    total_pkts_ucast: int = 0, total_pkts_bmcast: int = 0) -> Optional[str]:
     """Update SNMP RRD file with latest interface metrics and system resources.
 
     Args:
@@ -2893,6 +3046,8 @@ def update_snmp_rrd(rrd_path: str, timestamp: datetime, interfaces: Dict[str, Di
         total_errors_out: Aggregate outbound errors across all interfaces
         cpu_load: Average CPU utilization percentage (0-100)
         memory_pct: Memory utilization percentage (0-100)
+        total_pkts_ucast: Total unicast packets (in+out combined)
+        total_pkts_bmcast: Total broadcast+multicast packets (in+out combined)
     """
     prefix = getattr(thread_local, 'prefix', '')
 
@@ -2938,6 +3093,13 @@ def update_snmp_rrd(rrd_path: str, timestamp: datetime, interfaces: Dict[str, Di
 
     ds_names.append('total_errors_out')
     values.append(str(total_errors_out))
+
+    # Add packet type split
+    ds_names.append('total_pkts_ucast')
+    values.append(str(total_pkts_ucast))
+
+    ds_names.append('total_pkts_bmcast')
+    values.append(str(total_pkts_bmcast))
 
     # Add system resources
     ds_names.append('cpu_load')
@@ -3378,9 +3540,9 @@ def generate_mrtg_config(config: Dict[str, Any], work_dir: str, mrtg_config_path
         safe_name = re.sub(r'[^\w\-.]', '_', resource['name'])
         monitor_type = resource['type']
 
-        if monitor_type == 'snmp':
+        if monitor_type in ('snmp', 'port'):
             rrd_path = get_rrd_path(resource['name'], 'snmp')
-            percentile = resource.get('percentile')
+            percentile = resource.get('percentile') if monitor_type == 'snmp' else None
 
             # Target 1: Bandwidth (total_bits_in / total_bits_out)
             mrtg_lines.extend([
@@ -3424,7 +3586,28 @@ def generate_mrtg_config(config: Dict[str, Any], work_dir: str, mrtg_config_path
                 f"",
             ])
 
-            # Target 3: Interface Errors (total_errors_in / total_errors_out)
+            # Target 3: Packet type split (unicast vs broadcast+multicast, in+out combined)
+            mrtg_lines.extend([
+                f"######################################################################",
+                f"# {resource['name']} - Packet Type Split (Unicast vs Broadcast+Multicast)",
+                f"",
+                f"Target[{safe_name}-packets-type]: total_pkts_ucast&total_pkts_bmcast:{rrd_path}",
+                f"MaxBytes[{safe_name}-packets-type]: 10000000",  # 10M pps max
+                f"Title[{safe_name}-packets-type]: {resource['name']} - Packet Type Split",
+                f"PageTop[{safe_name}-packets-type]: <h1>{resource['name']} ({resource['address']})</h1><h2>Unicast vs Broadcast+Multicast Packets</h2>",
+                f"Options[{safe_name}-packets-type]: gauge,nopercent,growright",
+                f"YLegend[{safe_name}-packets-type]: Packets per second",
+                f"ShortLegend[{safe_name}-packets-type]: pps",
+                f"Legend1[{safe_name}-packets-type]: Unicast Packets (in+out)",
+                f"Legend2[{safe_name}-packets-type]: Broadcast+Multicast Packets (in+out)",
+                f"LegendI[{safe_name}-packets-type]: Ucast:",
+                f"LegendO[{safe_name}-packets-type]: B+Mcast:",
+                f"WithPeak[{safe_name}-packets-type]: dwmy",
+                *([f"Percentile[{safe_name}-packets-type]: {percentile}"] if percentile else []),
+                f"",
+            ])
+
+            # Target 4: Interface Errors (total_errors_in / total_errors_out)
             mrtg_lines.extend([
                 f"######################################################################",
                 f"# {resource['name']} - Interface Errors",
@@ -3445,47 +3628,48 @@ def generate_mrtg_config(config: Dict[str, Any], work_dir: str, mrtg_config_path
                 f"",
             ])
 
-            # Target 4: TCP Retransmits (tcp_retrans / tcp_retrans - same DS for both to show single line)
-            mrtg_lines.extend([
-                f"######################################################################",
-                f"# {resource['name']} - TCP Retransmits",
-                f"",
-                f"Target[{safe_name}-retransmits]: tcp_retrans&tcp_retrans:{rrd_path}",
-                f"MaxBytes[{safe_name}-retransmits]: 100000",  # 100k retrans/sec max
-                f"Title[{safe_name}-retransmits]: {resource['name']} - TCP Retransmits",
-                f"PageTop[{safe_name}-retransmits]: <h1>{resource['name']} ({resource['address']})</h1><h2>TCP Retransmits</h2>",
-                f"Options[{safe_name}-retransmits]: gauge,nopercent,growright",
-                f"YLegend[{safe_name}-retransmits]: Retransmits per second",
-                f"ShortLegend[{safe_name}-retransmits]: retrans/s",
-                f"Legend1[{safe_name}-retransmits]: TCP Retransmit Segments",
-                f"Legend2[{safe_name}-retransmits]: TCP Retransmit Segments",
-                f"LegendI[{safe_name}-retransmits]: Retrans:",
-                f"LegendO[{safe_name}-retransmits]: Retrans:",
-                f"WithPeak[{safe_name}-retransmits]: dwmy",
-                *([f"Percentile[{safe_name}-retransmits]: {percentile}"] if percentile else []),
-                f"",
-            ])
+            if monitor_type == 'snmp':
+                # Target 5: TCP Retransmits (tcp_retrans / tcp_retrans - same DS for both to show single line)
+                mrtg_lines.extend([
+                    f"######################################################################",
+                    f"# {resource['name']} - TCP Retransmits",
+                    f"",
+                    f"Target[{safe_name}-retransmits]: tcp_retrans&tcp_retrans:{rrd_path}",
+                    f"MaxBytes[{safe_name}-retransmits]: 100000",  # 100k retrans/sec max
+                    f"Title[{safe_name}-retransmits]: {resource['name']} - TCP Retransmits",
+                    f"PageTop[{safe_name}-retransmits]: <h1>{resource['name']} ({resource['address']})</h1><h2>TCP Retransmits</h2>",
+                    f"Options[{safe_name}-retransmits]: gauge,nopercent,growright",
+                    f"YLegend[{safe_name}-retransmits]: Retransmits per second",
+                    f"ShortLegend[{safe_name}-retransmits]: retrans/s",
+                    f"Legend1[{safe_name}-retransmits]: TCP Retransmit Segments",
+                    f"Legend2[{safe_name}-retransmits]: TCP Retransmit Segments",
+                    f"LegendI[{safe_name}-retransmits]: Retrans:",
+                    f"LegendO[{safe_name}-retransmits]: Retrans:",
+                    f"WithPeak[{safe_name}-retransmits]: dwmy",
+                    *([f"Percentile[{safe_name}-retransmits]: {percentile}"] if percentile else []),
+                    f"",
+                ])
 
-            # Target 5: System (cpu_load / memory_pct)
-            mrtg_lines.extend([
-                f"######################################################################",
-                f"# {resource['name']} - CPU & Memory Utilization",
-                f"",
-                f"Target[{safe_name}-system]: cpu_load&memory_pct:{rrd_path}",
-                f"MaxBytes[{safe_name}-system]: 100",  # Percentage 0-100
-                f"Title[{safe_name}-system]: {resource['name']} - System Resources",
-                f"PageTop[{safe_name}-system]: <h1>{resource['name']} ({resource['address']})</h1><h2>CPU & Memory Utilization</h2>",
-                f"Options[{safe_name}-system]: gauge,nopercent,growright",
-                f"YLegend[{safe_name}-system]: Utilization %",
-                f"ShortLegend[{safe_name}-system]: %",
-                f"Legend1[{safe_name}-system]: CPU Load Average",
-                f"Legend2[{safe_name}-system]: Memory Utilization",
-                f"LegendI[{safe_name}-system]: CPU:",
-                f"LegendO[{safe_name}-system]: Memory:",
-                f"WithPeak[{safe_name}-system]: dwmy",
-                *([f"Percentile[{safe_name}-system]: {percentile}"] if percentile else []),
-                f"",
-            ])
+                # Target 6: System (cpu_load / memory_pct)
+                mrtg_lines.extend([
+                    f"######################################################################",
+                    f"# {resource['name']} - CPU & Memory Utilization",
+                    f"",
+                    f"Target[{safe_name}-system]: cpu_load&memory_pct:{rrd_path}",
+                    f"MaxBytes[{safe_name}-system]: 100",  # Percentage 0-100
+                    f"Title[{safe_name}-system]: {resource['name']} - System Resources",
+                    f"PageTop[{safe_name}-system]: <h1>{resource['name']} ({resource['address']})</h1><h2>CPU & Memory Utilization</h2>",
+                    f"Options[{safe_name}-system]: gauge,nopercent,growright",
+                    f"YLegend[{safe_name}-system]: Utilization %",
+                    f"ShortLegend[{safe_name}-system]: %",
+                    f"Legend1[{safe_name}-system]: CPU Load Average",
+                    f"Legend2[{safe_name}-system]: Memory Utilization",
+                    f"LegendI[{safe_name}-system]: CPU:",
+                    f"LegendO[{safe_name}-system]: Memory:",
+                    f"WithPeak[{safe_name}-system]: dwmy",
+                    *([f"Percentile[{safe_name}-system]: {percentile}"] if percentile else []),
+                    f"",
+                ])
 
         else:
             # Non-SNMP monitors (ping, http, quic, tcp, udp) - availability tracking
@@ -3580,24 +3764,24 @@ def generate_mrtg_index(all_config_files: List[str], index_path: str, site_name:
                     monitor_info['title'] = pagetop_match.group(1).strip()
                     monitor_info['address'] = pagetop_match.group(2).strip()
 
-                # Check if this is an SNMP target (ends with -bandwidth, -packets, -retransmits, -system, or -errors)
-                if (target_name.endswith('-bandwidth') or target_name.endswith('-packets') or
-                        target_name.endswith('-retransmits') or target_name.endswith('-system') or
-                        target_name.endswith('-errors')):
-                    if target_name.endswith('-bandwidth'):
-                        base_name = target_name[:-10]  # Remove '-bandwidth'
-                    elif target_name.endswith('-packets'):
-                        base_name = target_name[:-8]   # Remove '-packets'
-                    elif target_name.endswith('-retransmits'):
-                        base_name = target_name[:-12]  # Remove '-retransmits'
-                    elif target_name.endswith('-system'):
-                        base_name = target_name[:-7]   # Remove '-system'
-                    elif target_name.endswith('-errors'):
-                        base_name = target_name[:-7]   # Remove '-errors'
+                # Check if this is an SNMP target by known suffixes
+                snmp_suffixes = (
+                    '-bandwidth', '-packets', '-packets-type',
+                    '-retransmits', '-system', '-errors',
+                )
+                if any(target_name.endswith(s) for s in snmp_suffixes):
+                    # Strip the matching suffix to get the base name
+                    base_name = target_name
+                    for s in snmp_suffixes:
+                        if target_name.endswith(s):
+                            base_name = target_name[:-len(s)]
+                            break
 
-                    # Store only once per base name (deduplicate)
+                    # Store metadata once per base name; accumulate target set for cell gating
                     if base_name not in snmp_monitors:
+                        monitor_info['targets'] = set()
                         snmp_monitors[base_name] = monitor_info
+                    snmp_monitors[base_name]['targets'].add(target_name)
                 else:
                     # Regular availability monitor
                     all_monitors.append(monitor_info)
@@ -3616,27 +3800,30 @@ def generate_mrtg_index(all_config_files: List[str], index_path: str, site_name:
         "<html>",
         "<head>",
         "    <meta charset='UTF-8'>",
+        "    <meta http-equiv='refresh' content='60'>",
         f"    <title>{site_name}</title>",
         "    <style>",
         "        body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }",
         "        h1 { color: #333; margin-bottom: 10px; }",
         "        h2 { color: #555; margin-top: 40px; margin-bottom: 20px; border-bottom: 2px solid #ddd; padding-bottom: 10px; }",
-        "        .grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 20px; }",
+        "        .grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 20px; }",
         "        .monitor { background: white; padding: 15px; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }",
         "        .monitor h3 { margin-top: 0; font-size: 18px; color: #555; }",
         "        .monitor a { text-decoration: none; color: inherit; }",
         "        .monitor a:hover { text-decoration: underline; }",
         "        .monitor img { max-width: 100%; height: auto; }",
         "        .network-host-label { font-size: 16px; font-weight: bold; color: #333; margin-bottom: 10px; }",
-        "        .network-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 20px; margin-bottom: 20px; }",
-        "        .network-cell { background: white; padding: 15px; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }",
-        "        .network-cell h4 { margin-top: 0; font-size: 14px; color: #666; text-align: center; }",
+        "        .network-row { display: grid; gap: 20px; margin-bottom: 20px; }",
+        "        .network-cell { background: white; padding: 8px; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }",
+        "        .network-cell h4 { margin-top: 0; margin-bottom: 4px; font-size: 11px; color: #666; text-align: center; }",
+        "        .network-cell a { display: block; text-align: center; }",
+        "        .network-cell img { max-width: 100%; height: auto; max-height: 80px; }",
         "        @media (max-width: 1400px) { ",
-        "            .grid { grid-template-columns: repeat(3, 1fr); }",
-        "            .network-row { grid-template-columns: repeat(3, 1fr); }",
+        "        .grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 20px; }",
+        "            .network-row { grid-template-columns: repeat(var(--cols-narrow, 2), 1fr); }",
         "        }",
         "        @media (max-width: 768px) { ",
-        "            .grid { grid-template-columns: 1fr; }",
+        "            .grid { grid-template-columns: repeat(3, 1fr); }",
         "            .network-row { grid-template-columns: 1fr; }",
         "        }",
         "    </style>",
@@ -3650,9 +3837,18 @@ def generate_mrtg_index(all_config_files: List[str], index_path: str, site_name:
         html_lines.append("    <h2>Network Monitoring</h2>")
 
         for base_name, monitor in sorted(snmp_monitors.items()):
+            targets = monitor.get('targets', set())
+            has_retransmits = f"{base_name}-retransmits" in targets
+            has_system      = f"{base_name}-system"      in targets
+
+            # Grid column count matches the number of cells actually emitted
+            col_count = 4 + int(has_retransmits) + int(has_system)
+            col_narrow = min(col_count, 3)
+            col_style = f"repeat({col_count}, 1fr); --cols-narrow: {col_narrow}"
+
             html_lines.extend([
                 f"    <div class='network-host-label'>{monitor['title']}</div>",
-                "    <div class='network-row'>",
+                f"    <div class='network-row' style='grid-template-columns: {col_style};'>",
                 "        <div class='network-cell'>",
                 "            <h4>Total Bandwidth In/Out</h4>",
                 f"            <a href='/mrtg-rrd/{base_name}-bandwidth.html'>",
@@ -3666,23 +3862,33 @@ def generate_mrtg_index(all_config_files: List[str], index_path: str, site_name:
                 "            </a>",
                 "        </div>",
                 "        <div class='network-cell'>",
+                "            <h4>Unicast vs B+Mcast Packets</h4>",
+                f"            <a href='/mrtg-rrd/{base_name}-packets-type.html'>",
+                f"                <img src='/mrtg-rrd/{base_name}-packets-type-day.png' alt='{monitor['title']} Packet Types'>",
+                "            </a>",
+                "        </div>",
+                "        <div class='network-cell'>",
                 "            <h4>Interface Errors In/Out</h4>",
                 f"            <a href='/mrtg-rrd/{base_name}-errors.html'>",
                 f"                <img src='/mrtg-rrd/{base_name}-errors-day.png' alt='{monitor['title']} Errors'>",
                 "            </a>",
                 "        </div>",
-                "        <div class='network-cell'>",
-                "            <h4>TCP Retransmits</h4>",
-                f"            <a href='/mrtg-rrd/{base_name}-retransmits.html'>",
-                f"                <img src='/mrtg-rrd/{base_name}-retransmits-day.png' alt='{monitor['title']} TCP Retransmits'>",
-                "            </a>",
-                "        </div>",
-                "        <div class='network-cell'>",
-                "            <h4>CPU & Memory</h4>",
-                f"            <a href='/mrtg-rrd/{base_name}-system.html'>",
-                f"                <img src='/mrtg-rrd/{base_name}-system-day.png' alt='{monitor['title']} System'>",
-                "            </a>",
-                "        </div>",
+                *([
+                    "        <div class='network-cell'>",
+                    "            <h4>TCP Retransmits</h4>",
+                    f"            <a href='/mrtg-rrd/{base_name}-retransmits.html'>",
+                    f"                <img src='/mrtg-rrd/{base_name}-retransmits-day.png' alt='{monitor['title']} TCP Retransmits'>",
+                    "            </a>",
+                    "        </div>",
+                ] if has_retransmits else []),
+                *([
+                    "        <div class='network-cell'>",
+                    "            <h4>CPU & Memory</h4>",
+                    f"            <a href='/mrtg-rrd/{base_name}-system.html'>",
+                    f"                <img src='/mrtg-rrd/{base_name}-system-day.png' alt='{monitor['title']} System'>",
+                    "            </a>",
+                    "        </div>",
+                ] if has_system else []),
                 "    </div>",
             ])
 

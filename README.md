@@ -1700,7 +1700,7 @@ under the [GNU General Public License version 3](LICENSE.txt).
 `mrtg-rrd.cgi.pl` is licensed by Jan "Yenya" Kasprzak <kas@fi.muni.cz><br />
 under the [GNU General Public License version 2](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html).
 ```
-Software: APMonitor 1.2.12
+Software: APMonitor 1.2.13
 License: GNU General Public License version 3
 Licensor: Andrew (AP) Prendergast, ap@andrewprendergast.com -- FSF Member
 ```
