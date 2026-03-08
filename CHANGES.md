@@ -9,6 +9,9 @@ Multithreaded high speed availability checking for SNMP, PING, TCP/UDP, QUIC & H
 Integrates w/Site24x7 heartbeat monitoring for failover alerts + MRTG + Slack & Pushover webhooks.
 Thread safe, reentrant, modifiable.
 
+# Release 1.2.13 (???): ???
+- BUGFIX: When monitoring an entire switch, we don't get an availability graph in MRTG #4
+
 # Release 1.2.12 (4-Mar-26): L2 Port Pinning 
 - Implemented individual L2 port pinning
 - Updated docs

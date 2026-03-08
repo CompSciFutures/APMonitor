@@ -3214,7 +3214,7 @@ def check_and_heartbeat_r(resource: Dict[str, Any], site_config: Dict[str, Any])
                 notified_count = prev_notified_count
 
     # Update RRD database for MRTG (availability monitors only)
-    if RRD_ENABLED and resource['type'] not in ('snmp', 'ports', 'port'):
+    if RRD_ENABLED and resource['type'] not in ('snmp', 'port'):
         rrd_path = get_rrd_path(resource['name'])
         if VERBOSE > 1:
             print(f"{prefix}updating RRD database for {rrd_path} w/ {now}, {last_response_time_ms}, {is_up}")
