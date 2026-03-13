@@ -44,7 +44,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-__version__ = "1.2.13"
+__version__ = "1.2.14"
 __app_name__ = "APMonitor"
 
 import argparse
@@ -3719,13 +3719,14 @@ def generate_mrtg_config(config: Dict[str, Any], work_dir: str, mrtg_config_path
         print(f"{prefix}Failed to generate MRTG config '{mrtg_config_path}': {e}", file=sys.stderr)
 
 
-def generate_mrtg_index(all_config_files: List[str], index_path: str, site_name: str = "Availability Monitoring") -> None:
+def generate_mrtg_index(all_config_files: List[str], index_path: str, site_name: str = "Availability Monitoring", state: Dict[str, Any] = None) -> None:
     """Generate index.html with Network Monitoring (SNMP) and Availability Monitoring sections using atomic file rotation.
 
     Args:
         all_config_files: List of paths to MRTG config files
         index_path: Full path to index.html file to create (will use .new/.old rotation)
         site_name: Site name for page heading (from APMonitor config)
+        state: APMonitor state dict for outage highlighting (optional)
     """
     prefix = getattr(thread_local, 'prefix', '')
 
@@ -3794,20 +3795,47 @@ def generate_mrtg_index(all_config_files: List[str], index_path: str, site_name:
         print(f"{prefix}Warning: No monitors found in any config files", file=sys.stderr)
         return
 
+    # Build world clock display for header
+    world_clocks = [
+        ('California',  'America/Los_Angeles'),
+        ('New York',    'America/New_York'),
+        ('London',      'Europe/London'),
+        ('Amsterdam',   'Europe/Amsterdam'),
+        ('Mumbai',      'Asia/Kolkata'),
+        ('Tokyo',       'Asia/Tokyo'),
+        ('Melbourne',   'Australia/Melbourne'),
+    ]
+
+    # zoneinfo available Python 3.9+; fallback to UTC if unavailable
+    try:
+        from zoneinfo import ZoneInfo
+        def _fmt_tz(tz_name: str, fmt: str) -> str:
+            return datetime.now(ZoneInfo(tz_name)).strftime(fmt).lstrip('0') or '12'
+    except ImportError:
+        def _fmt_tz(tz_name: str, fmt: str) -> str:
+            return datetime.utcnow().strftime(fmt).lstrip('0') or '12'
+
+    local_time_str = _fmt_tz('Australia/Melbourne', '%a %I:%M %p')
+    world_clock_parts = ' &nbsp;&nbsp; '.join(
+        f"{city}: <b>{_fmt_tz(tz, '%I:%M %p')}</b>"
+        for city, tz in world_clocks
+    )
+
     # Build HTML content
     html_lines = [
         "<!DOCTYPE html>",
         "<html>",
         "<head>",
         "    <meta charset='UTF-8'>",
-        "    <meta http-equiv='refresh' content='60'>",
+        "    <meta http-equiv='refresh' content='95'>",
         f"    <title>{site_name}</title>",
         "    <style>",
-        "        body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }",
+        "        body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; position: relative; }",
         "        h1 { color: #333; margin-bottom: 10px; }",
         "        h2 { color: #555; margin-top: 40px; margin-bottom: 20px; border-bottom: 2px solid #ddd; padding-bottom: 10px; }",
         "        .grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 20px; }",
         "        .monitor { background: white; padding: 15px; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }",
+        "        .monitor.down { background: #ffe8e8; }",
         "        .monitor h3 { margin-top: 0; font-size: 18px; color: #555; }",
         "        .monitor a { text-decoration: none; color: inherit; }",
         "        .monitor a:hover { text-decoration: underline; }",
@@ -3818,23 +3846,30 @@ def generate_mrtg_index(all_config_files: List[str], index_path: str, site_name:
         "        .network-cell h4 { margin-top: 0; margin-bottom: 4px; font-size: 11px; color: #666; text-align: center; }",
         "        .network-cell a { display: block; text-align: center; }",
         "        .network-cell img { max-width: 100%; height: auto; max-height: 80px; }",
+        "        .header-clock { position: absolute; top: 0; right: 0; text-align: right; padding: 6px 12px; }",
+        "        .header-clock-main { font-size: 36px; font-weight: bold; color: #333; }",
+        "        .header-clock-world { font-size: 20px; color: #999; margin-top: 4px; }",
         "        @media (max-width: 1400px) { ",
-        "        .grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 20px; }",
+        "            .grid { grid-template-columns: repeat(3, 1fr); }",
         "            .network-row { grid-template-columns: repeat(var(--cols-narrow, 2), 1fr); }",
         "        }",
         "        @media (max-width: 768px) { ",
-        "            .grid { grid-template-columns: repeat(3, 1fr); }",
+        "            .grid { grid-template-columns: 1fr; }",
         "            .network-row { grid-template-columns: 1fr; }",
         "        }",
         "    </style>",
         "</head>",
         "<body>",
+        "    <div class='header-clock'>",
+        f"        <div class='header-clock-main'>{local_time_str}</div>",
+        f"        <div class='header-clock-world'>{world_clock_parts}</div>",
+        "    </div>",
         f"    <h1>{site_name}</h1>",
     ]
 
     # Add Network Monitoring section (SNMP monitors)
     if snmp_monitors:
-        html_lines.append("    <h2>Network Monitoring</h2>")
+        html_lines.append("    <h2>L2/L3 Network Monitoring</h2>")
 
         for base_name, monitor in sorted(snmp_monitors.items()):
             targets = monitor.get('targets', set())
@@ -3895,20 +3930,24 @@ def generate_mrtg_index(all_config_files: List[str], index_path: str, site_name:
     # Add Availability Monitoring section (non-SNMP monitors)
     if all_monitors:
         html_lines.extend([
-            "    <h2>Availability Monitoring</h2>",
+            "    <h2>L4 Availability Monitoring</h2>",
             "    <div class='grid'>",
         ])
 
         for monitor in all_monitors:
             safe_name = monitor['name']
+            monitor_state = state.get(monitor['title'], {}) if state else {}
+            is_down = not monitor_state.get('is_up', True)
+            div_class = "monitor down" if is_down else "monitor"
+            outage_str = f"<span style='color: #cc0000; font-weight: bold;'>Down {format_time_ago(monitor_state.get('last_alarm_started'))}</span>" if is_down else ""
 
             html_lines.extend([
-                "        <div class='monitor'>",
+                f"        <div class='{div_class}'>",
                 f"            <h3><a href='/mrtg-rrd/{safe_name}.html'>{monitor['title']}</a></h3>",
                 f"            <a href='/mrtg-rrd/{safe_name}.html'>",
                 f"                <img src='/mrtg-rrd/{safe_name}-day.png' alt='{monitor['title']} Daily Graph'>",
                 "            </a>",
-                f"            <p style='font-size: 12px; color: #666;'>{monitor['address']}</p>",
+                f"            <p style='font-size: 12px; color: #666;'>{monitor['address']}{(' &nbsp;' + outage_str) if is_down else ''}</p>",
                 "        </div>",
             ])
 
@@ -4090,6 +4129,9 @@ def main() -> None:
             print("Email test complete")
             sys.exit(0)
 
+        # Load previous state
+        STATE = load_state(STATEFILE)
+
         # Generate MRTG config mode
         if args.generate_mrtg_config is not None:
             work_dir = args.generate_mrtg_config
@@ -4103,7 +4145,7 @@ def main() -> None:
 
             # Generate master index from all config files, passing site name
             master_index_path = str(Path(work_dir) / 'index.html')
-            generate_mrtg_index(all_config_files, master_index_path, site_name)
+            generate_mrtg_index(all_config_files, master_index_path, site_name, STATE)
 
             print(f"MRTG config generated at: {mrtg_config_path}")
             print(f"MRTG master index generated at: {master_index_path}")
@@ -4128,9 +4170,6 @@ def main() -> None:
             DEFAULT_NOTIFY_EVERY_N_SECS = config['site']['notify_every_n_secs']
         if 'after_every_n_notifications' in config['site']:
             DEFAULT_AFTER_EVERY_N_NOTIFICATIONS = config['site']['after_every_n_notifications']
-
-        # Load previous state
-        STATE = load_state(STATEFILE)
 
         if VERBOSE and STATE:
             last_execution_time = STATE.get('execution_time')

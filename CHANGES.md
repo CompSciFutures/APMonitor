@@ -9,6 +9,10 @@ Multithreaded high speed availability checking for SNMP, PING, TCP/UDP, QUIC & H
 Integrates w/Site24x7 heartbeat monitoring for failover alerts + MRTG + Slack & Pushover webhooks.
 Thread safe, reentrant, modifiable.
 
+# Release 1.2.14 (???): ???
+- Added red shading to MRTG UI when an avaiability monitor is down
+- Added time display to MRTG output
+
 # Release 1.2.13 (8-Mar-26): MRTG UI Upodates
 - BUGFIX: When monitoring an entire switch, we don't get an availability graph in MRTG #4
 - Changed MRTG to 5 column layout for best use of 14:9 HD screens.
