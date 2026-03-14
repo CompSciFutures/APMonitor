@@ -85,7 +85,7 @@ the Ethernet MAC address can still be read at Layer 2 so you can still receive a
 <img src="images/port-change-notification.png" width="500" />
 
 NB. Be careful that your definition of "Kill Switched" is well defined and tested before the need to make use of it comes time.
-E.g., downing a port never works, it's merely advisory and something one does as the walk across the floor to unplug the cable from a switch.
+E.g., downing a port never works long term, it's merely advisory and something one does as they walk across the floor to unplug the cable from a switch.
 Or is it, if you have this? YMMV.
 
 See DOI [10.13140/RG.2.2.12609.84321](https://doi.org/10.13140/RG.2.2.12609.84321) for more information on the Pillars of Information Security. It borrows from a piece of work I did back when #PARC needed me to work on #BookMasters in the digital era.
