@@ -11,6 +11,7 @@ Thread safe, reentrant, modifiable.
 
 # Release 1.2.15 (???): ???
 - Updated docs to illustrate L2 monitoring.
+- Updated docs to say "NGINX"
 
 # Release 1.2.14 (13-Mar-26): T1 NOC Vizualisation
 - Added red shading to MRTG UI when an avaiability monitor is down

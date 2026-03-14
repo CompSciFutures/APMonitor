@@ -269,7 +269,7 @@ SNMP monitors create RRD files with dynamic data sources based on discovered net
 
 ## Expected Output
 
-Installing MRTG will spin up a web server with FastCGI on http://localhost:888/, as follows:
+Installing MRTG will spin up a small lightweight NGINX web server with FastCGI on http://localhost:888/, as follows:
 
 ![mrtg-availability.png](images/mrtg-availability.png)
 
