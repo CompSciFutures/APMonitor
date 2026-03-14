@@ -73,7 +73,7 @@ Key Features:
 NB: This tool is useful for implementing the second &amp; third pillars (Availability &amp; System Integrity)
 from the 12 Pillars of Information Security, for Necessary, Sufficient & Complete Security: 
 
-![The-Pillars-of-Information-Security.png](images/The-Pillars-of-Information-Security.png)
+<img src="images/The-Pillars-of-Information-Security.png" width="500" />
 
 Also be mindful of the Attack Surface Kill-Switch Riddle:
 
@@ -82,7 +82,7 @@ Also be mindful of the Attack Surface Kill-Switch Riddle:
 To address this riddle, you should try to configure your machines & devices so that even if they are shutdown,
 the Ethernet MAC address can still be read at Layer 2 so you can still receive alerts like this:  
 
-![port-change-notification.png](images/port-change-notification.png)
+<img src="images/port-change-notification.png" width="650" />
 
 See DOI [10.13140/RG.2.2.12609.84321](https://doi.org/10.13140/RG.2.2.12609.84321) for more information on the Pillars of Information Security. It borrows from a piece of work I did back when #PARC needed me to work on #BookMasters in the digital era.
 
