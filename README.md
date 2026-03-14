@@ -279,7 +279,7 @@ I chose RRD because it's a rather good frequency domain format for data warehous
 
 If you want to work with this data directly, consider looking at <a href="https://librosa.org/doc/latest/index.html">librosa</a> from NYU's Fourier Lab team.
 It is designed for working with Frequency Domain/Time Domain data and has a rather nifty spectrogram visualisation which might be relevant to you, amongst other things.
-See the <a href="https://www.youtube.com/watch?v=MhOdbtPhbLU">launch lecture given a SciPy</a> for more information.
+See the <a href="https://www.youtube.com/watch?v=MhOdbtPhbLU">launch lecture given at SciPy</a> for more information.
 
 ## Working with RRD Files Directly
 ```bash
