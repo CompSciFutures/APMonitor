@@ -269,9 +269,15 @@ SNMP monitors create RRD files with dynamic data sources based on discovered net
 
 ## Expected Output
 
-Installing MRTG will spin up a small lightweight NGINX web server with FastCGI on http://localhost:888/, as follows:
+Installing MRTG with `make install; make installmrtg` will spin up a small lightweight NGINX web server with FastCGI on http://localhost:888/, as follows:
 
 ![mrtg-availability.png](images/mrtg-availability.png)
+
+Note the NGINX/FastCGI combination means we don't need to keep a machine chewing on itself generating charts anymore - they are now generated on demand in near-realtime and extremely efficiently. The only I/O is the RRD files, which under the hood operate very much like the older MRTG text file format.
+
+I chose RRD because it's a rather good frequency domain format for data warehousing of frequency domain sample data that's still compatible with Tier 1 NOCs. 
+
+If you want to work with this data directly, consider looking at <a href="https://librosa.org/doc/latest/index.html">librosa</a>. It is designed for working with Frequency Domain/Time Domain data and has a rather nifty spectrogram visualisation which might be relevant to you, amongst other things.
 
 ## Working with RRD Files Directly
 ```bash
