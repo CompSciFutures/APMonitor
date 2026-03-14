@@ -277,7 +277,7 @@ Note the NGINX/FastCGI combination means we don't need to keep a machine chewing
 
 I chose RRD because it's a rather good frequency domain format for data warehousing of frequency domain sample data that's still compatible with Tier 1 NOCs. 
 
-If you want to work with this data directly, consider looking at <a href="https://librosa.org/doc/latest/index.html">librosa</a>. It is designed for working with Frequency Domain/Time Domain data and has a rather nifty spectrogram visualisation which might be relevant to you, amongst other things.
+If you want to work with this data directly, consider looking at <a href="https://librosa.org/doc/latest/index.html">librosa</a> from NYU's Fourier Lab team. It is designed for working with Frequency Domain/Time Domain data and has a rather nifty spectrogram visualisation which might be relevant to you, amongst other things.
 
 ## Working with RRD Files Directly
 ```bash
