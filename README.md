@@ -73,7 +73,7 @@ Key Features:
 NB: This tool is useful for implementing the second &amp; third pillars (Availability &amp; System Integrity)
 from the 12 Pillars of Information Security, for Necessary, Sufficient & Complete Security: 
 
-<img src="images/The-Pillars-of-Information-Security.png" width="500" />
+<img src="images/The-Pillars-of-Information-Security.png" width="350" />
 
 Also be mindful of the Attack Surface Kill-Switch Riddle:
 
