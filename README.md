@@ -79,7 +79,12 @@ Also be mindful of the Attack Surface Kill-Switch Riddle:
 
 ![The-attack-surface-kill-switch-riddle.png](images/The-attack-surface-kill-switch-riddle.png)
 
-See DOI [10.13140/RG.2.2.12609.84321](https://doi.org/10.13140/RG.2.2.12609.84321) for more information.
+To address this riddle, you should try to configure your machines & devices so that even if they are shutdown,
+the Ethernet MAC address can still be read at Layer 2 so you can still receive alerts like this:  
+
+![port-change-notification.png](images/port-change-notification.png)
+
+See DOI [10.13140/RG.2.2.12609.84321](https://doi.org/10.13140/RG.2.2.12609.84321) for more information on the Pillars of Information Security. It borrows from a piece of work I did back when #PARC needed me to work on #BookMasters in the digital era.
 
 ## Alternatives
 
@@ -1700,7 +1705,7 @@ under the [GNU General Public License version 3](LICENSE.txt).
 `mrtg-rrd.cgi.pl` is licensed by Jan "Yenya" Kasprzak <kas@fi.muni.cz><br />
 under the [GNU General Public License version 2](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html).
 ```
-Software: APMonitor 1.2.14
+Software: APMonitor 1.2.15
 License: GNU General Public License version 3
 Licensor: Andrew (AP) Prendergast, ap@andrewprendergast.com -- FSF Member
 
