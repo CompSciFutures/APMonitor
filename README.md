@@ -88,7 +88,7 @@ NB. Be careful that your definition of "Kill Switched" is well defined and teste
 E.g., downing a port never works long term, it's merely advisory and something one does as they walk across the floor to unplug the cable from a switch.
 Or is it, if you have this? YMMV.
 
-See DOI [10.13140/RG.2.2.12609.84321](https://doi.org/10.13140/RG.2.2.12609.84321) for more information on the Pillars of Information Security. It borrows from a piece of work I did back when #PARC needed me to work on #BookMasters in the digital era.
+See DOI [10.13140/RG.2.2.12609.84321](https://doi.org/10.13140/RG.2.2.12609.84321) and associated [LinkedIn post](https://www.linkedin.com/feed/update/urn:li:activity:7331490410197905409/) for more information on the Pillars of Information Security. It borrows from a piece of work I did back when #PARC needed me to work on #BookMasters in the digital era.
 
 ## Alternatives
 
