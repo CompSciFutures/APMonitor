@@ -246,7 +246,7 @@ Each availability monitor's RRD file tracks two metrics:
   - `1` = service up
   - `0` = service down
 
-### SNMP Monitors
+### SNMP Monitors (port, ports, snmp)
 
 SNMP monitors create a single RRD file per device with data sources dynamically generated based on discovered interfaces plus fixed aggregate and system metrics.
 
