@@ -248,20 +248,52 @@ Each availability monitor's RRD file tracks two metrics:
 
 ### SNMP Monitors
 
-SNMP monitors create RRD files with dynamic data sources based on discovered network interfaces:
+SNMP monitors create a single RRD file per device with data sources dynamically generated based on discovered interfaces plus fixed aggregate and system metrics.
 
-- **Interface Traffic Counters** (COUNTER, bytes): Cumulative byte counters per interface
-  - `{interface_name}_in`: Inbound bytes (IF-MIB::ifInOctets)
-  - `{interface_name}_out`: Outbound bytes (IF-MIB::ifOutOctets)
-  
-- **TCP Retransmissions** (COUNTER, segments): TCP retransmit counter
-  - `tcp_retrans`: Global TCP retransmission counter (TCP-MIB::tcpRetransSegs)
+**Filename**: `{statefile-dir}/{statefile-name}.rrd/{monitor-name}-snmp.rrd`
 
-**SNMP Specifics:**
-- Interface names are sanitized (alphanumeric + underscore, max 15 chars) to fit RRD's 19-character DS name limit
-- COUNTER type automatically calculates rates (bytes/second) and handles 32/64-bit wraparound
-- All interfaces for a device are stored in a single RRD file for atomic updates
-- Interface list is discovered automatically via SNMP walk of IF-MIB::ifDescr table
+**Per-Interface Data Sources** (one pair per discovered interface, COUNTER):
+
+- **`if{index}_in`**: Inbound bytes for interface at ifIndex `{index}` (IF-MIB::ifInOctets)
+- **`if{index}_out`**: Outbound bytes for interface at ifIndex `{index}` (IF-MIB::ifOutOctets)
+
+DS names use the raw ifIndex integer (e.g., `if1_in`, `if2_out`), not the interface description string. DS order is stable — interfaces are sorted numerically by ifIndex at both create and update time.
+
+**Aggregate Traffic Data Sources** (COUNTER):
+
+- **`total_bits_in`**: Sum of inbound octets × 8 across all interfaces
+- **`total_bits_out`**: Sum of outbound octets × 8 across all interfaces
+- **`total_pkts_in`**: Sum of all inbound packets (unicast + multicast + broadcast) across all interfaces (IF-MIB::ifHCInUcastPkts + ifHCInMulticastPkts + ifHCInBroadcastPkts)
+- **`total_pkts_out`**: Sum of all outbound packets across all interfaces (IF-MIB::ifHCOutUcastPkts + ifHCOutMulticastPkts + ifHCOutBroadcastPkts)
+- **`total_pkts_ucast`**: Total unicast packets in+out combined across all interfaces
+- **`total_pkts_bmcast`**: Total broadcast+multicast packets in+out combined across all interfaces
+- **`total_errors_in`**: Sum of inbound interface errors across all interfaces (IF-MIB::ifInErrors)
+- **`total_errors_out`**: Sum of outbound interface errors across all interfaces (IF-MIB::ifOutErrors)
+
+**TCP Data Source** (COUNTER):
+
+- **`tcp_retrans`**: Global TCP retransmit segment counter (TCP-MIB::tcpRetransSegs)
+
+**System Resource Data Sources** (GAUGE):
+
+- **`cpu_load`**: CPU utilization percentage, range 0–100. Sourced from vendor-specific OIDs (Cisco/HP/Juniper/Ubiquiti) with HOST-RESOURCES-MIB::hrProcessorLoad as fallback. Stored as `U` (unknown) if unavailable.
+- **`memory_pct`**: Memory utilization percentage, range 0–100. Sourced from vendor-specific OIDs with HOST-RESOURCES-MIB::hrStorage as fallback. Stored as `U` if unavailable.
+
+**MRTG Targets generated per SNMP monitor:**
+
+| Target suffix | DS pair | Description |
+|---|---|---|
+| `-bandwidth` | `total_bits_in` / `total_bits_out` | Total bandwidth in/out (bits) |
+| `-packets` | `total_pkts_in` / `total_pkts_out` | Total packets in/out |
+| `-packets-type` | `total_pkts_ucast` / `total_pkts_bmcast` | Unicast vs broadcast+multicast |
+| `-errors` | `total_errors_in` / `total_errors_out` | Interface errors in/out |
+| `-retransmits` | `tcp_retrans` / `tcp_retrans` | TCP retransmits (single line) |
+| `-system` | `cpu_load` / `memory_pct` | CPU & memory utilization |
+
+**Notes:**
+- COUNTER type automatically calculates per-second rates and handles 32/64-bit wraparound.
+- All interfaces for a device are stored in a single RRD for atomic updates. If the interface list changes, stale DS entries remain in the RRD unused — the RRD is never recreated on interface list change alone.
+- If the discovered interface count grows such that the expected DS count exceeds what was created, APMonitor auto-heals by deleting and recreating the RRD on the next run. Expected DS count = `(2 × interface_count) + 11`.
 
 ### RRD Retention Policy (MRTG-compatible)
 
@@ -273,7 +305,7 @@ SNMP monitors create RRD files with dynamic data sources based on discovered net
 
 ## Expected Output
 
-Installing MRTG with `make install; make installmrtg` will spin up a small lightweight NGINX web server with FastCGI on http://localhost:888/, as follows:
+Installing MRTG with `make install; make installmrtg` will spin up via `rc.d` a small lightweight NGINX web server with FastCGI on http://localhost:888/, as follows:
 
 ![mrtg-availability.png](images/mrtg-availability.png)
 
@@ -794,18 +826,21 @@ SNMP monitors automatically poll these standard MIB objects:
 - **IF-MIB::ifDescr** (1.3.6.1.2.1.2.2.1.2) - Interface descriptions
 - **IF-MIB::ifInOctets** (1.3.6.1.2.1.2.2.1.10) - Bytes received per interface
 - **IF-MIB::ifOutOctets** (1.3.6.1.2.1.2.2.1.16) - Bytes transmitted per interface
+- **IF-MIB::ifInErrors** (1.3.6.1.2.1.2.2.1.14) - Inbound errors per interface
+- **IF-MIB::ifOutErrors** (1.3.6.1.2.1.2.2.1.20) - Outbound errors per interface
+- **IF-MIB::ifHCInUcastPkts** (1.3.6.1.2.1.31.1.1.1.7) - Inbound unicast packets per interface (64-bit)
+- **IF-MIB::ifHCInMulticastPkts** (1.3.6.1.2.1.31.1.1.1.8) - Inbound multicast packets per interface (64-bit)
+- **IF-MIB::ifHCInBroadcastPkts** (1.3.6.1.2.1.31.1.1.1.9) - Inbound broadcast packets per interface (64-bit)
+- **IF-MIB::ifHCOutUcastPkts** (1.3.6.1.2.1.31.1.1.1.11) - Outbound unicast packets per interface (64-bit)
+- **IF-MIB::ifHCOutMulticastPkts** (1.3.6.1.2.1.31.1.1.1.12) - Outbound multicast packets per interface (64-bit)
+- **IF-MIB::ifHCOutBroadcastPkts** (1.3.6.1.2.1.31.1.1.1.13) - Outbound broadcast packets per interface (64-bit)
 - **TCP-MIB::tcpRetransSegs** (1.3.6.1.2.1.6.12.0) - TCP retransmission segments (global counter)
+- **Vendor-specific CPU OIDs** (Cisco/HP/Juniper/Ubiquiti) with HOST-RESOURCES-MIB::hrProcessorLoad fallback
+- **Vendor-specific memory OIDs** (Cisco/HP/Juniper/Ubiquiti) with HOST-RESOURCES-MIB::hrStorage fallback
 
 **RRD Integration:**
 
-When `--generate-mrtg-config` is specified, SNMP monitors create RRD files with dynamic data sources:
-- **Filename**: `{statefile-dir}/{statefile-name}.rrd/{monitor-name}-snmp.rrd`
-- **Data Sources**: One per discovered interface plus TCP retransmits
-  - `{interface}_in` (COUNTER) - Inbound bytes
-  - `{interface}_out` (COUNTER) - Outbound bytes
-  - `tcp_retrans` (COUNTER) - TCP retransmissions
-
-Interface names are sanitized to alphanumeric + underscore, truncated to 15 characters to fit RRD's 19-character DS name limit (leaving room for `_in`/`_out` suffix).
+When `--generate-mrtg-config` is specified, SNMP monitors create RRD files with dynamic data sources based on discovered interfaces. See the **SNMP Monitors** subsection under **RRD Data Collection** above for the complete DS inventory. DS names use the raw ifIndex integer (e.g., `if1_in`, `if2_out`) — not the interface description string.
 
 **SNMP Protocol Notes:**
 - Uses SNMPv2c (community-based authentication)
