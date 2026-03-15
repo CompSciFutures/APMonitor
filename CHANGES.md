@@ -9,6 +9,9 @@ Multithreaded high speed availability checking for SNMP, PING, TCP/UDP, QUIC & H
 Integrates w/Site24x7 heartbeat monitoring for failover alerts + MRTG + Slack & Pushover webhooks.
 Thread safe, reentrant, modifiable.
 
+# Release 1.2.16 (???): ???
+- Added info on setting up read-only SNMP to Linux
+
 # Release 1.2.15 (15-Mar-26): Documentation Updates
 - Updated docs to illustrate L2 monitoring.
 - Updated docs to say "NGINX" & call out librosa for frequency domain.

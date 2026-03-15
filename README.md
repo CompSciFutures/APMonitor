@@ -184,6 +184,78 @@ To see how the alarm pacing will accelerate then subsequently delay notification
 
 Note that alarm pacing can be set at a global level in the `site:` config, and is overridden when set at a per monitored resource level in the `monitors:` section of the config.
 
+# Recommended configuration for SNMP monitoring on Debian Linux
+
+To enable SNMP monitoring on a Debian host so that APMonitor can poll it, install and configure `snmpd` with a read-only community string restricted to your APMonitor machine.
+
+## Install
+
+```bash
+sudo apt install snmpd snmp
+```
+
+## Configure `/etc/snmp/snmpd.conf`
+
+Replace the default config with the following minimal read-only configuration:
+
+```
+# Listen on all interfaces (lock to a specific IP if preferred)
+agentAddress udp:161
+
+# Read-only community, restricted to your APMonitor host only
+# Replace 192.168.1.50 with the IP of your APMonitor machine
+rocommunity YourCommunityString 192.168.1.50
+
+# Optional: identify the device
+sysLocation "Server Room Rack 3"
+sysContact "admin@example.com"
+sysName "my-debian-host"
+```
+
+## Enable and restart
+
+```bash
+sudo systemctl restart snmpd
+sudo systemctl enable snmpd
+```
+
+## Firewall
+
+If the host runs a firewall, allow UDP port 161 from your APMonitor machine only:
+
+```bash
+# ufw
+sudo ufw allow from 192.168.1.50 to any port 161 proto udp
+
+# iptables
+sudo iptables -A INPUT -s 192.168.1.50 -p udp --dport 161 -j ACCEPT
+```
+
+## Test from your APMonitor host
+
+```bash
+snmpwalk -v 2c -c YourCommunityString 192.168.1.x
+```
+
+## Notes
+
+- `rocommunity` is the read-only directive — the absence of any `rwcommunity` line is what keeps access strictly read-only.
+- Locking the source IP to your APMonitor machine is the primary access control on a LAN. Do not use `default` or `0.0.0.0/0` unless there is no alternative.
+- Change `YourCommunityString` to something non-obvious — `public` is the first string any scanner tries.
+- SNMPv3 with authentication and encryption is the correct choice for hosts on networks you do not fully trust. For a closed LAN behind a firewall, SNMPv2c with a non-default community string and source IP restriction is workable.
+
+## APMonitor configuration
+
+Once `snmpd` is running, add an `snmp` monitor pointing at the host:
+
+```yaml
+- type: snmp
+  name: my-debian-host
+  address: "snmp://192.168.1.x"
+  community: "YourCommunityString"
+  check_every_n_secs: 300
+```
+
 # MRTG/RRD Integration for Performance Graphing
 
 APMonitor integrates with MRTG (Multi Router Traffic Grapher) and RRDtool to provide historical performance graphs of resource availability and response times. This integration enables trend analysis, capacity planning, and visual monitoring dashboards.
@@ -1752,7 +1824,7 @@ under the [GNU General Public License version 3](LICENSE.txt).
 `mrtg-rrd.cgi.pl` is licensed by Jan "Yenya" Kasprzak <kas@fi.muni.cz><br />
 under the [GNU General Public License version 2](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html).
 ```
-Software: APMonitor 1.2.15
+Software: APMonitor 1.2.16
 License: GNU General Public License version 3
 Licensor: Andrew (AP) Prendergast, ap@andrewprendergast.com -- FSF Member
 
