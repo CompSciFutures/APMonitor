@@ -44,7 +44,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-__version__ = "1.2.16"
+__version__ = "1.3.0"
 __app_name__ = "APMonitor"
 
 import argparse
@@ -3855,7 +3855,7 @@ def generate_mrtg_index(all_config_files: List[str], index_path: str, site_name:
         "        body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; position: relative; }",
         "        h1 { color: #333; margin-bottom: 10px; }",
         "        h2 { color: #555; margin-top: 40px; margin-bottom: 20px; border-bottom: 2px solid #ddd; padding-bottom: 10px; }",
-        "        .grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 20px; }",
+        "        .grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 20px; }",
         "        .monitor { background: white; padding: 15px; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }",
         "        .monitor.down { background: #ffe8e8; }",
         "        .monitor h3 { margin-top: 0; font-size: 18px; color: #555; }",
@@ -3870,16 +3870,22 @@ def generate_mrtg_index(all_config_files: List[str], index_path: str, site_name:
         "        .network-cell h4 { margin-top: 0; margin-bottom: 4px; font-size: 11px; color: #666; text-align: center; }",
         "        .network-cell a { display: block; text-align: center; }",
         "        .network-cell img { max-width: 100%; height: auto; max-height: 80px; }",
+        # port-label-row: same grid as the chart row below it, labels sit in col 1 and col 5
+        "        .port-label-row { display: grid; gap: 20px; margin-bottom: 4px; }",
+        "        .port-label-cell { display: flex; align-items: flex-end; }",
+        "        .port-label-spacer { visibility: hidden; }",
         "        .header-clock { position: absolute; top: 0; right: 0; text-align: right; padding: 6px 12px; }",
         "        .header-clock-main { font-size: 36px; font-weight: bold; color: #333; }",
         "        .header-clock-world { font-size: 20px; color: #999; margin-top: 4px; }",
         "        @media (max-width: 1400px) { ",
-        "            .grid { grid-template-columns: repeat(3, 1fr); }",
+        "            .grid { grid-template-columns: repeat(4, 1fr); }",
         "            .network-row { grid-template-columns: repeat(var(--cols-narrow, 2), 1fr); }",
+        "            .port-label-row { grid-template-columns: repeat(var(--cols-narrow, 2), 1fr) !important; }",
         "        }",
         "        @media (max-width: 768px) { ",
         "            .grid { grid-template-columns: 1fr; }",
         "            .network-row { grid-template-columns: 1fr; }",
+        "            .port-label-row { grid-template-columns: 1fr !important; }",
         "        }",
         "    </style>",
         "</head>",
@@ -3891,75 +3897,149 @@ def generate_mrtg_index(all_config_files: List[str], index_path: str, site_name:
         f"    <h1>{site_name}</h1>",
     ]
 
-    # Add Network Monitoring section (SNMP monitors)
-    if snmp_monitors:
-        html_lines.append("    <h2>L2/L3 Network Monitoring</h2>")
+    def _emit_snmp_row(base_name: str, monitor: Dict[str, Any]) -> None:
+        """Emit one snmp monitor row (label + network-row grid)."""
+        targets = monitor.get('targets', set())
+        has_retransmits = f"{base_name}-retransmits" in targets
+        has_system      = f"{base_name}-system"      in targets
 
-        # Iterate in insertion order — mirrors config file order, user-controllable via monitors: list
-        for base_name, monitor in snmp_monitors.items():
-            targets = monitor.get('targets', set())
-            has_retransmits = f"{base_name}-retransmits" in targets
-            has_system      = f"{base_name}-system"      in targets
+        col_count = 4 + int(has_retransmits) + int(has_system)
+        col_narrow = min(col_count, 3)
+        col_style = f"repeat({col_count}, 1fr); --cols-narrow: {col_narrow}"
 
-            # Grid column count matches the number of cells actually emitted
-            col_count = 4 + int(has_retransmits) + int(has_system)
-            col_narrow = min(col_count, 3)
-            col_style = f"repeat({col_count}, 1fr); --cols-narrow: {col_narrow}"
+        plain_name = re.sub(r'^[^:]+:\s*', '', monitor['title'])
+        monitor_state = state.get(plain_name, {}) if state else {}
+        is_down = not monitor_state.get('is_up', True)
+        label_class = "network-host-label down" if is_down else "network-host-label"
+        cell_class  = "network-cell down" if is_down else "network-cell"
+        outage_str = f" &nbsp;<span style='font-weight: normal; font-size: 13px;'>Down {format_time_ago(monitor_state.get('last_alarm_started'))}</span>" if is_down else ""
 
-            # Down state: monitor['title'] carries the type prefix (e.g. "snmp: debmon") —
-            # strip it to get the plain monitor name that matches statefile keys
+        html_lines.extend([
+            f"    <div class='{label_class}'>{monitor['title']}{outage_str}</div>",
+            f"    <div class='network-row' style='grid-template-columns: {col_style};'>",
+            f"        <div class='{cell_class}'>",
+            "            <h4>Total Bandwidth In/Out</h4>",
+            f"            <a href='/mrtg-rrd/{base_name}-bandwidth.html'>",
+            f"                <img src='/mrtg-rrd/{base_name}-bandwidth-day.png' alt='{monitor['title']} Bandwidth'>",
+            "            </a>",
+            "        </div>",
+            f"        <div class='{cell_class}'>",
+            "            <h4>Total Packets In/Out</h4>",
+            f"            <a href='/mrtg-rrd/{base_name}-packets.html'>",
+            f"                <img src='/mrtg-rrd/{base_name}-packets-day.png' alt='{monitor['title']} Packets'>",
+            "            </a>",
+            "        </div>",
+            f"        <div class='{cell_class}'>",
+            "            <h4>Unicast vs B+Mcast Packets</h4>",
+            f"            <a href='/mrtg-rrd/{base_name}-packets-type.html'>",
+            f"                <img src='/mrtg-rrd/{base_name}-packets-type-day.png' alt='{monitor['title']} Packet Types'>",
+            "            </a>",
+            "        </div>",
+            f"        <div class='{cell_class}'>",
+            "            <h4>Interface Errors In/Out</h4>",
+            f"            <a href='/mrtg-rrd/{base_name}-errors.html'>",
+            f"                <img src='/mrtg-rrd/{base_name}-errors-day.png' alt='{monitor['title']} Errors'>",
+            "            </a>",
+            "        </div>",
+            *([
+                f"        <div class='{cell_class}'>",
+                "            <h4>TCP Retransmits</h4>",
+                f"            <a href='/mrtg-rrd/{base_name}-retransmits.html'>",
+                f"                <img src='/mrtg-rrd/{base_name}-retransmits-day.png' alt='{monitor['title']} TCP Retransmits'>",
+                "            </a>",
+                "        </div>",
+            ] if has_retransmits else []),
+            *([
+                f"        <div class='{cell_class}'>",
+                "            <h4>CPU & Memory</h4>",
+                f"            <a href='/mrtg-rrd/{base_name}-system.html'>",
+                f"                <img src='/mrtg-rrd/{base_name}-system-day.png' alt='{monitor['title']} System'>",
+                "            </a>",
+                "        </div>",
+            ] if has_system else []),
+            "    </div>",
+        ])
+
+    def _emit_port_group(run: List[Tuple[str, Dict[str, Any]]]) -> None:
+        """Emit a contiguous run of port monitors as a single grid (8-up or 4-up).
+
+        Layout: label row + chart row share the same column grid so labels sit
+        directly above their respective 4-cell blocks on the grey background.
+
+        Label row columns:
+          - col 1: monitor name label
+          - cols 2-4: invisible spacers (maintain grid alignment)
+          - col 5 (if 2nd monitor): monitor name label
+          - cols 6-8: invisible spacers
+        """
+        col_count = 8 if len(run) >= 2 else 4
+        col_narrow = min(col_count, 4)
+        col_style = f"repeat({col_count}, 1fr); --cols-narrow: {col_narrow}"
+
+        port_targets = [
+            ('-bandwidth',    'Bandwidth In/Out'),
+            ('-packets',      'Packets In/Out'),
+            ('-packets-type', 'Unicast vs B+Mcast'),
+            ('-errors',       'Errors In/Out'),
+        ]
+
+        # --- label row: one cell per column, labels at col 1 and col 5 ---
+        html_lines.append(f"    <div class='port-label-row' style='grid-template-columns: {col_style};'>")
+        for base_name, monitor in run:
             plain_name = re.sub(r'^[^:]+:\s*', '', monitor['title'])
             monitor_state = state.get(plain_name, {}) if state else {}
             is_down = not monitor_state.get('is_up', True)
             label_class = "network-host-label down" if is_down else "network-host-label"
-            cell_class  = "network-cell down" if is_down else "network-cell"
             outage_str = f" &nbsp;<span style='font-weight: normal; font-size: 13px;'>Down {format_time_ago(monitor_state.get('last_alarm_started'))}</span>" if is_down else ""
+            # Label cell at position 1 (or 5 for second monitor)
+            html_lines.append(f"        <div class='port-label-cell'><span class='{label_class}'>{monitor['title']}{outage_str}</span></div>")
+            # Three invisible spacer cells to fill cols 2-4 (or 6-8)
+            for _ in range(3):
+                html_lines.append("        <div class='port-label-cell port-label-spacer'></div>")
+        html_lines.append("    </div>")
 
-            html_lines.extend([
-                f"    <div class='{label_class}'>{monitor['title']}{outage_str}</div>",
-                f"    <div class='network-row' style='grid-template-columns: {col_style};'>",
-                f"        <div class='{cell_class}'>",
-                "            <h4>Total Bandwidth In/Out</h4>",
-                f"            <a href='/mrtg-rrd/{base_name}-bandwidth.html'>",
-                f"                <img src='/mrtg-rrd/{base_name}-bandwidth-day.png' alt='{monitor['title']} Bandwidth'>",
-                "            </a>",
-                "        </div>",
-                f"        <div class='{cell_class}'>",
-                "            <h4>Total Packets In/Out</h4>",
-                f"            <a href='/mrtg-rrd/{base_name}-packets.html'>",
-                f"                <img src='/mrtg-rrd/{base_name}-packets-day.png' alt='{monitor['title']} Packets'>",
-                "            </a>",
-                "        </div>",
-                f"        <div class='{cell_class}'>",
-                "            <h4>Unicast vs B+Mcast Packets</h4>",
-                f"            <a href='/mrtg-rrd/{base_name}-packets-type.html'>",
-                f"                <img src='/mrtg-rrd/{base_name}-packets-type-day.png' alt='{monitor['title']} Packet Types'>",
-                "            </a>",
-                "        </div>",
-                f"        <div class='{cell_class}'>",
-                "            <h4>Interface Errors In/Out</h4>",
-                f"            <a href='/mrtg-rrd/{base_name}-errors.html'>",
-                f"                <img src='/mrtg-rrd/{base_name}-errors-day.png' alt='{monitor['title']} Errors'>",
-                "            </a>",
-                "        </div>",
-                *([
+        # --- chart row ---
+        html_lines.append(f"    <div class='network-row' style='grid-template-columns: {col_style};'>")
+        for base_name, monitor in run:
+            plain_name = re.sub(r'^[^:]+:\s*', '', monitor['title'])
+            monitor_state = state.get(plain_name, {}) if state else {}
+            is_down = not monitor_state.get('is_up', True)
+            cell_class = "network-cell down" if is_down else "network-cell"
+
+            for suffix, heading in port_targets:
+                html_lines.extend([
                     f"        <div class='{cell_class}'>",
-                    "            <h4>TCP Retransmits</h4>",
-                    f"            <a href='/mrtg-rrd/{base_name}-retransmits.html'>",
-                    f"                <img src='/mrtg-rrd/{base_name}-retransmits-day.png' alt='{monitor['title']} TCP Retransmits'>",
+                    f"            <h4>{heading}</h4>",
+                    f"            <a href='/mrtg-rrd/{base_name}{suffix}.html'>",
+                    f"                <img src='/mrtg-rrd/{base_name}{suffix}-day.png' alt='{monitor['title']} {heading}'>",
                     "            </a>",
                     "        </div>",
-                ] if has_retransmits else []),
-                *([
-                    f"        <div class='{cell_class}'>",
-                    "            <h4>CPU & Memory</h4>",
-                    f"            <a href='/mrtg-rrd/{base_name}-system.html'>",
-                    f"                <img src='/mrtg-rrd/{base_name}-system-day.png' alt='{monitor['title']} System'>",
-                    "            </a>",
-                    "        </div>",
-                ] if has_system else []),
-                "    </div>",
-            ])
+                ])
+        html_lines.append("    </div>")
+
+    # Add Network Monitoring section — iterate snmp_monitors in insertion order,
+    # flushing contiguous runs of port monitors as grouped grids.
+    if snmp_monitors:
+        html_lines.append("    <h2>L2/L3 Network Monitoring</h2>")
+
+        port_run: List[Tuple[str, Dict[str, Any]]] = []
+        port_count_total = 0
+
+        for base_name, monitor in snmp_monitors.items():
+            is_port = monitor['title'].startswith('port: ')
+            if is_port:
+                port_run.append((base_name, monitor))
+                port_count_total += 1
+            else:
+                # Flush any buffered port run before this snmp row
+                if port_run:
+                    _emit_port_group(port_run)
+                    port_run = []
+                _emit_snmp_row(base_name, monitor)
+
+        # Flush any trailing port run
+        if port_run:
+            _emit_port_group(port_run)
 
     # Add Availability Monitoring section (non-SNMP monitors)
     if all_monitors:
@@ -4027,10 +4107,10 @@ def generate_mrtg_index(all_config_files: List[str], index_path: str, site_name:
         os.replace(new_path, current_path)
 
         if VERBOSE:
-            snmp_count = len(snmp_monitors)
+            snmp_count = sum(1 for m in snmp_monitors.values() if not m['title'].startswith('port: '))
             avail_count = len(all_monitors)
             hidden_count = len(hidden_monitors) if hidden_monitors else 0
-            print(f"{prefix}Generated MRTG master index: {index_path} ({snmp_count} SNMP hosts, {avail_count} availability monitors, {hidden_count} hidden)")
+            print(f"{prefix}Generated MRTG master index: {index_path} ({snmp_count} SNMP hosts, {port_count_total} port monitors, {avail_count} availability monitors, {hidden_count} hidden)")
 
     except Exception as e:
         print(f"{prefix}Failed to generate MRTG master index '{index_path}': {e}", file=sys.stderr)
