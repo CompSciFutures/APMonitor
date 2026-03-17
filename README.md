@@ -100,14 +100,14 @@ consider these on-prem alternatives:
 - Uptime Kuma
 - Statping
 - UptimeRobot
-- Paesler PRTG
+- Paessler PRTG
 
 APMonitor is simple, minimalist, elegant and lightweight and comes from a reliable line of heritage so you can spin 
 it up fast as a 2nd opinion monitoring tool with little more than a `make install`. If you want something more 
 sophisticated that's less focused on realtime programming or elegant simplicity, take a look at those very capable
 alternatives.
 
-## Expected Output with MRTG/RRD Integration Enabled
+# Expected Output with MRTG/RRD Integration Enabled
 
 Installing MRTG with `make install; make installmrtg` will spin up via `rc.d` a small lightweight NGINX web server with FastCGI on http://localhost:888/, as follows:
 
