@@ -11,6 +11,8 @@ Thread safe, reentrant, modifiable.
 
 # Release 1.3.1 (???): ???
 - Added 'Buy me a coffee' comment + made MRTG/RRD more prominent in docs
+- Added reference to nixtla.io seasonal decomposition tools.
+- Added note about support for 4K 3840x2160 16:9 highdpi screens
 
 # Release 1.3.0 (17-Mar-26): T1 NOC MRTG Tweaks (8-up per row)
 - Made availability monitors 8-up per row 
