@@ -382,6 +382,9 @@ Installing MRTG with `make install; make installmrtg` will spin up via `rc.d` a 
 
 ![mrtg-availability.png](images/mrtg-availability.png)
 
+This layout is specifically designed for 4K highdpi screens. It's not uncommon to see modern NOCs with an array of these on the wall at eye height when someone is sitting down. 
+Instead of just having CCTV, you can now add some proper network telemetry and instrumentation, say on the top row of screens.
+
 Note the NGINX/FastCGI combination means we don't need to keep a machine chewing on itself generating charts anymore - they are now generated on demand in near-realtime and extremely efficiently. The only I/O is the RRD files, which under the hood operate very much like the older MRTG text file format.
 
 I chose RRD because it's a rather good frequency domain format for data warehousing of frequency domain sample data that's still compatible with Tier 1 NOCs. 
