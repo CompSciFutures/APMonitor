@@ -107,7 +107,7 @@ it up fast as a 2nd opinion monitoring tool with little more than a `make instal
 sophisticated that's less focused on realtime programming or elegant simplicity, take a look at those very capable
 alternatives.
 
-# Expected Output with MRTG/RRD Integration Enabled
+# Expected Output with <a href="https://github.com/CompSciFutures/APMonitor?tab=readme-ov-file#mrtgrrd-integration-for-performance-graphing">MRTG/RRD Integration Enabled</a>
 
 Installing MRTG with `make install; make installmrtg` will spin up via `rc.d` a small lightweight NGINX web server with FastCGI on http://localhost:888/, as follows:
 
@@ -1839,7 +1839,7 @@ under the [GNU General Public License version 3](LICENSE.txt).
 `mrtg-rrd.cgi.pl` is licensed by Jan "Yenya" Kasprzak <kas@fi.muni.cz><br />
 under the [GNU General Public License version 2](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html).
 ```
-Software: APMonitor 1.3.0
+Software: APMonitor 1.3.1
 License: GNU General Public License version 3
 Licensor: Andrew (AP) Prendergast, ap@andrewprendergast.com -- FSF Member
 

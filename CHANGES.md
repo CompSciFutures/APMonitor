@@ -9,6 +9,9 @@ Multithreaded high speed availability checking for SNMP, PING, TCP/UDP, QUIC & H
 Integrates w/Site24x7 heartbeat monitoring for failover alerts + MRTG + Slack & Pushover webhooks.
 Thread safe, reentrant, modifiable.
 
+# Release 1.3.1 (???): ???
+- Added 'Buy me a coffee' comment + made MRTG/RRD more prominent in docs
+
 # Release 1.3.0 (17-Mar-26): T1 NOC MRTG Tweaks (8-up per row)
 - Made availability monitors 8-up per row 
 - Made port monitors render 8-up (2 ports) per row
