@@ -98,6 +98,7 @@ consider these on-prem alternatives:
 - Uptime Kuma
 - Statping
 - UptimeRobot
+- Paesler PRTG
 
 APMonitor is simple, minimalist, elegant and lightweight and comes from a reliable line of heritage so you can spin 
 it up fast as a 2nd opinion monitoring tool with little more than a `make install`. If you want something more 
@@ -469,7 +470,7 @@ site:
   after_every_n_notifications: 1
 
 monitors:
-  # Single-port MAC-pinning monitor
+  # Single-port MAC-pinning monitor (hidden from MRTG display, monitoring continues)
   - type: port
     name: "switch-port0"
     address: snmp://192.168.1.6
@@ -480,6 +481,7 @@ monitors:
     port: 0
     mac: 18:E8:29:45:F8:F7
     always_up: yes
+    display: false
 
   # Switch port status monitoring with per-interface silence windows
   - type: ports
@@ -737,6 +739,13 @@ email: true
 ```
 
 **Note**: When set to `false`, this monitor will not send any email notifications regardless of site-level `outage_emails` configuration. Useful for non-critical resources or during maintenance windows. This is a monitor-level override that takes precedence over all other email settings.
+
+- **`display`** (boolean/integer/string, optional): Controls whether this monitor appears in the MRTG index page. Accepts: `true`/`yes`/`on`/`1` (case-insensitive) for visible, `false`/`no`/`off`/`0` for hidden. Default: true (displayed)
+```yaml
+display: false
+```
+
+**Note**: When set to `false`, the monitor is completely excluded from the MRTG index HTML output and MRTG config file — no graphs are generated and no graph cells appear. Monitoring, alerting, heartbeats, and RRD data collection continue unaffected. Hidden monitors are listed by name in a small audit footer at the bottom of the MRTG index page; if a hidden monitor is down, its name appears in red in that footer so outages remain visible as a detective control. Useful for suppressing internal infrastructure monitors (e.g., the APMonitor host itself) that would clutter the dashboard without adding operational value.
 
 - **`heartbeat_url`** (string, optional): URL to ping (HTTP GET) when resource check succeeds. Useful for external monitoring services like Site24x7 or Healthchecks.io. Must be valid URL with scheme and host.
 ```yaml
@@ -1242,6 +1251,7 @@ The configuration validator enforces these rules:
 32. `always_up` is optional for `port` monitors and accepts boolean or string values
 33. `expect`, `ssl_fingerprint`, `ignore_ssl_expiry`, `send`, `content_type`, `percentile` are not allowed for `port` monitors
 34. `port` monitors support `heartbeat_url` and `heartbeat_every_n_secs` like other monitor types
+35. `display` is optional for all monitor types and accepts boolean or string values; when `false`, the monitor is excluded from MRTG index output but monitoring, alerting, heartbeats, and RRD collection continue unaffected; hidden monitors appear in the MRTG index audit footer and render in red when down
 
 # Dependencies
 

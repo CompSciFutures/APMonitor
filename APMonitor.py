@@ -490,7 +490,8 @@ def print_and_exit_on_bad_config(config: Dict[str, Any]) -> None:
                 'type', 'name', 'address', 'check_every_n_secs', 'notify_every_n_secs',
                 'notify_on_down_every_n_secs', 'after_every_n_notifications', 'heartbeat_url',
                 'heartbeat_every_n_secs', 'expect', 'ssl_fingerprint', 'ignore_ssl_expiry', 'email',
-                'send', 'content_type', 'community', 'percentile', 'port', 'mac', 'always_up'
+                'send', 'content_type', 'community', 'percentile', 'port', 'mac', 'always_up',
+                'display'
             }
             unrecognized_monitor = set(monitor.keys()) - valid_monitor_params
             if unrecognized_monitor:
@@ -544,6 +545,13 @@ def print_and_exit_on_bad_config(config: Dict[str, Any]) -> None:
                     to_natural_language_boolean(monitor['email'])
                 except ValueError as e:
                     raise ConfigError(f"Monitor {i} (name: {name}): 'email' field: {e}")
+
+            # Validate optional display flag
+            if 'display' in monitor:
+                try:
+                    to_natural_language_boolean(monitor['display'])
+                except ValueError as e:
+                    raise ConfigError(f"Monitor {i} (name: {name}): 'display' field: {e}")
 
             monitor_type = monitor['type']
             address = monitor['address']
@@ -1901,10 +1909,14 @@ def check_snmp_resource(resource: Dict[str, Any]) -> Optional[str]:
                 storage_items = session.walk(OID_HR_STORAGE_DESCR)
 
                 # Find physical memory entry (description contains "memory" or "RAM")
+                # Known descriptions by platform:
+                #   Debian/Ubuntu net-snmp:  "Physical memory"
+                #   Some BSD/Linux net-snmp: "Real Memory"
+                #   Generic fallback:        "Memory" or contains "RAM"
                 memory_index = None
                 for item in storage_items:
                     descr = item.value.lower()
-                    if 'physical memory' in descr or 'ram' in descr or descr == 'memory':
+                    if 'physical memory' in descr or 'real memory' in descr or 'ram' in descr or descr == 'memory':
                         memory_index = item.oid.split('.')[-1]
                         if VERBOSE:
                             print(f"{prefix}Found memory storage entry: index={memory_index} descr='{item.value}'")
@@ -3540,19 +3552,26 @@ def generate_mrtg_config(config: Dict[str, Any], work_dir: str, mrtg_config_path
         safe_name = re.sub(r'[^\w\-.]', '_', resource['name'])
         monitor_type = resource['type']
 
+        # Skip monitors explicitly excluded from MRTG display (monitoring continues unaffected)
+        if not to_natural_language_boolean(resource.get('display', True)):
+            continue
+
         if monitor_type in ('snmp', 'port'):
             rrd_path = get_rrd_path(resource['name'], 'snmp')
             percentile = resource.get('percentile') if monitor_type == 'snmp' else None
 
+            # Prefix monitor name with type for index and graph page identification
+            display_name = f"{monitor_type}: {resource['name']}"
+
             # Target 1: Bandwidth (total_bits_in / total_bits_out)
             mrtg_lines.extend([
                 f"######################################################################",
-                f"# {resource['name']} - Total Bandwidth",
+                f"# {display_name} - Total Bandwidth",
                 f"",
                 f"Target[{safe_name}-bandwidth]: total_bits_in&total_bits_out:{rrd_path}",
                 f"MaxBytes[{safe_name}-bandwidth]: 10000000000",  # 10 Gbps max
-                f"Title[{safe_name}-bandwidth]: {resource['name']} - Total Bandwidth",
-                f"PageTop[{safe_name}-bandwidth]: <h1>{resource['name']} ({resource['address']})</h1><h2>Total Bandwidth In/Out</h2>",
+                f"Title[{safe_name}-bandwidth]: {display_name} - Total Bandwidth",
+                f"PageTop[{safe_name}-bandwidth]: <h1>{display_name} ({resource['address']})</h1><h2>Total Bandwidth In/Out</h2>",
                 f"Options[{safe_name}-bandwidth]: gauge,nopercent,growright,bits",
                 f"YLegend[{safe_name}-bandwidth]: Bits per second",
                 f"ShortLegend[{safe_name}-bandwidth]: b/s",
@@ -3568,12 +3587,12 @@ def generate_mrtg_config(config: Dict[str, Any], work_dir: str, mrtg_config_path
             # Target 2: Packets (total_pkts_in / total_pkts_out)
             mrtg_lines.extend([
                 f"######################################################################",
-                f"# {resource['name']} - Total Packets",
+                f"# {display_name} - Total Packets",
                 f"",
                 f"Target[{safe_name}-packets]: total_pkts_in&total_pkts_out:{rrd_path}",
                 f"MaxBytes[{safe_name}-packets]: 10000000",  # 10M pps max
-                f"Title[{safe_name}-packets]: {resource['name']} - Total Packets",
-                f"PageTop[{safe_name}-packets]: <h1>{resource['name']} ({resource['address']})</h1><h2>Total Packets In/Out</h2>",
+                f"Title[{safe_name}-packets]: {display_name} - Total Packets",
+                f"PageTop[{safe_name}-packets]: <h1>{display_name} ({resource['address']})</h1><h2>Total Packets In/Out</h2>",
                 f"Options[{safe_name}-packets]: gauge,nopercent,growright",
                 f"YLegend[{safe_name}-packets]: Packets per second",
                 f"ShortLegend[{safe_name}-packets]: pps",
@@ -3589,12 +3608,12 @@ def generate_mrtg_config(config: Dict[str, Any], work_dir: str, mrtg_config_path
             # Target 3: Packet type split (unicast vs broadcast+multicast, in+out combined)
             mrtg_lines.extend([
                 f"######################################################################",
-                f"# {resource['name']} - Packet Type Split (Unicast vs Broadcast+Multicast)",
+                f"# {display_name} - Packet Type Split (Unicast vs Broadcast+Multicast)",
                 f"",
                 f"Target[{safe_name}-packets-type]: total_pkts_ucast&total_pkts_bmcast:{rrd_path}",
                 f"MaxBytes[{safe_name}-packets-type]: 10000000",  # 10M pps max
-                f"Title[{safe_name}-packets-type]: {resource['name']} - Packet Type Split",
-                f"PageTop[{safe_name}-packets-type]: <h1>{resource['name']} ({resource['address']})</h1><h2>Unicast vs Broadcast+Multicast Packets</h2>",
+                f"Title[{safe_name}-packets-type]: {display_name} - Packet Type Split",
+                f"PageTop[{safe_name}-packets-type]: <h1>{display_name} ({resource['address']})</h1><h2>Unicast vs Broadcast+Multicast Packets</h2>",
                 f"Options[{safe_name}-packets-type]: gauge,nopercent,growright",
                 f"YLegend[{safe_name}-packets-type]: Packets per second",
                 f"ShortLegend[{safe_name}-packets-type]: pps",
@@ -3610,12 +3629,12 @@ def generate_mrtg_config(config: Dict[str, Any], work_dir: str, mrtg_config_path
             # Target 4: Interface Errors (total_errors_in / total_errors_out)
             mrtg_lines.extend([
                 f"######################################################################",
-                f"# {resource['name']} - Interface Errors",
+                f"# {display_name} - Interface Errors",
                 f"",
                 f"Target[{safe_name}-errors]: total_errors_in&total_errors_out:{rrd_path}",
                 f"MaxBytes[{safe_name}-errors]: 1000000",
-                f"Title[{safe_name}-errors]: {resource['name']} - Interface Errors",
-                f"PageTop[{safe_name}-errors]: <h1>{resource['name']} ({resource['address']})</h1><h2>Interface Errors In/Out</h2>",
+                f"Title[{safe_name}-errors]: {display_name} - Interface Errors",
+                f"PageTop[{safe_name}-errors]: <h1>{display_name} ({resource['address']})</h1><h2>Interface Errors In/Out</h2>",
                 f"Options[{safe_name}-errors]: gauge,nopercent,growright",
                 f"YLegend[{safe_name}-errors]: Errors per second",
                 f"ShortLegend[{safe_name}-errors]: err/s",
@@ -3632,12 +3651,12 @@ def generate_mrtg_config(config: Dict[str, Any], work_dir: str, mrtg_config_path
                 # Target 5: TCP Retransmits (tcp_retrans / tcp_retrans - same DS for both to show single line)
                 mrtg_lines.extend([
                     f"######################################################################",
-                    f"# {resource['name']} - TCP Retransmits",
+                    f"# {display_name} - TCP Retransmits",
                     f"",
                     f"Target[{safe_name}-retransmits]: tcp_retrans&tcp_retrans:{rrd_path}",
                     f"MaxBytes[{safe_name}-retransmits]: 100000",  # 100k retrans/sec max
-                    f"Title[{safe_name}-retransmits]: {resource['name']} - TCP Retransmits",
-                    f"PageTop[{safe_name}-retransmits]: <h1>{resource['name']} ({resource['address']})</h1><h2>TCP Retransmits</h2>",
+                    f"Title[{safe_name}-retransmits]: {display_name} - TCP Retransmits",
+                    f"PageTop[{safe_name}-retransmits]: <h1>{display_name} ({resource['address']})</h1><h2>TCP Retransmits</h2>",
                     f"Options[{safe_name}-retransmits]: gauge,nopercent,growright",
                     f"YLegend[{safe_name}-retransmits]: Retransmits per second",
                     f"ShortLegend[{safe_name}-retransmits]: retrans/s",
@@ -3653,12 +3672,12 @@ def generate_mrtg_config(config: Dict[str, Any], work_dir: str, mrtg_config_path
                 # Target 6: System (cpu_load / memory_pct)
                 mrtg_lines.extend([
                     f"######################################################################",
-                    f"# {resource['name']} - CPU & Memory Utilization",
+                    f"# {display_name} - CPU & Memory Utilization",
                     f"",
                     f"Target[{safe_name}-system]: cpu_load&memory_pct:{rrd_path}",
                     f"MaxBytes[{safe_name}-system]: 100",  # Percentage 0-100
-                    f"Title[{safe_name}-system]: {resource['name']} - System Resources",
-                    f"PageTop[{safe_name}-system]: <h1>{resource['name']} ({resource['address']})</h1><h2>CPU & Memory Utilization</h2>",
+                    f"Title[{safe_name}-system]: {display_name} - System Resources",
+                    f"PageTop[{safe_name}-system]: <h1>{display_name} ({resource['address']})</h1><h2>CPU & Memory Utilization</h2>",
                     f"Options[{safe_name}-system]: gauge,nopercent,growright",
                     f"YLegend[{safe_name}-system]: Utilization %",
                     f"ShortLegend[{safe_name}-system]: %",
@@ -3719,7 +3738,7 @@ def generate_mrtg_config(config: Dict[str, Any], work_dir: str, mrtg_config_path
         print(f"{prefix}Failed to generate MRTG config '{mrtg_config_path}': {e}", file=sys.stderr)
 
 
-def generate_mrtg_index(all_config_files: List[str], index_path: str, site_name: str = "Availability Monitoring", state: Dict[str, Any] = None) -> None:
+def generate_mrtg_index(all_config_files: List[str], index_path: str, site_name: str = "Availability Monitoring", state: Dict[str, Any] = None, hidden_monitors: Optional[List[Dict[str, Any]]] = None) -> None:
     """Generate index.html with Network Monitoring (SNMP) and Availability Monitoring sections using atomic file rotation.
 
     Args:
@@ -3727,6 +3746,7 @@ def generate_mrtg_index(all_config_files: List[str], index_path: str, site_name:
         index_path: Full path to index.html file to create (will use .new/.old rotation)
         site_name: Site name for page heading (from APMonitor config)
         state: APMonitor state dict for outage highlighting (optional)
+        hidden_monitors: List of monitor dicts with display=false — shown in audit footer only (optional)
     """
     prefix = getattr(thread_local, 'prefix', '')
 
@@ -3778,7 +3798,9 @@ def generate_mrtg_index(all_config_files: List[str], index_path: str, site_name:
                             base_name = target_name[:-len(s)]
                             break
 
-                    # Store metadata once per base name; accumulate target set for cell gating
+                    # Store metadata once per base name; accumulate target set for cell gating.
+                    # Insertion order is preserved (Python 3.7+ dict) — display order follows
+                    # config file order, which is controlled by the user via the monitors: list.
                     if base_name not in snmp_monitors:
                         monitor_info['targets'] = set()
                         snmp_monitors[base_name] = monitor_info
@@ -3840,9 +3862,11 @@ def generate_mrtg_index(all_config_files: List[str], index_path: str, site_name:
         "        .monitor a { text-decoration: none; color: inherit; }",
         "        .monitor a:hover { text-decoration: underline; }",
         "        .monitor img { max-width: 100%; height: auto; }",
-        "        .network-host-label { font-size: 16px; font-weight: bold; color: #333; margin-bottom: 10px; }",
+        "        .network-host-label { font-size: 16px; font-weight: bold; color: #333; margin-bottom: 10px; padding: 6px 10px; border-radius: 4px; display: inline-block; }",
+        "        .network-host-label.down { background: #ffe8e8; color: #cc0000; }",
         "        .network-row { display: grid; gap: 20px; margin-bottom: 20px; }",
         "        .network-cell { background: white; padding: 8px; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }",
+        "        .network-cell.down { background: #ffe8e8; }",
         "        .network-cell h4 { margin-top: 0; margin-bottom: 4px; font-size: 11px; color: #666; text-align: center; }",
         "        .network-cell a { display: block; text-align: center; }",
         "        .network-cell img { max-width: 100%; height: auto; max-height: 80px; }",
@@ -3871,7 +3895,8 @@ def generate_mrtg_index(all_config_files: List[str], index_path: str, site_name:
     if snmp_monitors:
         html_lines.append("    <h2>L2/L3 Network Monitoring</h2>")
 
-        for base_name, monitor in sorted(snmp_monitors.items()):
+        # Iterate in insertion order — mirrors config file order, user-controllable via monitors: list
+        for base_name, monitor in snmp_monitors.items():
             targets = monitor.get('targets', set())
             has_retransmits = f"{base_name}-retransmits" in targets
             has_system      = f"{base_name}-system"      in targets
@@ -3881,35 +3906,44 @@ def generate_mrtg_index(all_config_files: List[str], index_path: str, site_name:
             col_narrow = min(col_count, 3)
             col_style = f"repeat({col_count}, 1fr); --cols-narrow: {col_narrow}"
 
+            # Down state: monitor['title'] carries the type prefix (e.g. "snmp: debmon") —
+            # strip it to get the plain monitor name that matches statefile keys
+            plain_name = re.sub(r'^[^:]+:\s*', '', monitor['title'])
+            monitor_state = state.get(plain_name, {}) if state else {}
+            is_down = not monitor_state.get('is_up', True)
+            label_class = "network-host-label down" if is_down else "network-host-label"
+            cell_class  = "network-cell down" if is_down else "network-cell"
+            outage_str = f" &nbsp;<span style='font-weight: normal; font-size: 13px;'>Down {format_time_ago(monitor_state.get('last_alarm_started'))}</span>" if is_down else ""
+
             html_lines.extend([
-                f"    <div class='network-host-label'>{monitor['title']}</div>",
+                f"    <div class='{label_class}'>{monitor['title']}{outage_str}</div>",
                 f"    <div class='network-row' style='grid-template-columns: {col_style};'>",
-                "        <div class='network-cell'>",
+                f"        <div class='{cell_class}'>",
                 "            <h4>Total Bandwidth In/Out</h4>",
                 f"            <a href='/mrtg-rrd/{base_name}-bandwidth.html'>",
                 f"                <img src='/mrtg-rrd/{base_name}-bandwidth-day.png' alt='{monitor['title']} Bandwidth'>",
                 "            </a>",
                 "        </div>",
-                "        <div class='network-cell'>",
+                f"        <div class='{cell_class}'>",
                 "            <h4>Total Packets In/Out</h4>",
                 f"            <a href='/mrtg-rrd/{base_name}-packets.html'>",
                 f"                <img src='/mrtg-rrd/{base_name}-packets-day.png' alt='{monitor['title']} Packets'>",
                 "            </a>",
                 "        </div>",
-                "        <div class='network-cell'>",
+                f"        <div class='{cell_class}'>",
                 "            <h4>Unicast vs B+Mcast Packets</h4>",
                 f"            <a href='/mrtg-rrd/{base_name}-packets-type.html'>",
                 f"                <img src='/mrtg-rrd/{base_name}-packets-type-day.png' alt='{monitor['title']} Packet Types'>",
                 "            </a>",
                 "        </div>",
-                "        <div class='network-cell'>",
+                f"        <div class='{cell_class}'>",
                 "            <h4>Interface Errors In/Out</h4>",
                 f"            <a href='/mrtg-rrd/{base_name}-errors.html'>",
                 f"                <img src='/mrtg-rrd/{base_name}-errors-day.png' alt='{monitor['title']} Errors'>",
                 "            </a>",
                 "        </div>",
                 *([
-                    "        <div class='network-cell'>",
+                    f"        <div class='{cell_class}'>",
                     "            <h4>TCP Retransmits</h4>",
                     f"            <a href='/mrtg-rrd/{base_name}-retransmits.html'>",
                     f"                <img src='/mrtg-rrd/{base_name}-retransmits-day.png' alt='{monitor['title']} TCP Retransmits'>",
@@ -3917,7 +3951,7 @@ def generate_mrtg_index(all_config_files: List[str], index_path: str, site_name:
                     "        </div>",
                 ] if has_retransmits else []),
                 *([
-                    "        <div class='network-cell'>",
+                    f"        <div class='{cell_class}'>",
                     "            <h4>CPU & Memory</h4>",
                     f"            <a href='/mrtg-rrd/{base_name}-system.html'>",
                     f"                <img src='/mrtg-rrd/{base_name}-system-day.png' alt='{monitor['title']} System'>",
@@ -3953,8 +3987,25 @@ def generate_mrtg_index(all_config_files: List[str], index_path: str, site_name:
 
         html_lines.append("    </div>")
 
+    # Build hidden monitors audit footer — omitted entirely if no monitors are hidden
+    if hidden_monitors:
+        hidden_parts = []
+        for m in hidden_monitors:
+            monitor_state = state.get(m['name'], {}) if state else {}
+            is_down = not monitor_state.get('is_up', True)
+            if is_down:
+                outage_str = f" (down {format_time_ago(monitor_state.get('last_alarm_started'))})"
+                hidden_parts.append(f"<span style='color: #cc0000;'>{m['name']}{outage_str}</span>")
+            else:
+                hidden_parts.append(f"<span style='color: #aaa;'>{m['name']}</span>")
+        hidden_line = ", ".join(hidden_parts)
+        html_lines.append(
+            f"    <p style='margin-top: 20px; text-align: center; color: #333; font-size: 14px; font-weight: bold;'>"
+            f"Not displayed: {hidden_line}</p>"
+        )
+
     html_lines.extend([
-        f"    <p style='margin-top: 40px; text-align: center; color: #888; font-size: 12px;'>Generated by <a href='https://github.com/CompSciFutures/APMonitor/'>APMonitor v{__version__}</a> at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>",
+        f"    <p style='margin-top: 10px; text-align: center; color: #888; font-size: 12px;'>Generated by <a href='https://github.com/CompSciFutures/APMonitor/'>APMonitor v{__version__}</a> at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>",
         "</body>",
         "</html>",
     ])
@@ -3978,7 +4029,8 @@ def generate_mrtg_index(all_config_files: List[str], index_path: str, site_name:
         if VERBOSE:
             snmp_count = len(snmp_monitors)
             avail_count = len(all_monitors)
-            print(f"{prefix}Generated MRTG master index: {index_path} ({snmp_count} SNMP hosts, {avail_count} availability monitors)")
+            hidden_count = len(hidden_monitors) if hidden_monitors else 0
+            print(f"{prefix}Generated MRTG master index: {index_path} ({snmp_count} SNMP hosts, {avail_count} availability monitors, {hidden_count} hidden)")
 
     except Exception as e:
         print(f"{prefix}Failed to generate MRTG master index '{index_path}': {e}", file=sys.stderr)
@@ -4143,9 +4195,12 @@ def main() -> None:
             generate_mrtg_config(config, work_dir, mrtg_config_path)
             all_config_files = update_mrtg_rrd_cgi_config(work_dir, mrtg_config_path)
 
-            # Generate master index from all config files, passing site name
+            # Monitors with display=false are excluded from MRTG config but shown in audit footer
+            hidden_monitors = [r for r in config['monitors'] if not to_natural_language_boolean(r.get('display', True))]
+
+            # Generate master index from all config files, passing site name and hidden monitors
             master_index_path = str(Path(work_dir) / 'index.html')
-            generate_mrtg_index(all_config_files, master_index_path, site_name, STATE)
+            generate_mrtg_index(all_config_files, master_index_path, site_name, STATE, hidden_monitors)
 
             print(f"MRTG config generated at: {mrtg_config_path}")
             print(f"MRTG master index generated at: {master_index_path}")

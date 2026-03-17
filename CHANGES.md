@@ -9,8 +9,16 @@ Multithreaded high speed availability checking for SNMP, PING, TCP/UDP, QUIC & H
 Integrates w/Site24x7 heartbeat monitoring for failover alerts + MRTG + Slack & Pushover webhooks.
 Thread safe, reentrant, modifiable.
 
-# Release 1.2.16 (???): ???
+# Release 1.2.16 (17-Mar-26): T1 NOC MRTG Tweaks
 - Added info on setting up read-only SNMP to Linux
+- Updated SNMP type to handle Memory on BSD & Linux machines
+- Made SNMP monitor types (snmp, ports, port) also show on single pane of glass outages in red
+- Made display order in MRTG graphs stable WRT the site config file
+- Enabled muting of the disply of monitored resources from the MRTG output
+- Updated docs to document `display` option
+- Added explicit port/ports/snmp prefix to network monitoring titles
+- Fixed problem with SNMP hosts outages not displaying in red.
+- Updated screenshot of single pane of glass
 
 # Release 1.2.15 (15-Mar-26): Documentation Updates
 - Updated docs to illustrate L2 monitoring.
