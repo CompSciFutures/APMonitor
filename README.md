@@ -38,6 +38,8 @@ Ex Chief Scientist @ Clemenger BBDO / Omnicom</i>
 
 [![buy-me-a-coffee.png](images/buy-me-a-coffee.png)](https://buymeacoffee.com/compscifutures)
 
+<i>If you find APMonitor.py useful in your NOC, or would like email / telephone support, please consider <a href="https://buymeacoffee.com/compscifutures">a regular donation via Buy me a coffee</a>.</i> 
+
 
 # Quickstart
 
