@@ -395,23 +395,23 @@ DS names use the raw ifIndex integer (e.g., `if1_in`, `if2_out`), not the interf
 
 ### RRD Retention Policy
 
-| Time Range | Resolution | MRTG Standard Rows | APMonitor Default (31×) |
+| Time Range | Resolution | MRTG Standard Rows | APMonitor Default |
 |---|---|---|---|
 | High-resolution recent | Native step | 1 day native | 31 days native |
 | Short-term | 5-minute | 600 (~2 days) | 18600 (~64 days) |
 | Medium-term | 30-minute | 600 (~12.5 days) | 18600 (~387 days) |
-| Long-term | 2-hour | 600 (~50 days) | 18600 (~1550 days) |
+| Long-term | 1-hour | — | 43830 (~5 years) |
 | Historical | 1-day | 732 (~2 years) | 22692 (~62 years) |
 
 > [!WARNING]
-> Do not upgrade to the 1.3.x stream. This release contains RRD schema changes that require existing RRD files to be deleted and recreated before upgrading.
+> Do not upgrade to the 1.3.x stream. This release contains RRD schema changes that require existing RRD files to be deleted and recreated before upgrading. APMonitor will auto-heal existing RRDs on first run when `--generate-rrds` or `--generate-mrtg-config` is specified.
 
 To use custom retention, modify the row constants in `create_rrd_rras()`:
 ```python
 rows_1day_native  = 86400 // step_secs * 31  # 31 days at native resolution
 rows_2days_5min   = 18600                     # ~64 days at 5-min
 rows_12days_30min = 18600                     # ~387 days at 30-min
-rows_50days_2hour = 18600                     # ~1550 days at 2-hour
+rows_5years_1hour = 43830                     # ~5 years at 1-hour
 rows_2years_daily = 22692                     # ~62 years at 1-day
 ```
 

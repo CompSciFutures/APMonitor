@@ -9,7 +9,10 @@ Multithreaded high speed availability checking for SNMP, PING, TCP/UDP, QUIC & H
 Integrates w/Site24x7 heartbeat monitoring for failover alerts + MRTG + Slack & Pushover webhooks.
 Thread safe, reentrant, modifiable.
 
-# Release 1.3.1 (???): ???
+# Release 1.3.2 (18-Mar-26): Extended Storage
+- Changed 5 year storage to hourly
+
+# Release 1.3.1 (18-Mar-26): Extended Storage
 - Added 'Buy me a coffee' comment + made MRTG/RRD more prominent in docs
 - Added reference to nixtla.io seasonal decomposition tools.
 - Added note about support for 4K 3840x2160 16:9 highdpi screens

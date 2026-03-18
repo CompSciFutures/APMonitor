@@ -3208,11 +3208,11 @@ def create_rrd_rras(step_secs: int) -> List[str]:
     """Generate RRAs that maintain MRTG-compatible time ranges.
 
     Time ranges maintained:
-    - High-resolution recent: 1 day at native resolution
-    - Short-term: ~2 days at 5-minute intervals
-    - Medium-term: ~12.5 days at 30-minute intervals
-    - Long-term: ~50 days at 2-hour intervals
-    - Historical: ~2 years at 1-day intervals
+    - High-resolution recent: 31 days at native resolution
+    - Short-term: ~64 days at 5-minute intervals
+    - Medium-term: ~387 days at 30-minute intervals
+    - Long-term (hourly): ~5 years at 1-hour intervals
+    - Historical: ~62 years at 1-day intervals
 
     Args:
         step_secs: RRD step interval in seconds
@@ -3221,17 +3221,17 @@ def create_rrd_rras(step_secs: int) -> List[str]:
         List of RRA definition strings
     """
     # Calculate consolidation factors to achieve target intervals
-    steps_per_5min = max(1, 300 // step_secs)
-    steps_per_30min = max(1, 1800 // step_secs)
-    steps_per_2hour = max(1, 7200 // step_secs)
-    steps_per_day = max(1, 86400 // step_secs)
+    steps_per_5min  = max(1, 300   // step_secs)
+    steps_per_30min = max(1, 1800  // step_secs)
+    steps_per_1hour = max(1, 3600  // step_secs)
+    steps_per_day   = max(1, 86400 // step_secs)
 
     # Calculate rows to maintain time ranges
-    rows_1day_native = 86400 // step_secs * 31  # 31 days at native resolution
-    rows_2days_5min = 18600  # ~64 days at 5-min
-    rows_12days_30min = 18600  # ~387 days at 30-min
-    rows_50days_2hour = 18600  # ~1550 days at 2-hour
-    rows_2years_daily = 22692  # ~62 years at 1-day
+    rows_1day_native  = 86400 // step_secs * 31  # 31 days at native resolution
+    rows_2days_5min   = 18600                     # ~64 days at 5-min
+    rows_12days_30min = 18600                     # ~387 days at 30-min
+    rows_5years_1hour = 43830                     # ~5 years at 1-hour
+    rows_2years_daily = 22692                     # ~62 years at 1-day
 
     return [
         # High-resolution recent data
@@ -3242,7 +3242,7 @@ def create_rrd_rras(step_secs: int) -> List[str]:
         # MRTG-compatible intervals
         f'RRA:AVERAGE:0.5:{steps_per_5min}:{rows_2days_5min}',
         f'RRA:AVERAGE:0.5:{steps_per_30min}:{rows_12days_30min}',
-        f'RRA:AVERAGE:0.5:{steps_per_2hour}:{rows_50days_2hour}',
+        f'RRA:AVERAGE:0.5:{steps_per_1hour}:{rows_5years_1hour}',
         f'RRA:AVERAGE:0.5:{steps_per_day}:{rows_2years_daily}',
 
         # Min/Max for MRTG intervals
