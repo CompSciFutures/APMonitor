@@ -48,6 +48,10 @@ To run APMonitor with a configuration file `test-apmonitor-config.yaml ` & auto-
  ./APMonitor.py -vv -s /tmp/statefile.json test-apmonitor-config.yaml --generate-rrds 
 ```
 
+> ***WARNING***
+> Do not upgrade to the 1.3.x stream. This is an experimental release stream contains RRD & config YAML schema changes that require existing RRD files to be deleted and recreated before upgrading.
+
+
 # Design Philosophy &amp; Provenance
 
 Once upon a time, I was well known in data center circles along Highway 101 in Silicon Valley for carrying in my back pocket a super lightweight pure C/libc cross-platform availability monitoring tool with no dependencies whatsoever called `APMonitor.c`. I'd graciously provide the source code to anyone who asked.
@@ -389,13 +393,27 @@ DS names use the raw ifIndex integer (e.g., `if1_in`, `if2_out`), not the interf
 - All interfaces for a device are stored in a single RRD for atomic updates. If the interface list changes, stale DS entries remain in the RRD unused — the RRD is never recreated on interface list change alone.
 - If the discovered interface count grows such that the expected DS count exceeds what was created, APMonitor auto-heals by deleting and recreating the RRD on the next run. Expected DS count = `(2 × interface_count) + 11`.
 
-### RRD Retention Policy (MRTG-compatible)
+### RRD Retention Policy
 
-- High-resolution: 1 day at native check interval
-- Short-term: ~2 days at 5-minute intervals (600 rows)
-- Medium-term: ~12.5 days at 30-minute intervals (600 rows)
-- Long-term: ~50 days at 2-hour intervals (600 rows)
-- Historical: ~2 years at 1-day intervals (732 rows)
+| Time Range | Resolution | MRTG Standard Rows | APMonitor Default (28×) |
+|---|---|---|---|
+| High-resolution recent | Native step | 1 day native | 28 days native |
+| Short-term | 5-minute | 600 (~2 days) | 16800 (~58 days) |
+| Medium-term | 30-minute | 600 (~12.5 days) | 16800 (~350 days) |
+| Long-term | 2-hour | 600 (~50 days) | 16800 (~1400 days) |
+| Historical | 1-day | 732 (~2 years) | 20496 (~56 years) |
+
+> [!WARNING]
+> Do not upgrade to the 1.3.x stream. This release contains RRD schema changes that require existing RRD files to be deleted and recreated before upgrading.
+
+To use custom retention, modify the row constants in `create_rrd_rras()`:
+```python
+rows_1day_native  = 86400 // step_secs * 28  # 28 days at native resolution
+rows_2days_5min   = 16800                     # ~58 days at 5-min
+rows_12days_30min = 16800                     # ~350 days at 30-min
+rows_50days_2hour = 16800                     # ~1400 days at 2-hour
+rows_2years_daily = 20496                     # ~56 years at 1-day
+```
 
 ## Working with RRD Files Directly
 ```bash

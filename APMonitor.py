@@ -1959,20 +1959,29 @@ def check_snmp_resource(resource: Dict[str, Any]) -> Optional[str]:
         if RRD_ENABLED:
             check_every_n_secs = resource.get('check_every_n_secs', DEFAULT_CHECK_EVERY_N_SECS)
             rrd_path = get_rrd_path(name, 'snmp')
+            rras = create_rrd_rras(check_every_n_secs)
 
-            # Delete RRD if DS count is less than required (auto-heals after new metrics are added).
-            # Expected: 2 DS per interface (in/out) + 11 fixed DS.
+            # Auto-heal: recreate if DS count is less than expected OR any RRA has fewer rows
+            # than configured. Expected DS count = 2 per interface + 11 fixed DS.
             if os.path.exists(rrd_path):
                 expected_ds_count = 2 * len(interfaces) + 11
+                needs_recreation = False
                 try:
                     info = rrdtool.info(rrd_path)
                     actual_ds_count = len([k for k in info if k.startswith('ds[') and k.endswith('].type')])
                     if actual_ds_count < expected_ds_count:
-                        os.remove(rrd_path)
                         print(f"{prefix}SNMP RRD deleted for recreation: {rrd_path} "
                               f"(ds_count={actual_ds_count} < expected={expected_ds_count})")
+                        needs_recreation = True
                 except Exception as e:
                     print(f"{prefix}SNMP RRD introspection failed for '{rrd_path}': {e}, will recreate", file=sys.stderr)
+                    needs_recreation = True
+
+                if not needs_recreation and _check_rrd_needs_recreation(rrd_path, rras):
+                    print(f"{prefix}SNMP RRD deleted for recreation: {rrd_path} (RRA rows under-provisioned)")
+                    needs_recreation = True
+
+                if needs_recreation:
                     os.remove(rrd_path)
 
             if not os.path.exists(rrd_path):
@@ -2402,18 +2411,28 @@ def check_port_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Option
                   f"pkts_in={total_pkts_in:,} pkts_out={total_pkts_out:,} "
                   f"ucast={total_pkts_ucast:,} bmcast={total_pkts_bmcast:,}")
 
-        # Auto-heal: 1 interface → expected DS = 2*1 + 11 = 13
+        # Auto-heal: recreate if DS count < expected OR any RRA has fewer rows than configured.
+        # 1 interface → expected DS = 2*1 + 11 = 13
+        rras = create_rrd_rras(check_every_n_secs)
         if os.path.exists(rrd_path):
             expected_ds_count = 2 * len(interfaces) + 11
+            needs_recreation = False
             try:
                 info = rrdtool.info(rrd_path)
                 actual_ds_count = len([k for k in info if k.startswith('ds[') and k.endswith('].type')])
                 if actual_ds_count < expected_ds_count:
-                    os.remove(rrd_path)
                     print(f"{prefix}PORT RRD deleted for recreation: {rrd_path} "
                           f"(ds_count={actual_ds_count} < expected={expected_ds_count})")
+                    needs_recreation = True
             except Exception as e:
                 print(f"{prefix}PORT RRD introspection failed for '{rrd_path}': {e}, will recreate", file=sys.stderr)
+                needs_recreation = True
+
+            if not needs_recreation and _check_rrd_needs_recreation(rrd_path, rras):
+                print(f"{prefix}PORT RRD deleted for recreation: {rrd_path} (RRA rows under-provisioned)")
+                needs_recreation = True
+
+            if needs_recreation:
                 os.remove(rrd_path)
 
         if not os.path.exists(rrd_path):
@@ -2899,6 +2918,35 @@ def get_rrd_path(monitor_name: str, metric_type: str = 'availability') -> str:
     return str(rrd_dir / f"{safe_name}-{metric_type}.rrd")
 
 
+def _check_rrd_needs_recreation(rrd_path: str, expected_rras: List[str]) -> bool:
+    """Return True if any RRA in the existing RRD has fewer rows than configured.
+
+    Args:
+        rrd_path: Full path to existing RRD file
+        expected_rras: RRA definition strings from create_rrd_rras() — row count
+                       parsed from the 4th colon-separated field (e.g. 'RRA:AVERAGE:0.5:1:8640')
+
+    Returns:
+        bool: True if RRD should be deleted and recreated, False if compatible
+    """
+    prefix = getattr(thread_local, 'prefix', '')
+    try:
+        info = rrdtool.info(rrd_path)
+        for i, rra_def in enumerate(expected_rras):
+            # RRA def format: RRA:CF:xff:steps:rows
+            expected_rows = int(rra_def.split(':')[4])
+            actual_rows = info.get(f'rra[{i}].rows')
+            if actual_rows is None or actual_rows < expected_rows:
+                if VERBOSE:
+                    print(f"{prefix}RRD recreation needed: {rrd_path} "
+                          f"rra[{i}] actual_rows={actual_rows} < expected={expected_rows}")
+                return True
+        return False
+    except Exception as e:
+        print(f"{prefix}RRD introspection failed for '{rrd_path}': {e}, will recreate", file=sys.stderr)
+        return True
+
+
 def create_rrd(rrd_path: str, step_secs: int) -> None:
     """Create RRD file with MRTG-compatible retention policy.
 
@@ -3179,11 +3227,11 @@ def create_rrd_rras(step_secs: int) -> List[str]:
     steps_per_day = max(1, 86400 // step_secs)
 
     # Calculate rows to maintain time ranges
-    rows_1day_native = 86400 // step_secs  # 1 day at native resolution
-    rows_2days_5min = 600  # MRTG standard
-    rows_12days_30min = 600  # MRTG standard
-    rows_50days_2hour = 600  # MRTG standard
-    rows_2years_daily = 732  # MRTG standard
+    rows_1day_native = 86400 // step_secs * 28  # 28 days at native resolution
+    rows_2days_5min = 16800  # ~58 days at 5-min
+    rows_12days_30min = 16800  # ~350 days at 30-min
+    rows_50days_2hour = 16800  # ~1400 days at 2-hour
+    rows_2years_daily = 20496  # ~56 years at 1-day
 
     return [
         # High-resolution recent data
@@ -3271,11 +3319,9 @@ def check_and_heartbeat_r(resource: Dict[str, Any], site_config: Dict[str, Any])
     notify_every_n_secs = resource.get('notify_every_n_secs', DEFAULT_NOTIFY_EVERY_N_SECS)
     after_every_n_notifications = resource.get('after_every_n_notifications', DEFAULT_AFTER_EVERY_N_NOTIFICATIONS)
     monitor_email_enabled = to_natural_language_boolean(resource.get('email', True))
-    # print(f"{prefix} PACING: notify_every_n_secs={notify_every_n_secs} after_every_n_notifications={after_every_n_notifications}")
 
     # Ping heartbeat URL if required
     if is_up and 'heartbeat_url' in resource:
-        # Determine if we should ping heartbeat
         should_heartbeat, seconds_since_heartbeat = is_heartbeat_due(resource, prev_last_successful_heartbeat, now)
 
         if should_heartbeat:
@@ -3454,6 +3500,13 @@ def check_and_heartbeat_r(resource: Dict[str, Any], site_config: Dict[str, Any])
     # Update RRD database for MRTG (availability monitors only)
     if RRD_ENABLED and resource['type'] not in ('snmp'):
         rrd_path = get_rrd_path(resource['name'])
+        rras = create_rrd_rras(check_every_n_secs)
+
+        # Auto-heal: recreate if any RRA has fewer rows than configured
+        if os.path.exists(rrd_path) and _check_rrd_needs_recreation(rrd_path, rras):
+            print(f"{prefix}Availability RRD deleted for recreation: {rrd_path} (RRA rows under-provisioned)")
+            os.remove(rrd_path)
+
         if VERBOSE > 1:
             print(f"{prefix}updating RRD database for {rrd_path} w/ {now}, {last_response_time_ms}, {is_up}")
         if not os.path.exists(rrd_path):
