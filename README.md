@@ -48,7 +48,7 @@ To run APMonitor with a configuration file `test-apmonitor-config.yaml ` & auto-
  ./APMonitor.py -vv -s /tmp/statefile.json test-apmonitor-config.yaml --generate-rrds 
 ```
 
-> ***WARNING***
+> [!WARNING]
 > Do not upgrade to the 1.3.x stream. This is an experimental release stream contains RRD & config YAML schema changes that require existing RRD files to be deleted and recreated before upgrading.
 
 
@@ -118,7 +118,7 @@ Installing MRTG with `make install; make installmrtg` will spin up via `rc.d` a 
 ![mrtg-availability.png](images/mrtg-availability.png)
 
 This layout is specifically designed for now commonly available 4K 3840x2160 16:9 highdpi screens. It's not uncommon to see modern NOCs with an array of these on the wall at eye height when someone is sitting down. 
-Instead of just having CCTV, you can now add some proper network telemetry and instrumentation, say on the top row of screens.
+Instead of just having CCTV, you can now add some proper network telemetry and instrumentation, say with one YAML site file per screen, on the top row of screens.
 
 Note the NGINX/FastCGI combination means we don't need to keep a machine chewing on itself generating charts anymore - they are now generated on demand in near-realtime and extremely efficiently. The only I/O is the RRD files, which under the hood operate very much like the older MRTG text file format.
 
