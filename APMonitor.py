@@ -3227,11 +3227,11 @@ def create_rrd_rras(step_secs: int) -> List[str]:
     steps_per_day = max(1, 86400 // step_secs)
 
     # Calculate rows to maintain time ranges
-    rows_1day_native = 86400 // step_secs * 28  # 28 days at native resolution
-    rows_2days_5min = 16800  # ~58 days at 5-min
-    rows_12days_30min = 16800  # ~350 days at 30-min
-    rows_50days_2hour = 16800  # ~1400 days at 2-hour
-    rows_2years_daily = 20496  # ~56 years at 1-day
+    rows_1day_native = 86400 // step_secs * 31  # 31 days at native resolution
+    rows_2days_5min = 18600  # ~64 days at 5-min
+    rows_12days_30min = 18600  # ~387 days at 30-min
+    rows_50days_2hour = 18600  # ~1550 days at 2-hour
+    rows_2years_daily = 22692  # ~62 years at 1-day
 
     return [
         # High-resolution recent data

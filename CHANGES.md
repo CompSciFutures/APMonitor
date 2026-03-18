@@ -17,6 +17,7 @@ Thread safe, reentrant, modifiable.
 - Added timing of generating MRTG RRDs to debug output
 - Updated docs to explain new RRAs retention policy for RRDs
 - Increased storage to 28x MRTG defaults
+- Increased storage to 31x MRTG defaults
 
 # Release 1.3.0 (17-Mar-26): T1 NOC MRTG Tweaks (8-up per row)
 - Made availability monitors 8-up per row 
