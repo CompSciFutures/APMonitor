@@ -92,6 +92,8 @@ DEFAULT_CHECK_EVERY_N_SECS: int = 60
 DEFAULT_NOTIFY_EVERY_N_SECS: int = 600
 DEFAULT_AFTER_EVERY_N_NOTIFICATIONS: int = 1
 RRD_ENABLED: bool = False
+RRD_ELAPSED_MS: int = 0
+RRD_ELAPSED_LOCK: threading.Lock = threading.Lock()
 
 # Global thread-local storage
 thread_local: threading.local = threading.local()
@@ -2904,6 +2906,7 @@ def create_rrd(rrd_path: str, step_secs: int) -> None:
         rrd_path: Full path to RRD file to create
         step_secs: Update interval in seconds (from check_every_n_secs)
     """
+    global RRD_ELAPSED_MS
     prefix = getattr(thread_local, 'prefix', '')
 
     # Ensure RRD directory exists
@@ -2924,6 +2927,7 @@ def create_rrd(rrd_path: str, step_secs: int) -> None:
 
     # Create RRD
     try:
+        _t = int(time.time() * 1000)
         rrdtool.create(
             rrd_path,
             '--step', str(step_secs),
@@ -2931,6 +2935,8 @@ def create_rrd(rrd_path: str, step_secs: int) -> None:
             *data_sources,
             *rras
         )
+        with RRD_ELAPSED_LOCK:
+            RRD_ELAPSED_MS += int(time.time() * 1000) - _t
         if VERBOSE:
             print(f"{prefix}Created RRD file: {rrd_path} (step={step_secs}s)")
     except rrdtool.OperationalError as e:
@@ -2946,6 +2952,7 @@ def update_rrd(rrd_path: str, timestamp: datetime, response_time_ms: Optional[in
         response_time_ms: Response time in milliseconds (or None if check failed)
         is_up: Whether resource is up (True) or down (False)
     """
+    global RRD_ELAPSED_MS
     prefix = getattr(thread_local, 'prefix', '')
 
     # Convert to epoch timestamp
@@ -2957,10 +2964,13 @@ def update_rrd(rrd_path: str, timestamp: datetime, response_time_ms: Optional[in
     is_up_val = '100' if is_up else '0'
 
     try:
+        _t = int(time.time() * 1000)
         rrdtool.update(
             rrd_path,
             f'{epoch}:{response_val}:{is_up_val}'
         )
+        with RRD_ELAPSED_LOCK:
+            RRD_ELAPSED_MS += int(time.time() * 1000) - _t
         if VERBOSE > 1:
             print(f"{prefix}Updated RRD: {rrd_path} @ {epoch} response={response_val}ms is_up={is_up_val}%")
     except rrdtool.OperationalError as e:
@@ -2981,6 +2991,7 @@ def create_snmp_rrd(rrd_path: str, step_secs: int, interfaces: Dict[str, Dict[st
 
     NB: existing SNMP RRDs must be deleted before next run whenever DS layout changes.
     """
+    global RRD_ELAPSED_MS
     prefix = getattr(thread_local, 'prefix', '')
 
     # Ensure RRD directory exists
@@ -3024,6 +3035,7 @@ def create_snmp_rrd(rrd_path: str, step_secs: int, interfaces: Dict[str, Dict[st
 
     # Create RRD
     try:
+        _t = int(time.time() * 1000)
         rrdtool.create(
             rrd_path,
             '--step', str(step_secs),
@@ -3031,6 +3043,8 @@ def create_snmp_rrd(rrd_path: str, step_secs: int, interfaces: Dict[str, Dict[st
             *data_sources,
             *rras
         )
+        with RRD_ELAPSED_LOCK:
+            RRD_ELAPSED_MS += int(time.time() * 1000) - _t
         if VERBOSE:
             print(f"{prefix}Created SNMP RRD file: {rrd_path} (step={step_secs}s, {len(interfaces)} interfaces, {len(data_sources)} data sources)")
     except rrdtool.OperationalError as e:
@@ -3061,6 +3075,7 @@ def update_snmp_rrd(rrd_path: str, timestamp: datetime, interfaces: Dict[str, Di
         total_pkts_ucast: Total unicast packets (in+out combined)
         total_pkts_bmcast: Total broadcast+multicast packets (in+out combined)
     """
+    global RRD_ELAPSED_MS
     prefix = getattr(thread_local, 'prefix', '')
 
     # Convert to epoch timestamp
@@ -3124,11 +3139,14 @@ def update_snmp_rrd(rrd_path: str, timestamp: datetime, interfaces: Dict[str, Di
     value_str = ':'.join(values)
 
     try:
+        _t = int(time.time() * 1000)
         rrdtool.update(
             rrd_path,
             '--template', template,
             f'{epoch}:{value_str}'
         )
+        with RRD_ELAPSED_LOCK:
+            RRD_ELAPSED_MS += int(time.time() * 1000) - _t
         if VERBOSE > 1:
             print(f"{prefix}Updated SNMP RRD: {rrd_path} @ {epoch} ({len(interfaces)} interfaces, aggregates, system)")
     except rrdtool.OperationalError as e:
@@ -4264,6 +4282,9 @@ def main() -> None:
         # Load previous state
         STATE = load_state(STATEFILE)
 
+        # Hoisted so the finally block can always reference it regardless of code path
+        mrtg_index_elapsed_ms: int = 0
+
         # Generate MRTG config mode
         if args.generate_mrtg_config is not None:
             work_dir = args.generate_mrtg_config
@@ -4271,6 +4292,8 @@ def main() -> None:
 
             # Extract site name from config
             site_name = config['site']['name']
+
+            mrtg_start_ms = int(datetime.now().timestamp() * 1000)
 
             generate_mrtg_config(config, work_dir, mrtg_config_path)
             all_config_files = update_mrtg_rrd_cgi_config(work_dir, mrtg_config_path)
@@ -4281,6 +4304,8 @@ def main() -> None:
             # Generate master index from all config files, passing site name and hidden monitors
             master_index_path = str(Path(work_dir) / 'index.html')
             generate_mrtg_index(all_config_files, master_index_path, site_name, STATE, hidden_monitors)
+
+            mrtg_index_elapsed_ms = int(datetime.now().timestamp() * 1000) - mrtg_start_ms
 
             print(f"MRTG config generated at: {mrtg_config_path}")
             print(f"MRTG master index generated at: {master_index_path}")
@@ -4361,8 +4386,12 @@ def main() -> None:
             })
 
             if VERBOSE:
-                print(f"_ ___ ________  {'.' * len(str(execution_ms))} .. .")
-                print(f"Execution time: {execution_ms} ms")
+                print(f"_ ___ _____________  {'.' * len(str(execution_ms))} .. .")
+                print(f"     Execution time: {execution_ms} ms")
+
+            if RRD_ENABLED:
+                print(f"  MRTG indices time: {mrtg_index_elapsed_ms} ms")
+                print(f"RRD generation time: {RRD_ELAPSED_MS} ms")
 
             # Save state atomically
             save_state(STATE)
