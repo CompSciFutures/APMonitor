@@ -49,7 +49,15 @@ To run APMonitor with a configuration file `test-apmonitor-config.yaml ` & auto-
 ```
 
 > [!WARNING]
-> Do not upgrade to the 1.3.x stream. This is an experimental release stream contains RRD & config YAML schema changes that require existing RRD files to be deleted and recreated before upgrading.
+> Do not upgrade to the 1.3.x stream. This is an experimental release stream that contains RRD & config YAML schema changes that require existing RRD files to be deleted and recreated before upgrading. APMonitor will auto-heal existing RRDs on first run when `--generate-rrds` or `--generate-mrtg-config` is specified.
+> 
+> To do a full upgrade change your YAML to replace `type: snmp` with `type: ports` then execute something similar to this command:
+> 
+> ```
+> cp tellusion-apmonitor-config.yaml /usr/local/etc/apmonitor-config.yaml; make install; make installmrtg; rm /var/tmp/apmonitor-statefile.rrd/*
+> ```
+
+
 
 
 # Design Philosophy &amp; Provenance
@@ -66,6 +74,7 @@ Key Features:
 - Multithreaded high-speed availability checking for PING, TCP, UDP, QUIC, HTTP(S), and SNMP resources
 - SSL/TLS certificate checking and pinning so you can use self-signed certificates on-lan safely
 - SNMP monitoring for network device interface bandwidth, I/O statistics, and TCP retransmit metrics
+- Host performance monitoring (CPU, memory, disk I/O, swap, interrupts) per *System Performance Tuning* by Musumeci & Loukides (O'Reilly)
 - Integration with Site24x7/PagerDuty heartbeat monitoring for high-availability second-opinion and failover alerting
 - Integration with Slack and Pushover webhooks for notifications, plus standard email support
 - Smart notification pacing: rapid alerts initially, then gradually decreasing frequency for extended outages
@@ -117,7 +126,7 @@ Installing MRTG with `make install; make installmrtg` will spin up via `rc.d` a 
 
 ![mrtg-availability.png](images/mrtg-availability.png)
 
-This layout is specifically designed for now commonly available 4K 3840x2160 16:9 highdpi screens. It's not uncommon to see modern NOCs with an array of these on the wall at eye height when someone is sitting down. 
+This layout is specifically designed for now commonly available 4K Ultra HD (3840x2160 16:9 2160p) screens. It's not uncommon to see modern NOCs with an array of these on the wall at eye height when someone is sitting down. 
 Instead of just having CCTV, you can now add some proper network telemetry and instrumentation, say with one YAML site file per screen, on the top row of screens.
 
 Note the NGINX/FastCGI combination means we don't need to keep a machine chewing on itself generating charts anymore - they are now generated on demand in near-realtime and extremely efficiently. The only I/O is the RRD files, which under the hood operate very much like the older MRTG text file format.
@@ -272,10 +281,20 @@ snmpwalk -v 2c -c YourCommunityString 192.168.1.x
 
 ## APMonitor configuration
 
-Once `snmpd` is running, add an `snmp` monitor pointing at the host:
+Once `snmpd` is running, add a `ports` monitor pointing at the host:
 
 ```yaml
-- type: snmp
+- type: ports
+  name: my-debian-ports
+  address: "snmp://192.168.1.x"
+  community: "YourCommunityString"
+  check_every_n_secs: 300
+```
+
+For host performance monitoring (CPU, memory, disk I/O), use `type: host` instead:
+
+```yaml
+- type: host
   name: my-debian-host
   address: "snmp://192.168.1.x"
   community: "YourCommunityString"
@@ -344,54 +363,69 @@ Each availability monitor's RRD file tracks two metrics:
   - `1` = service up
   - `0` = service down
 
-### SNMP Monitors (port, ports, snmp)
+### SNMP Monitors (port, ports, host)
 
-SNMP monitors create a single RRD file per device with data sources dynamically generated based on discovered interfaces plus fixed aggregate and system metrics.
+All SNMP-family monitors (`port`, `ports`, `host`) use a single unified RRD schema per device. The schema is divided into three sections: per-interface DS pairs (used by `ports`/`port` only), fixed aggregate network DS (used by `ports`/`port`; stored as `U` for `host`), and fixed host performance DS (used by `host`; stored as `U` for `ports`/`port`).
 
 **Filename**: `{statefile-dir}/{statefile-name}.rrd/{monitor-name}-snmp.rrd`
 
-**Per-Interface Data Sources** (one pair per discovered interface, COUNTER):
+**Per-Interface Data Sources** (one pair per discovered interface, COUNTER — `ports`/`port` only):
 
 - **`if{index}_in`**: Inbound bytes for interface at ifIndex `{index}` (IF-MIB::ifInOctets)
 - **`if{index}_out`**: Outbound bytes for interface at ifIndex `{index}` (IF-MIB::ifOutOctets)
 
 DS names use the raw ifIndex integer (e.g., `if1_in`, `if2_out`), not the interface description string. DS order is stable — interfaces are sorted numerically by ifIndex at both create and update time.
 
-**Aggregate Traffic Data Sources** (COUNTER):
+**Fixed Aggregate Network Data Sources** (COUNTER — `ports`/`port` populated, `host` stores `U`):
 
+- **`tcp_retrans`**: Global TCP retransmit segment counter (TCP-MIB::tcpRetransSegs) — `ports` only
 - **`total_bits_in`**: Sum of inbound octets × 8 across all interfaces
 - **`total_bits_out`**: Sum of outbound octets × 8 across all interfaces
-- **`total_pkts_in`**: Sum of all inbound packets (unicast + multicast + broadcast) across all interfaces (IF-MIB::ifHCInUcastPkts + ifHCInMulticastPkts + ifHCInBroadcastPkts)
-- **`total_pkts_out`**: Sum of all outbound packets across all interfaces (IF-MIB::ifHCOutUcastPkts + ifHCOutMulticastPkts + ifHCOutBroadcastPkts)
-- **`total_pkts_ucast`**: Total unicast packets in+out combined across all interfaces
-- **`total_pkts_bmcast`**: Total broadcast+multicast packets in+out combined across all interfaces
+- **`total_pkts_in`**: Sum of all inbound packets (unicast + multicast + broadcast) across all interfaces
+- **`total_pkts_out`**: Sum of all outbound packets across all interfaces
 - **`total_errors_in`**: Sum of inbound interface errors across all interfaces (IF-MIB::ifInErrors)
 - **`total_errors_out`**: Sum of outbound interface errors across all interfaces (IF-MIB::ifOutErrors)
+- **`total_pkts_ucast`**: Total unicast packets in+out combined across all interfaces
+- **`total_pkts_bmcast`**: Total broadcast+multicast packets in+out combined across all interfaces
 
-**TCP Data Source** (COUNTER):
+**System Resource Data Sources** (GAUGE — all types):
 
-- **`tcp_retrans`**: Global TCP retransmit segment counter (TCP-MIB::tcpRetransSegs)
-
-**System Resource Data Sources** (GAUGE):
-
-- **`cpu_load`**: CPU utilization percentage, range 0–100. Sourced from vendor-specific OIDs (Cisco/HP/Juniper/Ubiquiti) with HOST-RESOURCES-MIB::hrProcessorLoad as fallback. Stored as `U` (unknown) if unavailable.
+- **`cpu_load`**: CPU utilization percentage, range 0–100. Sourced from vendor-specific OIDs (Cisco/HP/Juniper/Ubiquiti) with HOST-RESOURCES-MIB::hrProcessorLoad as fallback. Stored as `U` if unavailable.
 - **`memory_pct`**: Memory utilization percentage, range 0–100. Sourced from vendor-specific OIDs with HOST-RESOURCES-MIB::hrStorage as fallback. Stored as `U` if unavailable.
 
-**MRTG Targets generated per SNMP monitor:**
+**Fixed Host Performance Data Sources** (COUNTER/GAUGE — `host` populated, `ports`/`port` store `U`):
 
-| Target suffix | DS pair | Description |
-|---|---|---|
-| `-bandwidth` | `total_bits_in` / `total_bits_out` | Total bandwidth in/out (bits) |
-| `-packets` | `total_pkts_in` / `total_pkts_out` | Total packets in/out |
-| `-packets-type` | `total_pkts_ucast` / `total_pkts_bmcast` | Unicast vs broadcast+multicast |
-| `-errors` | `total_errors_in` / `total_errors_out` | Interface errors in/out |
-| `-retransmits` | `tcp_retrans` / `tcp_retrans` | TCP retransmits (single line) |
-| `-system` | `cpu_load` / `memory_pct` | CPU & memory utilization |
+- **`context_switches`** (COUNTER): Raw context switch counter (UCD-SNMP-MIB::ssRawContexts)
+- **`swap_io`** (COUNTER): Raw swap pages in + out combined (UCD-SNMP-MIB::ssRawSwapIn + ssRawSwapOut)
+- **`disk_read`** (COUNTER): Disk read bytes summed across all block devices (UCD-DISKIO-MIB::diskIOReadX)
+- **`disk_write`** (COUNTER): Disk write bytes summed across all block devices (UCD-DISKIO-MIB::diskIOWriteX)
+- **`disk_space_pct`** (GAUGE): Root filesystem utilization percentage 0–100 (HOST-RESOURCES-MIB::hrStorage `/` entry). Also persisted to statefile for display in MRTG index and detail page headers.
+- **`swap_used`** (GAUGE): Swap space used in bytes (HOST-RESOURCES-MIB::hrStorage virtual memory entry, with UCD-SNMP-MIB::memTotalSwap − memAvailSwap as fallback)
+- **`interrupts`** (COUNTER): Raw hardware interrupt counter (UCD-SNMP-MIB::ssRawInterrupts)
+
+**Total fixed DS count: 18** (11 network/system + 7 host performance). Expected DS count for auto-heal check = `(2 × interface_count) + 18`.
+
+**MRTG Targets generated per monitor type:**
+
+| Target suffix | DS pair | Monitor types | Description |
+|---|---|---|---|
+| `-bandwidth` | `total_bits_in` / `total_bits_out` | `ports`, `port` | Total bandwidth in/out (bits) |
+| `-packets` | `total_pkts_in` / `total_pkts_out` | `ports`, `port` | Total packets in/out |
+| `-packets-type` | `total_pkts_ucast` / `total_pkts_bmcast` | `ports`, `port` | Unicast vs broadcast+multicast |
+| `-errors` | `total_errors_in` / `total_errors_out` | `ports`, `port` | Interface errors in/out |
+| `-retransmits` | `tcp_retrans` / `tcp_retrans` | `ports` only | TCP retransmits (single line) |
+| `-system` | `cpu_load` / `memory_pct` | `ports` only | CPU & memory utilization |
+| `-system1` | `cpu_load` / `context_switches` | `host` | CPU & Load |
+| `-system2` | `memory_pct` / `swap_io` | `host` | Memory & Paging |
+| `-system3` | `disk_read` / `disk_write` | `host` | Disk I/O (Disk Use % in PageTop) |
+| `-system4` | `swap_used` / `interrupts` | `host` | System Thrashing |
 
 **Notes:**
 - COUNTER type automatically calculates per-second rates and handles 32/64-bit wraparound.
 - All interfaces for a device are stored in a single RRD for atomic updates. If the interface list changes, stale DS entries remain in the RRD unused — the RRD is never recreated on interface list change alone.
-- If the discovered interface count grows such that the expected DS count exceeds what was created, APMonitor auto-heals by deleting and recreating the RRD on the next run. Expected DS count = `(2 × interface_count) + 11`.
+- If the discovered interface count grows such that the expected DS count exceeds what was created, APMonitor auto-heals by deleting and recreating the RRD on the next run.
+- `disk_space_pct` is stored in the RRD as a GAUGE DS and also persisted to the statefile so that `generate_mrtg_config()` and `generate_mrtg_index()` can embed the live value (e.g., `Disk Use: 73.4%`) in MRTG PageTop headers and index cell headings without a live SNMP poll at generation time. Displays as `Disk Use: N/A` until the first successful poll.
+- UCD-SNMP-MIB host performance metrics (context switches, swap I/O, disk I/O, interrupts) are Linux `net-snmp` specific. On network devices (Cisco, HP, Juniper, Ubiquiti), these DS will store `U`.
 
 ### RRD Retention Policy
 
@@ -448,6 +482,7 @@ rrdtool fetch /var/tmp/apmonitor.rrd/tellusion-gw-availability.rrd AVERAGE -s en
 **References:**
 - [MRTG-RRD Documentation](https://directory.fsf.org/wiki/Mrtg-rrd)
 - [mrtg-rrd.cgi FAQ](https://web.archive.org/web/20081228131907/http://www.fi.muni.cz:80/~kas/mrtg-rrd/cvsweb.cgi/FAQ?rev=HEAD)
+- *System Performance Tuning*, 2nd Ed. — Gian-Paolo D. Musumeci & Mike Loukides (O'Reilly) — the canonical reference for the host performance metrics collected by `type: host`
 
 **Note:** RRD data collection is disabled by default. Run with `--generate-mrtg-config` once to enable, then continue normal monitoring to collect historical data.
 
@@ -508,24 +543,22 @@ monitors:
     always_up: yes
     display: false
 
-  # Switch port status monitoring with per-interface silence windows
+  # Switch port status + SNMP metrics monitoring
   - type: ports
     name: office-switch
     address: "snmp://192.168.1.6"
     community: "public"
+    percentile: 95
     check_every_n_secs: 30
     notify_every_n_secs: 3600
     after_every_n_notifications: 1
 
-  # SNMP network device monitoring with 95th percentile graphing
-  - type: snmp
-    name: core-switch
-    address: "snmp://192.168.1.1"
+  # Host performance monitoring (CPU, memory, disk I/O, swap, interrupts)
+  - type: host
+    name: debmon-host
+    address: "snmp://192.168.1.10"
     community: "public"
-    percentile: 95
     check_every_n_secs: 300
-    heartbeat_url: "https://hc-ping.com/uuid-here"
-    heartbeat_every_n_secs: 600
 
   # TCP port check with send/receive
   - type: tcp
@@ -721,9 +754,12 @@ The `monitors` section is a list of resources to monitor. Each monitor defines w
   - `quic`: HTTP/3 over QUIC endpoint check (UDP-based, faster than HTTP/HTTPS for high-latency networks)
   - `tcp`: TCP port connectivity and protocol check
   - `udp`: UDP datagram send/receive check
-  - `snmp`: SNMP network device monitoring (interface bandwidth, TCP retransmits)
-  - `ports`: SNMP switch port status monitor (tracks interface oper/admin state and MAC address changes with per-interface silence windows)
+  - `ports`: SNMP network device monitor — collects interface bandwidth/packet/error metrics, TCP retransmits, CPU & memory, and tracks per-interface oper/admin state and MAC address changes
   - `port`: SNMP single-port MAC-pinning monitor (pins one switch port to one MAC address; fires alerts on wrong MAC, port down, or MAC absence depending on `always_up`)
+  - `host`: SNMP host performance monitor — collects CPU, memory, disk I/O, swap activity, and hardware interrupt metrics per *System Performance Tuning* (Musumeci & Loukides, O'Reilly)
+
+> [!NOTE]
+> `type: snmp` has been removed. It was a protocol name, not a monitor type. Use `type: ports` for network device bandwidth/packet/error monitoring (it now includes all former `snmp` functionality), or `type: host` for server/host performance monitoring. If you have an existing config with `type: snmp`, APMonitor will print: *"type 'snmp' is not valid. Did you mean type: ports?"*
 
 - **`name`** (string): Unique identifier for this monitor. Must be unique across all monitors in the configuration. Used in notifications and state tracking.
 
@@ -732,9 +768,9 @@ The `monitors` section is a list of resources to monitor. Each monitor defines w
   - For `http`/`quic`: Full URL with scheme and host
   - For `tcp`: URL with `tcp://` scheme, hostname/IP, and port (e.g., `tcp://server.example.com:22`)
   - For `udp`: URL with `udp://` scheme, hostname/IP, and port (e.g., `udp://192.168.1.1:161`)
-  - For `snmp`: URL with `snmp://` scheme and hostname/IP (e.g., `snmp://192.168.1.1` or `snmp://192.168.1.1:161`)
-  - For `ports`: URL with `snmp://` scheme and hostname/IP — uses SNMP transport, same format as `snmp` (e.g., `snmp://192.168.1.6`)
+  - For `ports`: URL with `snmp://` scheme and hostname/IP (e.g., `snmp://192.168.1.1` or `snmp://192.168.1.1:161`)
   - For `port`: URL with `snmp://` scheme and hostname/IP — uses SNMP transport, same format as `ports` (e.g., `snmp://192.168.1.6`)
+  - For `host`: URL with `snmp://` scheme and hostname/IP — uses SNMP transport, same format as `ports` (e.g., `snmp://192.168.1.10`)
 
 ### Optional Fields (All Monitor Types)
 
@@ -879,23 +915,26 @@ expect: "SSH-2.0"
 - **Without `expect`**: Fire-and-forget (useful for syslog, statsd) - succeeds if packet sends without socket error, cannot detect if port is listening
 - UDP is connectionless, so there's no "connection established" signal like TCP's three-way handshake
 
-### SNMP Monitor Specific Fields
+### Ports Monitor Specific Fields
 
-SNMP monitors poll network devices for interface statistics and TCP metrics using SNMPv2c. These monitors automatically discover all interfaces and collect bandwidth utilization data.
+The `ports` monitor type polls a managed network switch, router, or Linux host via SNMPv2c. It combines two orthogonal functions in one monitor: it collects bandwidth, packet, error, TCP retransmit, CPU, and memory metrics into RRD (the former `type: snmp` function), and it also tracks the operational and administrative status of every interface plus the set of learned MAC addresses on each port (the original `ports` function), firing one notification per changed interface.
+
+> [!NOTE]
+> `type: ports` subsumes the former `type: snmp`. If you previously used `type: snmp` for bandwidth/metric monitoring, change it to `type: ports`. The only functional difference is that `ports` also performs port state and MAC change detection; for devices where that is not relevant (e.g., a Linux host with no managed switching), the MAC walk will simply return empty results harmlessly.
 
 **Required Fields:**
-- **`type`**: Must be `snmp`
-- **`address`**: URL with `snmp://` scheme and hostname/IP (format: `snmp://[community@]hostname[:port]`)
+- **`type`**: Must be `ports`
+- **`address`**: URL with `snmp://` scheme and hostname/IP — same format as former `snmp` monitors (e.g., `snmp://192.168.1.6`). Uses IF-MIB via SNMP transport.
 
 **Optional Fields:**
 
-- **`community`** (string, optional): SNMP community string for authentication. Default: `public`
+- **`community`** (string, optional): SNMP community string. Default: `public`
 
 - **`percentile`** (integer, optional): Percentile value to compute and display beneath each MRTG graph (e.g., `95` for 95th percentile billing). Must be an integer between 1 and 99. When specified, the Nth percentile is calculated over the graphed time range and shown in the stats table below each graph alongside Max/Average/Current.
 
   The 95th percentile is the standard metric for burstable bandwidth ("95th percentile billing"), which discards the top 5% of traffic samples to allow for short bursts without penalising peak usage in capacity planning.
 ```yaml
-- type: snmp
+- type: ports
   name: office-switch
   address: "snmp://192.168.1.6"
   community: "public"
@@ -903,119 +942,33 @@ SNMP monitors poll network devices for interface statistics and TCP metrics usin
   check_every_n_secs: 300
 ```
 
-  **Note**: `percentile` is only valid for `snmp` monitors and has no effect unless `--generate-mrtg-config` is also used. The percentile is computed by `mrtg-rrd.cgi.pl` at graph render time via RRDtool's `VDEF PERCENT` consolidation function — it is not stored separately in the RRD.
+  **Note**: `percentile` is only valid for `ports` and `port` monitors and has no effect unless `--generate-mrtg-config` is also used.
 
-**SNMP Address Format:**
-
-The community string can be specified in three ways (in order of precedence):
-
-1. **Monitor-level `community` field** (recommended for clarity):
-```yaml
-- type: snmp
-  name: switch
-  address: "snmp://192.168.1.6"
-  community: "private"
-```
-
-2. **URL userinfo** (inline with address):
-```yaml
-- type: snmp
-  name: switch
-  address: "snmp://private@192.168.1.6"
-```
-
-3. **Default**: If neither is specified, defaults to `public`
-
-**Monitored Metrics:**
-
-SNMP monitors automatically poll these standard MIB objects:
-- **IF-MIB::ifDescr** (1.3.6.1.2.1.2.2.1.2) - Interface descriptions
-- **IF-MIB::ifInOctets** (1.3.6.1.2.1.2.2.1.10) - Bytes received per interface
-- **IF-MIB::ifOutOctets** (1.3.6.1.2.1.2.2.1.16) - Bytes transmitted per interface
-- **IF-MIB::ifInErrors** (1.3.6.1.2.1.2.2.1.14) - Inbound errors per interface
-- **IF-MIB::ifOutErrors** (1.3.6.1.2.1.2.2.1.20) - Outbound errors per interface
-- **IF-MIB::ifHCInUcastPkts** (1.3.6.1.2.1.31.1.1.1.7) - Inbound unicast packets per interface (64-bit)
-- **IF-MIB::ifHCInMulticastPkts** (1.3.6.1.2.1.31.1.1.1.8) - Inbound multicast packets per interface (64-bit)
-- **IF-MIB::ifHCInBroadcastPkts** (1.3.6.1.2.1.31.1.1.1.9) - Inbound broadcast packets per interface (64-bit)
-- **IF-MIB::ifHCOutUcastPkts** (1.3.6.1.2.1.31.1.1.1.11) - Outbound unicast packets per interface (64-bit)
-- **IF-MIB::ifHCOutMulticastPkts** (1.3.6.1.2.1.31.1.1.1.12) - Outbound multicast packets per interface (64-bit)
-- **IF-MIB::ifHCOutBroadcastPkts** (1.3.6.1.2.1.31.1.1.1.13) - Outbound broadcast packets per interface (64-bit)
-- **TCP-MIB::tcpRetransSegs** (1.3.6.1.2.1.6.12.0) - TCP retransmission segments (global counter)
-- **Vendor-specific CPU OIDs** (Cisco/HP/Juniper/Ubiquiti) with HOST-RESOURCES-MIB::hrProcessorLoad fallback
-- **Vendor-specific memory OIDs** (Cisco/HP/Juniper/Ubiquiti) with HOST-RESOURCES-MIB::hrStorage fallback
-
-**RRD Integration:**
-
-When `--generate-mrtg-config` is specified, SNMP monitors create RRD files with dynamic data sources based on discovered interfaces. See the **SNMP Monitors** subsection under **RRD Data Collection** above for the complete DS inventory. DS names use the raw ifIndex integer (e.g., `if1_in`, `if2_out`) — not the interface description string.
-
-**SNMP Protocol Notes:**
-- Uses SNMPv2c (community-based authentication)
-- Port 161 is the standard SNMP port (can be overridden in address: `snmp://host:1161`)
-- Performs SNMP walk to discover all interfaces automatically
-- COUNTER data sources automatically calculate rates (bytes/second) from cumulative counters
-- Handles 32-bit and 64-bit counter wraparound via RRDtool's COUNTER type
-- All interfaces for a device are stored in a single RRD file for atomic updates
-
-**Example SNMP Monitor Configuration:**
-```yaml
-- type: snmp
-  name: core-switch
-  address: "snmp://192.168.1.1:161"
-  community: "monitoring"
-  percentile: 95
-  check_every_n_secs: 300
-  heartbeat_url: "https://hc-ping.com/uuid-here"
-  heartbeat_every_n_secs: 600
-```
-
-**Field Restrictions:**
-- `expect`, `ssl_fingerprint`, `ignore_ssl_expiry` fields are not valid for SNMP monitors
-- `send` and `content_type` fields are not valid for SNMP monitors
-- `percentile` is not valid for non-SNMP monitor types
-- SNMP monitors support `heartbeat_url` and `heartbeat_every_n_secs` like other monitor types
-
-### Ports Monitor Specific Fields
-
-The `ports` monitor type polls a managed network switch or router via SNMPv2c to track the operational and administrative status of every interface, and the set of learned MAC addresses on each port. It fires one notification per changed interface and enforces per-interface silence windows to suppress flap noise.
-
-**Required Fields:**
-- **`type`**: Must be `ports`
-- **`address`**: URL with `snmp://` scheme and hostname/IP — same format as `snmp` monitors (e.g., `snmp://192.168.1.6`). Uses IF-MIB via SNMP transport.
-
-**Optional Fields:**
-
-- **`community`** (string, optional): SNMP community string. Default: `public`
-
-- **`notify_every_n_secs`** / **`after_every_n_notifications`** (integers, optional): Control the per-interface silence window. Once an interface change fires a notification, further alerts for that interface are suppressed for `notify_every_n_secs × after_every_n_notifications` seconds. After the window expires, the baseline advances to the current interface state. Default values from site config apply.
-
-**Silence Window Semantics:**
-
-Each interface tracks its own silence window independently:
-
-- **First poll**: establishes a silent baseline (no alerts, prints to stderr for diagnostics)
-- **Change detected**: alert fires immediately, silence window opens for that interface only
-- **During window**: baseline is held at the pre-change state; further state changes (including flap-back to original) are absorbed silently
-- **Window expires**: baseline advances to current state regardless of intermediate flaps; new changes can trigger fresh alerts
-
-This means if an interface flaps down then back up during the silence window, both events are suppressed and the window still runs its full duration — the baseline advances to whatever state the interface is in when the window expires.
+- **`notify_every_n_secs`** / **`after_every_n_notifications`** (integers, optional): Control the per-interface silence window for port state change alerts. Default values from site config apply.
 
 **Monitored MIB Objects:**
-- **IF-MIB::ifDescr** (1.3.6.1.2.1.2.2.1.2) — Interface name/description
-- **IF-MIB::ifOperStatus** (1.3.6.1.2.1.2.2.1.8) — Operational status (`up`/`down`/`testing`/`unknown`/`dormant`/`notPresent`/`lowerLayerDown`)
-- **IF-MIB::ifAdminStatus** (1.3.6.1.2.1.2.2.1.7) — Administrative status (`up`/`down`/`testing`)
-- **Q-BRIDGE-MIB::dot1qTpFdbPort** (1.3.6.1.2.1.17.7.1.2.2.1.2) — Bridge port number per MAC (OID tail encodes `<vlan_id>.<6 MAC octets>`)
-- **Q-BRIDGE-MIB::dot1qTpFdbStatus** (1.3.6.1.2.1.17.7.1.2.2.1.3) — MAC entry status; only `learned` (3) entries are tracked
+- **IF-MIB::ifDescr** (1.3.6.1.2.1.2.2.1.2) — Interface name/description (single walk shared by metrics and state)
+- **IF-MIB::ifOperStatus** (1.3.6.1.2.1.2.2.1.8) — Operational status
+- **IF-MIB::ifAdminStatus** (1.3.6.1.2.1.2.2.1.7) — Administrative status
+- **IF-MIB::ifInOctets / ifOutOctets** (1.3.6.1.2.1.2.2.1.10/16) — Byte counters per interface
+- **IF-MIB::ifInErrors / ifOutErrors** (1.3.6.1.2.1.2.2.1.14/20) — Error counters per interface
+- **IF-MIB::ifHCIn/OutUcastPkts, ifHCIn/OutMulticastPkts, ifHCIn/OutBroadcastPkts** — 64-bit packet counters
+- **TCP-MIB::tcpRetransSegs** (1.3.6.1.2.1.6.12.0) — Global TCP retransmit counter
+- **Vendor-specific CPU OIDs** (Cisco/HP/Juniper/Ubiquiti) → fallback HOST-RESOURCES-MIB::hrProcessorLoad
+- **Vendor-specific memory OIDs** (Cisco/HP/Juniper/Ubiquiti) → fallback HOST-RESOURCES-MIB::hrStorage
+- **Q-BRIDGE-MIB::dot1qTpFdbPort** (1.3.6.1.2.1.17.7.1.2.2.1.2) — MAC-to-port mappings
+- **Q-BRIDGE-MIB::dot1qTpFdbStatus** (1.3.6.1.2.1.17.7.1.2.2.1.3) — FDB entry status (learned=3 filter)
+
+**MRTG Targets generated:** `-bandwidth`, `-packets`, `-packets-type`, `-errors`, `-retransmits`, `-system` (see MRTG targets table above).
 
 **State Tracking:**
 
 The state file stores one key per `ports` monitor:
-- `ports_state`: committed baseline — dict of `{if_index: {name, oper, admin, macs}}` per interface; `macs` is a sorted list of learned MAC addresses in `AA:BB:CC:DD:EE:FF` format sourced from Q-BRIDGE-MIB; advances to current state on each successful poll
+- `ports_state`: committed baseline — dict of `{if_index: {name, oper, admin, macs}}` per interface; advances to current state on each successful poll
 
 **Field Restrictions:**
-- `expect`, `ssl_fingerprint`, `ignore_ssl_expiry` are not valid for `ports` monitors
-- `send`, `content_type`, `percentile` are not valid for `ports` monitors
+- `expect`, `ssl_fingerprint`, `ignore_ssl_expiry`, `send`, `content_type` are not valid for `ports` monitors
 - `ports` monitors support `heartbeat_url` and `heartbeat_every_n_secs` like other monitor types
-- RRD/MRTG graph generation is not supported for `ports` monitors (no numeric time-series metrics collected)
 
 **Example Ports Monitor Configuration:**
 ```yaml
@@ -1023,21 +976,74 @@ The state file stores one key per `ports` monitor:
   name: office-switch
   address: "snmp://192.168.1.6"
   community: "public"
+  percentile: 95
   check_every_n_secs: 30
   notify_every_n_secs: 3600
   after_every_n_notifications: 1
 ```
 
-With the above config, the silence window is `3600 × 1 = 3600` seconds (1 hour). Once an interface change fires, that interface won't alert again for 1 hour regardless of further state changes.
-
 **Sample Notification Output:**
 ```
-##### PORT BASELINE: office-switch in HomeLab: GigabitEthernet0/1 oper=up admin=up #####
 ##### PORT CHANGE: office-switch in HomeLab: GigabitEthernet0/2 oper=down admin=up (was oper=up admin=up) at 2:15 PM #####
-##### PORT CHANGE: office-switch in HomeLab: GigabitEthernet0/5 appeared oper=up admin=up at 2:15 PM #####
-##### PORT CHANGE: office-switch in HomeLab: GigabitEthernet0/3 disappeared (was oper=up admin=up) at 2:15 PM #####
 ##### PORT MAC CHANGE: office-switch in HomeLab: GigabitEthernet0/1 MAC change appeared=[AA:BB:CC:DD:EE:FF] at 2:22 PM #####
-##### PORT MAC CHANGE: office-switch in HomeLab: GigabitEthernet0/1 MAC change disappeared=[AA:BB:CC:DD:EE:FF] appeared=[11:22:33:44:55:66] at 2:25 PM #####
+```
+
+### Host Monitor Specific Fields
+
+The `host` monitor type polls a Linux host (or any net-snmp compatible device) via SNMPv2c for system performance metrics drawn from UCD-SNMP-MIB and HOST-RESOURCES-MIB. The four MRTG charts generated correspond directly to the canonical performance tuning metrics defined in *System Performance Tuning* by Gian-Paolo D. Musumeci & Mike Loukides (O'Reilly, 2nd Ed.).
+
+`type: host` uses the same SNMP RRD schema as `ports` and `port`. Network DS (`total_bits_*`, `total_pkts_*`, etc.) are stored as `U` since `host` does not poll interface counters.
+
+**Required Fields:**
+- **`type`**: Must be `host`
+- **`address`**: URL with `snmp://` scheme and hostname/IP (e.g., `snmp://192.168.1.10`)
+
+**Optional Fields:**
+
+- **`community`** (string, optional): SNMP community string. Default: `public`
+
+**MRTG Charts Generated:**
+
+| Slot | DS pair | Title | Description |
+|---|---|---|---|
+| `-system1` | `cpu_load` / `context_switches` | CPU & Load | CPU utilization % + context switches/sec |
+| `-system2` | `memory_pct` / `swap_io` | Memory & Paging | Memory utilization % + swap I/O rate |
+| `-system3` | `disk_read` / `disk_write` | Disk I/O | Disk read/write bytes/sec (all devices summed). Disk space utilization % shown in PageTop header as *Disk Use: ##.#%* |
+| `-system4` | `swap_used` / `interrupts` | System Thrashing | Swap used bytes + hardware interrupts/sec |
+
+**Disk Space Display**: The current root filesystem utilization percentage is embedded in the MRTG `-system3` detail page header (PageTop) and in the MRTG index cell heading, e.g., `Disk I/O — Disk Use: 73.4%`. The value is read from state (persisted on each successful poll) so it updates on every monitoring cycle without requiring a live SNMP poll at graph generation time. Displays as `Disk Use: N/A` until the first successful poll.
+
+**Monitored MIB Objects:**
+- **HOST-RESOURCES-MIB::hrProcessorLoad** (1.3.6.1.2.1.25.3.3.1.2) — CPU load per core (averaged)
+- **HOST-RESOURCES-MIB::hrStorage** (1.3.6.1.2.1.25.2.3.1.*) — Physical memory, swap, and root filesystem utilization
+- **UCD-SNMP-MIB::ssRawContexts** (1.3.6.1.4.1.2021.11.60.0) — Raw context switch counter
+- **UCD-SNMP-MIB::ssRawSwapIn** (1.3.6.1.4.1.2021.11.62.0) — Raw swap-in counter
+- **UCD-SNMP-MIB::ssRawSwapOut** (1.3.6.1.4.1.2021.11.63.0) — Raw swap-out counter
+- **UCD-SNMP-MIB::ssRawInterrupts** (1.3.6.1.4.1.2021.11.59.0) — Raw hardware interrupt counter
+- **UCD-SNMP-MIB::memTotalReal / memAvailReal** (1.3.6.1.4.1.2021.4.5/6.0) — Memory fallback if hrStorage unavailable
+- **UCD-SNMP-MIB::memTotalSwap / memAvailSwap** (1.3.6.1.4.1.2021.4.3/4.0) — Swap fallback if hrStorage unavailable
+- **UCD-DISKIO-MIB::diskIOReadX** (1.3.6.1.4.1.2021.13.15.1.1.5) — 64-bit disk read bytes per device (walked, summed)
+- **UCD-DISKIO-MIB::diskIOWriteX** (1.3.6.1.4.1.2021.13.15.1.1.6) — 64-bit disk write bytes per device (walked, summed)
+
+**Notes:**
+- UCD-SNMP-MIB OIDs (`ssRaw*`, `diskIO*`) are Linux `net-snmp` specific. On network devices these DS store `U`.
+- Disk I/O bytes are summed across all block devices discovered by `diskIOTable`. This gives aggregate host I/O throughput rather than per-device breakdown.
+- hrStorage physical memory and swap are used preferentially; UCD memTotal/memAvail OIDs are fallback.
+- Root filesystem is identified by matching hrStorageDescr against `/`, `root`, `c:\`, or `c:`.
+
+**Field Restrictions:**
+- `expect`, `ssl_fingerprint`, `ignore_ssl_expiry`, `send`, `content_type`, `percentile` are not valid for `host` monitors
+- `host` monitors support `heartbeat_url` and `heartbeat_every_n_secs` like other monitor types
+
+**Example Host Monitor Configuration:**
+```yaml
+- type: host
+  name: debmon-host
+  address: "snmp://192.168.1.10"
+  community: "YourCommunityString"
+  check_every_n_secs: 300
+  heartbeat_url: "https://hc-ping.com/uuid-here"
+  heartbeat_every_n_secs: 600
 ```
 
 ### Port Monitor Specific Fields
@@ -1053,6 +1059,8 @@ The `port` monitor type polls a single switch port by ifIndex via SNMPv2c, pinni
 **Optional Fields:**
 
 - **`community`** (string, optional): SNMP community string. Default: `public`
+
+- **`percentile`** (integer, optional): Percentile value for MRTG graphs. Must be an integer between 1 and 99. See `ports` monitor for details.
 
 - **`always_up`** (boolean/integer/string, optional): Controls alarm semantics. Default: `false`
 
@@ -1080,9 +1088,8 @@ The state file stores one key per `port` monitor:
 - `port_state`: dict of `{oper, mac}` from last successful poll — used for observability and future state transition logging
 
 **Field Restrictions:**
-- `expect`, `ssl_fingerprint`, `ignore_ssl_expiry`, `send`, `content_type`, `percentile` are not valid for `port` monitors
+- `expect`, `ssl_fingerprint`, `ignore_ssl_expiry`, `send`, `content_type` are not valid for `port` monitors
 - `port` monitors support `heartbeat_url` and `heartbeat_every_n_secs` like other monitor types
-- RRD/MRTG graph generation is not supported for `port` monitors
 
 **Example Configuration:**
 ```yaml
@@ -1201,9 +1208,9 @@ With `always_up: yes`, this fires an alarm if ifIndex 0 is not oper=up, if `18:E
   check_every_n_secs: 300
 ```
 
-**SNMP Network Switch with 95th Percentile:**
+**Network Switch with 95th Percentile (formerly `type: snmp`):**
 ```yaml
-- type: snmp
+- type: ports
   name: office-switch
   address: "snmp://192.168.1.6"
   community: "public"
@@ -1213,7 +1220,16 @@ With `always_up: yes`, this fires an alarm if ifIndex 0 is not oper=up, if `18:E
   heartbeat_every_n_secs: 600
 ```
 
-**Switch Port Status Monitor:**
+**Host Performance Monitor:**
+```yaml
+- type: host
+  name: debmon-host
+  address: "snmp://192.168.1.10"
+  community: "public"
+  check_every_n_secs: 300
+```
+
+**Switch Port Status + Metrics Monitor:**
 ```yaml
 - type: ports
   name: office-switch
@@ -1262,20 +1278,20 @@ The configuration validator enforces these rules:
 18. `content_type` can only be specified if `send` is present
 19. `content_type` for TCP/UDP must be one of: text, hex, base64 (for HTTP/QUIC it's a raw MIME type string)
 20. `ssl_fingerprint` and `ignore_ssl_expiry` are not allowed for TCP/UDP monitors
-21. SNMP monitors must use `snmp://` scheme
-22. `community` field is optional for SNMP monitors and must be a non-empty string if specified
-23. `expect`, `ssl_fingerprint`, `ignore_ssl_expiry`, `send`, and `content_type` are not allowed for SNMP monitors
-24. SNMP monitors support `heartbeat_url` and `heartbeat_every_n_secs` like other monitor types
-25. `percentile` is only valid for SNMP monitors and must be an integer between 1 and 99
-26. `ports` monitors must use `snmp://` scheme (SNMP transport)
-27. `expect`, `ssl_fingerprint`, `ignore_ssl_expiry`, `send`, `content_type`, and `percentile` are not allowed for `ports` monitors
-28. `ports` monitors support `heartbeat_url` and `heartbeat_every_n_secs` like other monitor types
-29. `ports` monitors establish a silent baseline on first poll and alert on per-interface state changes thereafter
-30. `port` monitors must use `snmp://` scheme (SNMP transport)
-31. `port` monitors require `port` (non-negative integer ifIndex) and `mac` (valid `XX:XX:XX:XX:XX:XX` address)
-32. `always_up` is optional for `port` monitors and accepts boolean or string values
-33. `expect`, `ssl_fingerprint`, `ignore_ssl_expiry`, `send`, `content_type`, `percentile` are not allowed for `port` monitors
-34. `port` monitors support `heartbeat_url` and `heartbeat_every_n_secs` like other monitor types
+21. `ports` monitors must use `snmp://` scheme (SNMP transport)
+22. `community` field is optional for `ports`/`port`/`host` monitors and must be a non-empty string if specified
+23. `expect`, `ssl_fingerprint`, `ignore_ssl_expiry`, `send`, and `content_type` are not allowed for `ports` monitors
+24. `ports` monitors support `heartbeat_url` and `heartbeat_every_n_secs` like other monitor types
+25. `percentile` is only valid for `ports` and `port` monitors and must be an integer between 1 and 99
+26. `port` monitors must use `snmp://` scheme (SNMP transport)
+27. `port` monitors require `port` (non-negative integer ifIndex) and `mac` (valid `XX:XX:XX:XX:XX:XX` address)
+28. `always_up` is optional for `port` monitors and accepts boolean or string values
+29. `expect`, `ssl_fingerprint`, `ignore_ssl_expiry`, `send`, `content_type` are not allowed for `port` monitors
+30. `port` monitors support `heartbeat_url` and `heartbeat_every_n_secs` like other monitor types
+31. `host` monitors must use `snmp://` scheme (SNMP transport)
+32. `expect`, `ssl_fingerprint`, `ignore_ssl_expiry`, `send`, `content_type`, `percentile` are not allowed for `host` monitors
+33. `host` monitors support `heartbeat_url` and `heartbeat_every_n_secs` like other monitor types
+34. `type: snmp` is not valid — the validator emits: *"type 'snmp' is not valid. Did you mean type: ports?"*
 35. `display` is optional for all monitor types and accepts boolean or string values; when `false`, the monitor is excluded from MRTG index output but monitoring, alerting, heartbeats, and RRD collection continue unaffected; hidden monitors appear in the MRTG index audit footer and render in red when down
 
 # Dependencies
@@ -1294,7 +1310,7 @@ sudo pip3 install --break-system-packages PyYAML requests pyOpenSSL urllib3 aioq
 
 **Note**: 
 - The `aioquic` package is required for QUIC/HTTP3 monitoring support. If you don't plan to use `type: quic` monitors, you can omit this dependency.
-- The `easysnmp` package and `libsnmp-dev` system library are required for SNMP monitoring support. If you don't plan to use `type: snmp`, `type: ports`, or `type: port` monitors, you can omit these dependencies.
+- The `easysnmp` package and `libsnmp-dev` system library are required for SNMP monitoring support. If you don't plan to use `type: ports`, `type: port`, or `type: host` monitors, you can omit these dependencies.
 
 # Example invocation:
 ```
@@ -1542,6 +1558,7 @@ The state file tracks:
 - `notified_count`: Number of notifications sent for current outage
 - `error_reason`: Last error message
 - `last_config_checksum`: SHA-256 hash of monitor configuration (detects config changes)
+- `disk_space_pct`: (`host` monitors only) most recently polled root filesystem utilization percentage; used by MRTG config and index generators to embed live disk use in chart headers without a live SNMP poll
 - `ports_state`: (`ports` monitors only) committed baseline — dict of `{if_index: {name, oper, admin, macs}}` per interface; `macs` is a sorted list of learned MAC addresses in `AA:BB:CC:DD:EE:FF` format sourced from Q-BRIDGE-MIB; advances to current state on each successful poll
 - `port_state`: (`port` monitors only) last polled state — dict of `{oper, mac}` where `oper` is the IF-MIB operational status string and `mac` is the learned MAC address (or `None` if absent/unavailable)
 
@@ -1650,7 +1667,7 @@ sudo pip3 install PyYAML requests pyOpenSSL urllib3 aioquic easysnmp
 - `pyOpenSSL` - SSL certificate verification and fingerprint checking
 - `urllib3` - HTTP connection pooling (dependency of requests)
 - `aioquic` - QUIC/HTTP3 protocol support (required for `type: quic` monitors)
-- `easysnmp` - SNMP monitoring support (required for `type: snmp`, `type: ports`, and `type: port` monitors)
+- `easysnmp` - SNMP monitoring support (required for `type: ports`, `type: port`, and `type: host` monitors)
 
 ## Step 3: Create Monitoring User
 
@@ -1824,12 +1841,14 @@ sudo pip3 uninstall -y PyYAML requests pyOpenSSL urllib3 aioquic easysnmp
   - ~~Switch port status monitoring (`ports` type) with per-interface silence windows~~ (completed in v1.2.9)
   - ~~Add automated MAC address pinning to port status monitoring~~ (completed in v1.2.10)
   - ~~Add individual port monitor with MAC-pinning and `always_up` alarm semantics~~ (completed in v1.2.12)
+  - ~~Add `type: host` for system performance tuning metrics (CPU, memory, disk I/O, swap, interrupts)~~ (completed in v1.3.3)
+  - ~~Merge `type: snmp` into `type: ports`~~ (completed in v1.3.3)
   - Update docs to provide webhook examples for Pushover, Slack & Discord
 
 - Add additional outputs: 
   - ~~MRTG compatible logfiles~~ (completed in v1.2.3)
   - ~~MRTG compatible graph generation w/index.html~~ (completed in v1.2.3)
-  - Make index.html support multipl site files (index-<SiteName>.html)
+  - Make index.html support multiple site files (index-<SiteName>.html)
   - Use loess regression on MRTG compatible logfiles for outlier & drop/increase detection
 
 - Aggregated root cause alerting:
@@ -1859,7 +1878,7 @@ under the [GNU General Public License version 3](LICENSE.txt).
 `mrtg-rrd.cgi.pl` is licensed by Jan "Yenya" Kasprzak <kas@fi.muni.cz><br />
 under the [GNU General Public License version 2](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html).
 ```
-Software: APMonitor 1.3.1
+Software: APMonitor 1.3.3
 License: GNU General Public License version 3
 Licensor: Andrew (AP) Prendergast, ap@andrewprendergast.com -- FSF Member
 

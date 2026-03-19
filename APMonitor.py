@@ -44,7 +44,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-__version__ = "1.3.1"
+__version__ = "1.3.3"
 __app_name__ = "APMonitor"
 
 import argparse
@@ -303,7 +303,6 @@ def print_and_exit_on_bad_config(config: Dict[str, Any]) -> None:
 
             email_server = site['email_server']
 
-            # Required fields
             if 'smtp_host' not in email_server:
                 raise ConfigError("Field 'site.email_server': missing required field 'smtp_host'")
             if not isinstance(email_server['smtp_host'], str):
@@ -314,7 +313,6 @@ def print_and_exit_on_bad_config(config: Dict[str, Any]) -> None:
             if not isinstance(email_server['smtp_port'], int) or email_server['smtp_port'] < 1 or email_server['smtp_port'] > 65535:
                 raise ConfigError("Field 'site.email_server.smtp_port' must be an integer between 1 and 65535")
 
-            # Optional fields
             if 'smtp_username' in email_server:
                 if not isinstance(email_server['smtp_username'], str):
                     raise ConfigError("Field 'site.email_server.smtp_username' must be a string")
@@ -328,19 +326,16 @@ def print_and_exit_on_bad_config(config: Dict[str, Any]) -> None:
             if not isinstance(email_server['from_address'], str):
                 raise ConfigError("Field 'site.email_server.from_address' must be a string")
 
-            # Validate from_address email format
             email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
             if not re.match(email_pattern, email_server['from_address']):
                 raise ConfigError(f"Field 'site.email_server.from_address': '{email_server['from_address']}' is not a valid email address")
 
-            # Optional use_tls field
             if 'use_tls' in email_server:
                 if not isinstance(email_server['use_tls'], bool):
                     raise ConfigError("Field 'site.email_server.use_tls' must be a boolean")
 
         # Validate optional site.outage_emails
         if 'outage_emails' in site:
-            # Require email_server if outage_emails is specified
             if 'email_server' not in site:
                 raise ConfigError("Field 'site.outage_emails' can only be specified if 'site.email_server' is configured")
 
@@ -355,26 +350,22 @@ def print_and_exit_on_bad_config(config: Dict[str, Any]) -> None:
                 if not isinstance(email_entry['email'], str):
                     raise ConfigError(f"Field 'site.outage_emails[{i}].email' must be a string")
 
-                # Validate email format
                 email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
                 if not re.match(email_pattern, email_entry['email']):
                     raise ConfigError(f"Field 'site.outage_emails[{i}].email': '{email_entry['email']}' is not a valid email address")
 
-                # Validate optional email_outages
                 if 'email_outages' in email_entry:
                     try:
                         to_natural_language_boolean(email_entry['email_outages'])
                     except ValueError as e:
                         raise ConfigError(f"Field 'site.outage_emails[{i}].email_outages': {e}")
 
-                # Validate optional email_recoveries
                 if 'email_recoveries' in email_entry:
                     try:
                         to_natural_language_boolean(email_entry['email_recoveries'])
                     except ValueError as e:
                         raise ConfigError(f"Field 'site.outage_emails[{i}].email_recoveries': {e}")
 
-                # Validate optional email_reminders
                 if 'email_reminders' in email_entry:
                     try:
                         to_natural_language_boolean(email_entry['email_reminders'])
@@ -390,35 +381,29 @@ def print_and_exit_on_bad_config(config: Dict[str, Any]) -> None:
                 if not isinstance(webhook, dict):
                     raise ConfigError(f"Field 'site.outage_webhooks[{i}]' must be a dictionary")
 
-                # Validate required endpoint_url
                 if 'endpoint_url' not in webhook:
                     raise ConfigError(f"Missing required field: 'site.outage_webhooks[{i}].endpoint_url'")
                 if not isinstance(webhook['endpoint_url'], str):
                     raise ConfigError(f"Field 'site.outage_webhooks[{i}].endpoint_url' must be a string")
 
-                # Validate URL format
                 parsed_webhook = urlparse(webhook['endpoint_url'])
                 if not parsed_webhook.scheme or not parsed_webhook.netloc:
                     raise ConfigError(f"Field 'site.outage_webhooks[{i}].endpoint_url' must be a valid URL with scheme and host, got '{webhook['endpoint_url']}'")
 
-                # Validate required request_method
                 if 'request_method' not in webhook:
                     raise ConfigError(f"Missing required field: 'site.outage_webhooks[{i}].request_method'")
                 if webhook['request_method'] not in ['GET', 'POST']:
                     raise ConfigError(f"Field 'site.outage_webhooks[{i}].request_method' must be 'GET' or 'POST', got '{webhook['request_method']}'")
 
-                # Validate required request_encoding
                 if 'request_encoding' not in webhook:
                     raise ConfigError(f"Missing required field: 'site.outage_webhooks[{i}].request_encoding'")
                 if webhook['request_encoding'] not in ['URL', 'HTML', 'JSON', 'CSVQUOTED']:
                     raise ConfigError(f"Field 'site.outage_webhooks[{i}].request_encoding' must be one of 'URL', 'HTML', 'JSON', 'CSVQUOTED', got '{webhook['request_encoding']}'")
 
-                # Validate optional request_prefix
                 if 'request_prefix' in webhook:
                     if not isinstance(webhook['request_prefix'], str):
                         raise ConfigError(f"Field 'site.outage_webhooks[{i}].request_prefix' must be a string")
 
-                # Validate optional request_suffix
                 if 'request_suffix' in webhook:
                     if not isinstance(webhook['request_suffix'], str):
                         raise ConfigError(f"Field 'site.outage_webhooks[{i}].request_suffix' must be a string")
@@ -428,32 +413,26 @@ def print_and_exit_on_bad_config(config: Dict[str, Any]) -> None:
             if not isinstance(site['max_threads'], int) or site['max_threads'] < 1:
                 raise ConfigError("Field 'site.max_threads' must be a positive integer")
 
-        # Validate optional site.max_retries
         if 'max_retries' in site:
             if not isinstance(site['max_retries'], int) or site['max_retries'] < 1:
                 raise ConfigError("Field 'site.max_retries' must be a positive integer")
 
-        # Validate optional site.max_try_secs
         if 'max_try_secs' in site:
             if not isinstance(site['max_try_secs'], int) or site['max_try_secs'] < 1:
                 raise ConfigError("Field 'site.max_try_secs' must be a positive integer")
 
-        # Validate optional site.check_every_n_secs
         if 'check_every_n_secs' in site:
             if not isinstance(site['check_every_n_secs'], int) or site['check_every_n_secs'] < 1:
                 raise ConfigError("Field 'site.check_every_n_secs' must be a positive integer")
 
-        # Validate optional site.notify_every_n_secs
         if 'notify_every_n_secs' in site:
             if not isinstance(site['notify_every_n_secs'], int) or site['notify_every_n_secs'] < 1:
                 raise ConfigError("Field 'site.notify_every_n_secs' must be a positive integer")
 
-        # Validate optional site.after_every_n_notifications
         if 'after_every_n_notifications' in site:
             if not isinstance(site['after_every_n_notifications'], int) or site['after_every_n_notifications'] < 1:
                 raise ConfigError("Field 'site.after_every_n_notifications' must be a positive integer")
 
-        # Check for unrecognized site-level parameters
         valid_site_params = {
             'name', 'email_server', 'outage_emails', 'outage_webhooks', 'max_threads', 'max_retries',
             'max_try_secs', 'check_every_n_secs', 'notify_every_n_secs', 'after_every_n_notifications'
@@ -462,32 +441,25 @@ def print_and_exit_on_bad_config(config: Dict[str, Any]) -> None:
         if unrecognized_site:
             raise ConfigError(f"Unrecognized site-level parameters: {', '.join(sorted(unrecognized_site))}")
 
-        # Check monitors list exists
         if 'monitors' not in config:
             raise ConfigError("Missing required field: 'monitors'")
-
         if not isinstance(config['monitors'], list):
             raise ConfigError("Field 'monitors' must be a list")
-
         if len(config['monitors']) == 0:
             raise ConfigError("Field 'monitors' must contain at least one monitor")
 
-        # Track monitor names for uniqueness check
         monitor_names = set()
 
-        # Validate each monitor entry
         for i, monitor in enumerate(config['monitors']):
             if not isinstance(monitor, dict):
                 raise ConfigError(f"Monitor {i}: must be a dictionary")
 
-            # Check required fields
             required_fields = ['type', 'name', 'address']
             for field in required_fields:
                 if field not in monitor:
                     raise ConfigError(
                         f"Monitor {i} (name: {monitor.get('name', 'unknown')}): missing required field '{field}'")
 
-            # Check for unrecognized monitor-level parameters
             valid_monitor_params = {
                 'type', 'name', 'address', 'check_every_n_secs', 'notify_every_n_secs',
                 'notify_on_down_every_n_secs', 'after_every_n_notifications', 'heartbeat_url',
@@ -499,56 +471,47 @@ def print_and_exit_on_bad_config(config: Dict[str, Any]) -> None:
             if unrecognized_monitor:
                 raise ConfigError(f"Monitor {i} (name: {monitor.get('name', 'unknown')}): unrecognized parameters: {', '.join(sorted(unrecognized_monitor))}")
 
-            # Validate name is non-empty string
             if not isinstance(monitor['name'], str):
                 raise ConfigError(f"Monitor {i} (name: {monitor.get('name', 'unknown')}): 'name' must be a string")
 
-            # Check for duplicate names
             name = monitor['name']
             if name in monitor_names:
                 raise ConfigError(f"Monitor {i} (name: {name}): duplicate monitor name '{name}'")
             monitor_names.add(name)
 
-            # Validate type field
-            valid_types = ['ping', 'http', 'quic', 'tcp', 'udp', 'snmp', 'ports', 'port']
+            # 'snmp' removed — direct users to 'ports'
+            valid_types = ['ping', 'http', 'quic', 'tcp', 'udp', 'ports', 'port', 'host']
+            if monitor['type'] == 'snmp':
+                raise ConfigError(f"Monitor {i} (name: {name}): type 'snmp' is not valid. Did you mean type: ports?")
             if monitor['type'] not in valid_types:
                 raise ConfigError(f"Monitor {i} (name: {monitor.get('name', 'unknown')}): invalid type '{monitor['type']}', must be one of {valid_types}")
 
-            # Validate address is non-empty string
             if not isinstance(monitor['address'], str):
                 raise ConfigError(f"Monitor {i} (name: {monitor.get('name', 'unknown')}): 'address' must be a string")
 
-            # Validate optional check_every_n_secs
             if 'check_every_n_secs' in monitor:
                 if not isinstance(monitor['check_every_n_secs'], int) or monitor['check_every_n_secs'] < 1:
                     raise ConfigError(f"Monitor {i} (name: {name}): 'check_every_n_secs' must be a positive integer")
 
-            # Validate optional notify_on_down_every_n_secs
             if 'notify_on_down_every_n_secs' in monitor:
-                if not isinstance(monitor['notify_on_down_every_n_secs'], int) or monitor[
-                    'notify_on_down_every_n_secs'] < 1:
+                if not isinstance(monitor['notify_on_down_every_n_secs'], int) or monitor['notify_on_down_every_n_secs'] < 1:
                     raise ConfigError(f"Monitor {i} (name: {name}): 'notify_on_down_every_n_secs' must be a positive integer")
-
-                # Check that notify_on_down_every_n_secs >= check_every_n_secs
                 if 'check_every_n_secs' in monitor:
                     if monitor['notify_on_down_every_n_secs'] < monitor['check_every_n_secs']:
                         raise ConfigError(f"Monitor {i} (name: {name}): 'notify_on_down_every_n_secs' must be >= 'check_every_n_secs'")
 
-            # Validate optional after_every_n_notifications
             if 'after_every_n_notifications' in monitor:
                 if 'notify_every_n_secs' not in monitor:
                     raise ConfigError(f"Monitor {i} (name: {name}): 'after_every_n_notifications' can only be specified if 'notify_every_n_secs' is present")
                 if not isinstance(monitor['after_every_n_notifications'], int) or monitor['after_every_n_notifications'] < 1:
                     raise ConfigError(f"Monitor {i} (name: {name}): 'after_every_n_notifications' must be a positive integer")
 
-            # Validate optional email flag
             if 'email' in monitor:
                 try:
                     to_natural_language_boolean(monitor['email'])
                 except ValueError as e:
                     raise ConfigError(f"Monitor {i} (name: {name}): 'email' field: {e}")
 
-            # Validate optional display flag
             if 'display' in monitor:
                 try:
                     to_natural_language_boolean(monitor['display'])
@@ -559,61 +522,37 @@ def print_and_exit_on_bad_config(config: Dict[str, Any]) -> None:
             address = monitor['address']
 
             if monitor_type == 'ping':
-                # Validate hostname or IP address (IPv4 or IPv6)
                 ipv4_pattern = r'^(\d{1,3}\.){3}\d{1,3}$'
                 ipv6_pattern = r'^([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}$'
                 hostname_pattern = r'^([a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?$'
-
                 if not (re.match(ipv4_pattern, address) or re.match(ipv6_pattern, address) or re.match(hostname_pattern, address)):
                     raise ConfigError(f"Monitor {i} (name: {name}): 'address' must be a valid hostname, IPv4 or IPv6 address, got '{address}'")
-
-                # 'expect' not allowed for ping
-                if 'expect' in monitor:
-                    raise ConfigError(f"Monitor {i} (name: {name}): 'expect' field is only valid for 'http' and 'quic' monitors")
-
-                # 'ssl_fingerprint' not allowed for ping
-                if 'ssl_fingerprint' in monitor:
-                    raise ConfigError(f"Monitor {i} (name: {name}): 'ssl_fingerprint' field is only valid for 'http' and 'quic' monitors")
-
-                # 'percentile' not allowed for ping
-                if 'percentile' in monitor:
-                    raise ConfigError(f"Monitor {i} (name: {name}): 'percentile' field is only valid for 'snmp' monitors")
+                for forbidden in ('expect', 'ssl_fingerprint', 'percentile'):
+                    if forbidden in monitor:
+                        raise ConfigError(f"Monitor {i} (name: {name}): '{forbidden}' field is not valid for ping monitors")
 
             elif monitor_type in ['http', 'quic']:
-                # Validate URL/URI
                 parsed = urlparse(address)
                 if not parsed.scheme or not parsed.netloc:
                     raise ConfigError(f"Monitor {i} (name: {name}): 'address' must be a valid URL with scheme and host, got '{address}'")
-
-                # Validate 'expect' if present - must be a string
                 if 'expect' in monitor:
                     if not isinstance(monitor['expect'], str):
                         raise ConfigError(f"Monitor {i} (name: {name}): 'expect' must be a string")
                     if len(monitor['expect']) == 0:
                         raise ConfigError(f"Monitor {i} (name: {name}): 'expect' must not be empty")
-
-                # Validate 'ssl_fingerprint' if present
                 if 'ssl_fingerprint' in monitor:
                     if not isinstance(monitor['ssl_fingerprint'], str):
                         raise ConfigError(f"Monitor {i} (name: {name}): 'ssl_fingerprint' must be a string")
-
-                    # Remove colons and validate hex string
                     fingerprint_clean = monitor['ssl_fingerprint'].replace(':', '')
-
                     if not re.match(r'^[0-9a-fA-F]+$', fingerprint_clean):
                         raise ConfigError(f"Monitor {i} (name: {name}): 'ssl_fingerprint' must be a valid hex string")
-
-                    # Check length is power of two
                     fp_len = len(fingerprint_clean)
                     if fp_len == 0 or (fp_len & (fp_len - 1)) != 0:
                         raise ConfigError(f"Monitor {i} (name: {name}): 'ssl_fingerprint' length must be a power of two (got {fp_len} hex characters)")
-
-                # 'percentile' not allowed for http/quic
                 if 'percentile' in monitor:
-                    raise ConfigError(f"Monitor {i} (name: {name}): 'percentile' field is only valid for 'snmp' monitors")
+                    raise ConfigError(f"Monitor {i} (name: {name}): 'percentile' field is only valid for 'ports' monitors")
 
             elif monitor_type in ['tcp', 'udp']:
-                # Validate URL/URI with tcp:// or udp:// scheme
                 parsed = urlparse(address)
                 if monitor_type == 'tcp' and parsed.scheme != 'tcp':
                     raise ConfigError(f"Monitor {i} (name: {name}): TCP monitor must use 'tcp://' scheme, got '{address}'")
@@ -621,159 +560,99 @@ def print_and_exit_on_bad_config(config: Dict[str, Any]) -> None:
                     raise ConfigError(f"Monitor {i} (name: {name}): UDP monitor must use 'udp://' scheme, got '{address}'")
                 if not parsed.netloc:
                     raise ConfigError(f"Monitor {i} (name: {name}): 'address' must include hostname/IP and port, got '{address}'")
-
-                # Validate optional 'send'
                 if 'send' in monitor:
                     if not isinstance(monitor['send'], str):
                         raise ConfigError(f"Monitor {i} (name: {name}): 'send' must be a string")
-
-                # Validate optional 'content_type'
                 if 'content_type' in monitor:
                     if 'send' not in monitor:
                         raise ConfigError(f"Monitor {i} (name: {name}): 'content_type' can only be specified if 'send' is present")
                     valid_content_types = ['text', 'hex', 'base64']
                     if monitor['content_type'] not in valid_content_types:
                         raise ConfigError(f"Monitor {i} (name: {name}): 'content_type' must be one of {valid_content_types}, got '{monitor['content_type']}'")
-
-                # 'expect' is optional for TCP/UDP
                 if 'expect' in monitor:
                     if not isinstance(monitor['expect'], str):
                         raise ConfigError(f"Monitor {i} (name: {name}): 'expect' must be a string")
                     if len(monitor['expect']) == 0:
                         raise ConfigError(f"Monitor {i} (name: {name}): 'expect' must not be empty")
-
-                # 'ssl_fingerprint' not allowed for TCP/UDP
-                if 'ssl_fingerprint' in monitor:
-                    raise ConfigError(f"Monitor {i} (name: {name}): 'ssl_fingerprint' field is only valid for 'http' and 'quic' monitors")
-
-                # 'percentile' not allowed for tcp/udp
-                if 'percentile' in monitor:
-                    raise ConfigError(f"Monitor {i} (name: {name}): 'percentile' field is only valid for 'snmp' monitors")
-
-            elif monitor_type == 'snmp':
-                # Validate URL/URI with snmp:// scheme
-                parsed = urlparse(address)
-                if parsed.scheme != 'snmp':
-                    raise ConfigError(f"Monitor {i} (name: {name}): SNMP monitor must use 'snmp://' scheme, got '{address}'")
-                if not parsed.netloc:
-                    raise ConfigError(f"Monitor {i} (name: {name}): 'address' must include hostname/IP, got '{address}'")
-
-                # Validate hostname or IP address (IPv4 or IPv6)
-                hostname = parsed.hostname
-                if hostname:
-                    ipv4_pattern = r'^(\d{1,3}\.){3}\d{1,3}$'
-                    ipv6_pattern = r'^([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}$'
-                    hostname_pattern = r'^([a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?$'
-
-                    if not (re.match(ipv4_pattern, hostname) or re.match(ipv6_pattern, hostname) or re.match(hostname_pattern, hostname)):
-                        raise ConfigError(f"Monitor {i} (name: {name}): 'address' hostname must be valid hostname, IPv4 or IPv6 address, got '{hostname}'")
-
-                # Validate optional 'community' string
-                if 'community' in monitor:
-                    if not isinstance(monitor['community'], str):
-                        raise ConfigError(f"Monitor {i} (name: {name}): 'community' must be a string")
-                    if len(monitor['community']) == 0:
-                        raise ConfigError(f"Monitor {i} (name: {name}): 'community' must not be empty")
-
-                # Validate optional 'percentile'
-                if 'percentile' in monitor:
-                    if not isinstance(monitor['percentile'], int) or not (1 <= monitor['percentile'] <= 99):
-                        raise ConfigError(f"Monitor {i} (name: {name}): 'percentile' must be an integer between 1 and 99")
-
-                # 'expect' not allowed for SNMP
-                if 'expect' in monitor:
-                    raise ConfigError(f"Monitor {i} (name: {name}): 'expect' field not valid for SNMP monitors")
-
-                # 'ssl_fingerprint' not allowed for SNMP
-                if 'ssl_fingerprint' in monitor:
-                    raise ConfigError(f"Monitor {i} (name: {name}): 'ssl_fingerprint' field not valid for SNMP monitors")
-
-                # 'ignore_ssl_expiry' not allowed for SNMP
-                if 'ignore_ssl_expiry' in monitor:
-                    raise ConfigError(f"Monitor {i} (name: {name}): 'ignore_ssl_expiry' field not valid for SNMP monitors")
-
-                # 'send' not allowed for SNMP
-                if 'send' in monitor:
-                    raise ConfigError(f"Monitor {i} (name: {name}): 'send' field not valid for SNMP monitors")
-
-                # 'content_type' not allowed for SNMP
-                if 'content_type' in monitor:
-                    raise ConfigError(f"Monitor {i} (name: {name}): 'content_type' field not valid for SNMP monitors")
+                for forbidden in ('ssl_fingerprint', 'percentile'):
+                    if forbidden in monitor:
+                        raise ConfigError(f"Monitor {i} (name: {name}): '{forbidden}' field is not valid for {monitor_type} monitors")
 
             elif monitor_type == 'ports':
-                # Validate URL/URI with snmp:// scheme (ports uses SNMP transport)
+                # ports: merged snmp metrics + port state/MAC monitoring
                 parsed = urlparse(address)
                 if parsed.scheme != 'snmp':
                     raise ConfigError(f"Monitor {i} (name: {name}): ports monitor must use 'snmp://' scheme, got '{address}'")
                 if not parsed.netloc:
                     raise ConfigError(f"Monitor {i} (name: {name}): 'address' must include hostname/IP, got '{address}'")
 
-                # Validate hostname or IP address (IPv4 or IPv6)
                 hostname = parsed.hostname
                 if hostname:
                     ipv4_pattern = r'^(\d{1,3}\.){3}\d{1,3}$'
                     ipv6_pattern = r'^([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}$'
                     hostname_pattern = r'^([a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?$'
-
                     if not (re.match(ipv4_pattern, hostname) or re.match(ipv6_pattern, hostname) or re.match(hostname_pattern, hostname)):
                         raise ConfigError(f"Monitor {i} (name: {name}): 'address' hostname must be valid hostname, IPv4 or IPv6 address, got '{hostname}'")
 
-                # Validate optional 'community' string
                 if 'community' in monitor:
                     if not isinstance(monitor['community'], str):
                         raise ConfigError(f"Monitor {i} (name: {name}): 'community' must be a string")
                     if len(monitor['community']) == 0:
                         raise ConfigError(f"Monitor {i} (name: {name}): 'community' must not be empty")
 
-                # 'expect' not allowed for ports
-                if 'expect' in monitor:
-                    raise ConfigError(f"Monitor {i} (name: {name}): 'expect' field not valid for ports monitors")
-
-                # 'ssl_fingerprint' not allowed for ports
-                if 'ssl_fingerprint' in monitor:
-                    raise ConfigError(f"Monitor {i} (name: {name}): 'ssl_fingerprint' field not valid for ports monitors")
-
-                # 'ignore_ssl_expiry' not allowed for ports
-                if 'ignore_ssl_expiry' in monitor:
-                    raise ConfigError(f"Monitor {i} (name: {name}): 'ignore_ssl_expiry' field not valid for ports monitors")
-
-                # 'send' not allowed for ports
-                if 'send' in monitor:
-                    raise ConfigError(f"Monitor {i} (name: {name}): 'send' field not valid for ports monitors")
-
-                # 'content_type' not allowed for ports
-                if 'content_type' in monitor:
-                    raise ConfigError(f"Monitor {i} (name: {name}): 'content_type' field not valid for ports monitors")
-
-                # 'percentile' not allowed for ports
                 if 'percentile' in monitor:
-                    raise ConfigError(f"Monitor {i} (name: {name}): 'percentile' field not valid for ports monitors")
+                    if not isinstance(monitor['percentile'], int) or not (1 <= monitor['percentile'] <= 99):
+                        raise ConfigError(f"Monitor {i} (name: {name}): 'percentile' must be an integer between 1 and 99")
+
+                for forbidden in ('expect', 'ssl_fingerprint', 'ignore_ssl_expiry', 'send', 'content_type'):
+                    if forbidden in monitor:
+                        raise ConfigError(f"Monitor {i} (name: {name}): '{forbidden}' field not valid for ports monitors")
+
+            elif monitor_type == 'host':
+                parsed = urlparse(address)
+                if parsed.scheme != 'snmp':
+                    raise ConfigError(f"Monitor {i} (name: {name}): host monitor must use 'snmp://' scheme, got '{address}'")
+                if not parsed.netloc:
+                    raise ConfigError(f"Monitor {i} (name: {name}): 'address' must include hostname/IP, got '{address}'")
+
+                hostname = parsed.hostname
+                if hostname:
+                    ipv4_pattern = r'^(\d{1,3}\.){3}\d{1,3}$'
+                    ipv6_pattern = r'^([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}$'
+                    hostname_pattern = r'^([a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?$'
+                    if not (re.match(ipv4_pattern, hostname) or re.match(ipv6_pattern, hostname) or re.match(hostname_pattern, hostname)):
+                        raise ConfigError(f"Monitor {i} (name: {name}): 'address' hostname must be valid hostname, IPv4 or IPv6 address, got '{hostname}'")
+
+                if 'community' in monitor:
+                    if not isinstance(monitor['community'], str):
+                        raise ConfigError(f"Monitor {i} (name: {name}): 'community' must be a string")
+                    if len(monitor['community']) == 0:
+                        raise ConfigError(f"Monitor {i} (name: {name}): 'community' must not be empty")
+
+                for forbidden in ('expect', 'ssl_fingerprint', 'ignore_ssl_expiry', 'send', 'content_type', 'percentile'):
+                    if forbidden in monitor:
+                        raise ConfigError(f"Monitor {i} (name: {name}): '{forbidden}' field not valid for host monitors")
 
             elif monitor_type == 'port':
-                # Validate URL/URI with snmp:// scheme (port uses SNMP transport)
                 parsed = urlparse(address)
                 if parsed.scheme != 'snmp':
                     raise ConfigError(f"Monitor {i} (name: {name}): port monitor must use 'snmp://' scheme, got '{address}'")
                 if not parsed.netloc:
                     raise ConfigError(f"Monitor {i} (name: {name}): 'address' must include hostname/IP, got '{address}'")
 
-                # Validate hostname or IP address (IPv4 or IPv6)
                 hostname = parsed.hostname
                 if hostname:
                     ipv4_pattern = r'^(\d{1,3}\.){3}\d{1,3}$'
                     ipv6_pattern = r'^([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}$'
                     hostname_pattern = r'^([a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?$'
-
                     if not (re.match(ipv4_pattern, hostname) or re.match(ipv6_pattern, hostname) or re.match(hostname_pattern, hostname)):
                         raise ConfigError(f"Monitor {i} (name: {name}): 'address' hostname must be valid hostname, IPv4 or IPv6 address, got '{hostname}'")
 
-                # 'port' (ifIndex) is required
                 if 'port' not in monitor:
                     raise ConfigError(f"Monitor {i} (name: {name}): 'port' (ifIndex) is required for port monitors")
                 if not isinstance(monitor['port'], int) or monitor['port'] < 0:
                     raise ConfigError(f"Monitor {i} (name: {name}): 'port' must be a non-negative integer (ifIndex)")
 
-                # 'mac' is required
                 if 'mac' not in monitor:
                     raise ConfigError(f"Monitor {i} (name: {name}): 'mac' (pinned MAC address) is required for port monitors")
                 if not isinstance(monitor['mac'], str):
@@ -781,43 +660,35 @@ def print_and_exit_on_bad_config(config: Dict[str, Any]) -> None:
                 if not re.match(r'^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$', monitor['mac']):
                     raise ConfigError(f"Monitor {i} (name: {name}): 'mac' must be a valid MAC address (XX:XX:XX:XX:XX:XX), got '{monitor['mac']}'")
 
-                # 'always_up' is optional boolean
                 if 'always_up' in monitor:
                     try:
                         to_natural_language_boolean(monitor['always_up'])
                     except ValueError as e:
                         raise ConfigError(f"Monitor {i} (name: {name}): 'always_up' field: {e}")
 
-                # Validate optional 'community' string
                 if 'community' in monitor:
                     if not isinstance(monitor['community'], str):
                         raise ConfigError(f"Monitor {i} (name: {name}): 'community' must be a string")
                     if len(monitor['community']) == 0:
                         raise ConfigError(f"Monitor {i} (name: {name}): 'community' must not be empty")
 
-                # Fields not valid for port
                 for forbidden in ('expect', 'ssl_fingerprint', 'ignore_ssl_expiry', 'send', 'content_type', 'percentile'):
                     if forbidden in monitor:
                         raise ConfigError(f"Monitor {i} (name: {name}): '{forbidden}' field not valid for port monitors")
 
-            # Validate heartbeat_url if present (valid for all monitor types)
             if 'heartbeat_url' in monitor:
                 if not isinstance(monitor['heartbeat_url'], str):
                     raise ConfigError(f"Monitor {i} (name: {name}): 'heartbeat_url' must be a string")
-
                 parsed_heartbeat = urlparse(monitor['heartbeat_url'])
                 if not parsed_heartbeat.scheme or not parsed_heartbeat.netloc:
-                    raise ConfigError(
-                        f"Monitor {i} (name: {name}): 'heartbeat_url' must be a valid URL with scheme and host, got '{monitor['heartbeat_url']}'")
+                    raise ConfigError(f"Monitor {i} (name: {name}): 'heartbeat_url' must be a valid URL with scheme and host, got '{monitor['heartbeat_url']}'")
 
-            # Validate optional heartbeat_every_n_secs
             if 'heartbeat_every_n_secs' in monitor:
                 if 'heartbeat_url' not in monitor:
                     raise ConfigError(f"Monitor {i} (name: {name}): 'heartbeat_every_n_secs' can only be specified if 'heartbeat_url' is present")
                 if not isinstance(monitor['heartbeat_every_n_secs'], int) or monitor['heartbeat_every_n_secs'] < 1:
                     raise ConfigError(f"Monitor {i} (name: {name}): 'heartbeat_every_n_secs' must be a positive integer")
 
-            # Validate optional ignore_ssl_expiry
             if 'ignore_ssl_expiry' in monitor:
                 if monitor_type not in ['http', 'quic']:
                     raise ConfigError(f"Monitor {i} (name: {name}): 'ignore_ssl_expiry' field is only valid for 'http' and 'quic' monitors")
@@ -1489,80 +1360,71 @@ def check_ping_resource(resource: Dict[str, Any]) -> Optional[str]:
         return error_msg
 
 
-def check_snmp_resource(resource: Dict[str, Any]) -> Optional[str]:
-    """Poll SNMP device for interface bandwidth/retransmit metrics and system resources, update RRD."""
+def check_host_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Dict[str, Any]]:
+    """Poll SNMP device for host performance metrics and write RRD if enabled.
+
+    Collects UCD-SNMP-MIB system performance metrics:
+      - Chart 1 (-system1): CPU utilisation % + context switches/sec
+      - Chart 2 (-system2): Memory utilisation % + swap I/O rate
+      - Chart 3 (-system3): Disk read/write bytes summed across all devices
+      - Chart 4 (-system4): Swap used bytes + hardware interrupts/sec (System Thrashing)
+
+    Network DS (total_bits_*, total_pkts_*, total_errors_*, tcp_retrans) stored as U.
+    disk_space_pct is persisted to state for use by generate_mrtg_config() / generate_mrtg_index().
+
+    Returns (error_msg, {}) — empty ports_state, consistent with check_resource() interface.
+    """
     try:
         from easysnmp import Session
     except ImportError as e:
         error_msg = f"easysnmp library import failed: {e} (try: pip install easysnmp)"
         prefix = getattr(thread_local, 'prefix', '')
-        print(f"{prefix}SNMP check FAILED: {error_msg}", file=sys.stderr)
-        return error_msg
+        print(f"{prefix}HOST check FAILED: {error_msg}", file=sys.stderr)
+        return error_msg, {}
 
     prefix = getattr(thread_local, 'prefix', '')
     address = resource['address']
-    name = resource['name']
+    name    = resource['name']
 
-    # Parse SNMP configuration from address (format: snmp://community@host:port)
     parsed = urlparse(address)
     if parsed.scheme != 'snmp':
-        error_msg = f"{parsed.scheme.upper()} protocol not supported for SNMP, use snmp"
-        print(f"{prefix}SNMP check FAILED for '{name}': {error_msg}", file=sys.stderr)
-        return error_msg
+        error_msg = f"{parsed.scheme.upper()} protocol not supported for host monitor, use snmp"
+        print(f"{prefix}HOST check FAILED for '{name}': {error_msg}", file=sys.stderr)
+        return error_msg, {}
 
-    # Extract community string - priority: monitor config > URL userinfo > default 'public'
     community = resource.get('community') or parsed.username or 'public'
-    hostname = parsed.hostname
-    port = parsed.port or 161
+    hostname  = parsed.hostname
+    port      = parsed.port or 161
 
     if not hostname:
-        error_msg = "SNMP address must include hostname"
-        print(f"{prefix}SNMP check FAILED for '{name}': {error_msg}", file=sys.stderr)
-        return error_msg
+        error_msg = "host monitor address must include hostname"
+        print(f"{prefix}HOST check FAILED for '{name}': {error_msg}", file=sys.stderr)
+        return error_msg, {}
 
-    # Standard SNMP OIDs
-    OID_SYS_OBJECT_ID = '1.3.6.1.2.1.1.2.0'  # SNMPv2-MIB::sysObjectID
-    OID_IF_DESCR = '1.3.6.1.2.1.2.2.1.2'  # IF-MIB::ifDescr
-    OID_IF_IN_OCTETS = '1.3.6.1.2.1.2.2.1.10'  # IF-MIB::ifInOctets
-    OID_IF_OUT_OCTETS = '1.3.6.1.2.1.2.2.1.16'  # IF-MIB::ifOutOctets
-    OID_IF_IN_ERRORS = '1.3.6.1.2.1.2.2.1.14'   # IF-MIB::ifInErrors
-    OID_IF_OUT_ERRORS = '1.3.6.1.2.1.2.2.1.20'  # IF-MIB::ifOutErrors
-    OID_TCP_RETRANS_SEGS = '1.3.6.1.2.1.6.12.0'  # TCP-MIB::tcpRetransSegs
+    # HOST-RESOURCES-MIB
+    OID_HR_PROCESSOR_LOAD = '1.3.6.1.2.1.25.3.3.1.2'  # hrProcessorLoad
+    OID_HR_STORAGE_DESCR  = '1.3.6.1.2.1.25.2.3.1.3'  # hrStorageDescr
+    OID_HR_STORAGE_UNITS  = '1.3.6.1.2.1.25.2.3.1.4'  # hrStorageAllocationUnits
+    OID_HR_STORAGE_SIZE   = '1.3.6.1.2.1.25.2.3.1.5'  # hrStorageSize
+    OID_HR_STORAGE_USED   = '1.3.6.1.2.1.25.2.3.1.6'  # hrStorageUsed
 
-    # Interface packet counters (high-capacity 64-bit)
-    OID_IF_HC_IN_UCAST_PKTS = '1.3.6.1.2.1.31.1.1.1.7'  # IF-MIB::ifHCInUcastPkts
-    OID_IF_HC_IN_MCAST_PKTS = '1.3.6.1.2.1.31.1.1.1.8'  # IF-MIB::ifHCInMulticastPkts
-    OID_IF_HC_IN_BCAST_PKTS = '1.3.6.1.2.1.31.1.1.1.9'  # IF-MIB::ifHCInBroadcastPkts
-    OID_IF_HC_OUT_UCAST_PKTS = '1.3.6.1.2.1.31.1.1.1.11'  # IF-MIB::ifHCOutUcastPkts
-    OID_IF_HC_OUT_MCAST_PKTS = '1.3.6.1.2.1.31.1.1.1.12'  # IF-MIB::ifHCOutMulticastPkts
-    OID_IF_HC_OUT_BCAST_PKTS = '1.3.6.1.2.1.31.1.1.1.13'  # IF-MIB::ifHCOutBroadcastPkts
+    # UCD-SNMP-MIB system stats
+    OID_SS_RAW_CONTEXT_SWITCHES = '1.3.6.1.4.1.2021.11.60.0'  # ssRawContexts
+    OID_SS_RAW_SWAP_IN          = '1.3.6.1.4.1.2021.11.62.0'  # ssRawSwapIn
+    OID_SS_RAW_SWAP_OUT         = '1.3.6.1.4.1.2021.11.63.0'  # ssRawSwapOut
+    OID_SS_RAW_INTERRUPTS       = '1.3.6.1.4.1.2021.11.59.0'  # ssRawInterrupts
 
-    # HOST-RESOURCES-MIB for CPU and memory (fallback)
-    OID_HR_PROCESSOR_LOAD = '1.3.6.1.2.1.25.3.3.1.2'  # HOST-RESOURCES-MIB::hrProcessorLoad
-    OID_HR_STORAGE_INDEX = '1.3.6.1.2.1.25.2.3.1.1'  # HOST-RESOURCES-MIB::hrStorageIndex
-    OID_HR_STORAGE_DESCR = '1.3.6.1.2.1.25.2.3.1.3'  # HOST-RESOURCES-MIB::hrStorageDescr
-    OID_HR_STORAGE_UNITS = '1.3.6.1.2.1.25.2.3.1.4'  # HOST-RESOURCES-MIB::hrStorageAllocationUnits
-    OID_HR_STORAGE_SIZE = '1.3.6.1.2.1.25.2.3.1.5'  # HOST-RESOURCES-MIB::hrStorageSize
-    OID_HR_STORAGE_USED = '1.3.6.1.2.1.25.2.3.1.6'  # HOST-RESOURCES-MIB::hrStorageUsed
+    # UCD-SNMP-MIB memory (fallback if hrStorage gives nothing)
+    OID_MEM_TOTAL_REAL = '1.3.6.1.4.1.2021.4.5.0'  # memTotalReal (kB)
+    OID_MEM_AVAIL_REAL = '1.3.6.1.4.1.2021.4.6.0'  # memAvailReal (kB)
+    OID_MEM_TOTAL_SWAP = '1.3.6.1.4.1.2021.4.3.0'  # memTotalSwap (kB)
+    OID_MEM_AVAIL_SWAP = '1.3.6.1.4.1.2021.4.4.0'  # memAvailSwap (kB)
 
-    # Vendor-specific OIDs for CPU
-    OID_CISCO_CPU_5SEC = '1.3.6.1.4.1.9.9.109.1.1.1.1.7.1'  # CISCO-PROCESS-MIB::cpmCPUTotal5secRev
-    OID_CISCO_CPU_1MIN = '1.3.6.1.4.1.9.9.109.1.1.1.1.5.1'  # CISCO-PROCESS-MIB::cpmCPUTotal1minRev
-    OID_HP_CPU_LOAD = '1.3.6.1.4.1.11.2.14.11.5.1.9.6.1.0'  # HP-ICF-CHASSIS::hpSwitchCpuStat
-    OID_JUNIPER_CPU = '1.3.6.1.4.1.2636.3.1.13.1.8.9.1.0.0'  # JUNIPER-MIB::jnxOperatingCPU (RE0)
-    OID_UBNT_SYS_CPU = '1.3.6.1.4.1.41112.1.4.1.2.1.0'  # UBNT-MIB::ubntSystemCpuLoad
-
-    # Vendor-specific OIDs for memory
-    OID_CISCO_MEM_POOL_USED = '1.3.6.1.4.1.9.9.48.1.1.1.5.1'  # CISCO-MEMORY-POOL-MIB::ciscoMemoryPoolUsed
-    OID_CISCO_MEM_POOL_FREE = '1.3.6.1.4.1.9.9.48.1.1.1.6.1'  # CISCO-MEMORY-POOL-MIB::ciscoMemoryPoolFree
-    OID_HP_MEM_TOTAL = '1.3.6.1.4.1.11.2.14.11.5.1.1.2.1.1.1.5.1'  # HP-ICF-CHASSIS::hpLocalMemTotalBytes
-    OID_HP_MEM_FREE = '1.3.6.1.4.1.11.2.14.11.5.1.1.2.1.1.1.6.1'  # HP-ICF-CHASSIS::hpLocalMemFreeBytes
-    OID_JUNIPER_MEM_UTIL = '1.3.6.1.4.1.2636.3.1.13.1.11.9.1.0.0'  # JUNIPER-MIB::jnxOperatingBuffer (RE0)
-    OID_UBNT_SYS_MEM_TOTAL = '1.3.6.1.4.1.41112.1.4.1.2.2.0'  # UBNT-MIB::ubntSystemMemTotal
-    OID_UBNT_SYS_MEM_FREE = '1.3.6.1.4.1.41112.1.4.1.2.3.0'  # UBNT-MIB::ubntSystemMemFree
+    # UCD-DISKIO-MIB — walk all block devices and sum
+    OID_DISK_IO_READ  = '1.3.6.1.4.1.2021.13.15.1.1.5'  # diskIOReadX (64-bit bytes)
+    OID_DISK_IO_WRITE = '1.3.6.1.4.1.2021.13.15.1.1.6'  # diskIOWriteX (64-bit bytes)
 
     try:
-        # Create SNMP session
         session = Session(
             hostname=hostname,
             community=community,
@@ -1572,16 +1434,342 @@ def check_snmp_resource(resource: Dict[str, Any]) -> Optional[str]:
             retries=MAX_RETRIES - 1
         )
 
-        # Detect vendor via sysObjectID
+        # --- CPU utilisation (hrProcessorLoad averaged across cores) ---
+        cpu_load = None
+        try:
+            cpu_items = session.walk(OID_HR_PROCESSOR_LOAD)
+            if cpu_items:
+                cpu_values = [int(item.value) for item in cpu_items]
+                cpu_load   = sum(cpu_values) / len(cpu_values)
+                if VERBOSE:
+                    print(f"{prefix}HOST CPU: {len(cpu_values)} cores, avg={cpu_load:.1f}%")
+        except Exception as e:
+            if VERBOSE:
+                print(f"{prefix}HOST hrProcessorLoad FAILED: {e}")
+
+        # --- Memory utilisation + swap used + disk space (hrStorage walk) ---
+        memory_pct     = None
+        swap_used      = None
+        disk_space_pct = None
+
+        try:
+            storage_descr_items = session.walk(OID_HR_STORAGE_DESCR)
+            for item in storage_descr_items:
+                descr    = item.value.lower()
+                st_index = item.oid.split('.')[-1]
+
+                # Physical memory
+                if memory_pct is None and (
+                    'physical memory' in descr or 'real memory' in descr
+                    or 'ram' in descr or descr == 'memory'
+                ):
+                    try:
+                        units = int(session.get(f"{OID_HR_STORAGE_UNITS}.{st_index}").value)
+                        size  = int(session.get(f"{OID_HR_STORAGE_SIZE}.{st_index}").value)
+                        used  = int(session.get(f"{OID_HR_STORAGE_USED}.{st_index}").value)
+                        if size > 0:
+                            memory_pct = (used / size) * 100.0
+                            if VERBOSE:
+                                print(f"{prefix}HOST memory: used={used * units:,} total={size * units:,} ({memory_pct:.1f}%)")
+                    except Exception as e:
+                        if VERBOSE:
+                            print(f"{prefix}HOST hrStorage memory FAILED: {e}")
+
+                # Virtual memory / swap
+                elif swap_used is None and (
+                    'virtual memory' in descr or 'swap' in descr or 'swap space' in descr
+                ):
+                    try:
+                        units     = int(session.get(f"{OID_HR_STORAGE_UNITS}.{st_index}").value)
+                        used      = int(session.get(f"{OID_HR_STORAGE_USED}.{st_index}").value)
+                        swap_used = used * units  # bytes
+                        if VERBOSE:
+                            size = int(session.get(f"{OID_HR_STORAGE_SIZE}.{st_index}").value)
+                            print(f"{prefix}HOST swap: used={swap_used:,} total={size * units:,}")
+                    except Exception as e:
+                        if VERBOSE:
+                            print(f"{prefix}HOST hrStorage swap FAILED: {e}")
+
+                # Root filesystem disk space
+                elif disk_space_pct is None and descr in ('/', 'root', 'c:\\', 'c:'):
+                    try:
+                        size = int(session.get(f"{OID_HR_STORAGE_SIZE}.{st_index}").value)
+                        used = int(session.get(f"{OID_HR_STORAGE_USED}.{st_index}").value)
+                        if size > 0:
+                            disk_space_pct = (used / size) * 100.0
+                            if VERBOSE:
+                                print(f"{prefix}HOST disk space ({item.value}): {disk_space_pct:.1f}%")
+                    except Exception as e:
+                        if VERBOSE:
+                            print(f"{prefix}HOST hrStorage disk space FAILED: {e}")
+
+        except Exception as e:
+            if VERBOSE:
+                print(f"{prefix}HOST hrStorage walk FAILED: {e}")
+
+        # UCD memAvailReal fallback for memory_pct
+        if memory_pct is None:
+            try:
+                total_kb = int(session.get(OID_MEM_TOTAL_REAL).value)
+                avail_kb = int(session.get(OID_MEM_AVAIL_REAL).value)
+                if total_kb > 0:
+                    memory_pct = ((total_kb - avail_kb) / total_kb) * 100.0
+                    if VERBOSE:
+                        print(f"{prefix}HOST memory (UCD fallback): {memory_pct:.1f}%")
+            except Exception as e:
+                if VERBOSE:
+                    print(f"{prefix}HOST UCD memory fallback FAILED: {e}")
+
+        # UCD memAvailSwap fallback for swap_used
+        if swap_used is None:
+            try:
+                total_swap_kb = int(session.get(OID_MEM_TOTAL_SWAP).value)
+                avail_swap_kb = int(session.get(OID_MEM_AVAIL_SWAP).value)
+                swap_used     = (total_swap_kb - avail_swap_kb) * 1024  # bytes
+                if VERBOSE:
+                    print(f"{prefix}HOST swap used (UCD fallback): {swap_used:,} bytes")
+            except Exception as e:
+                if VERBOSE:
+                    print(f"{prefix}HOST UCD swap fallback FAILED: {e}")
+
+        # --- Context switches ---
+        context_switches = None
+        try:
+            context_switches = int(session.get(OID_SS_RAW_CONTEXT_SWITCHES).value)
+            if VERBOSE:
+                print(f"{prefix}HOST context switches: {context_switches:,}")
+        except Exception as e:
+            if VERBOSE:
+                print(f"{prefix}HOST ssRawContexts FAILED: {e}")
+
+        # --- Swap I/O (ssRawSwapIn + ssRawSwapOut combined COUNTER) ---
+        swap_io = None
+        try:
+            swap_in  = int(session.get(OID_SS_RAW_SWAP_IN).value)
+            swap_out = int(session.get(OID_SS_RAW_SWAP_OUT).value)
+            swap_io  = swap_in + swap_out
+            if VERBOSE:
+                print(f"{prefix}HOST swap I/O: in={swap_in:,} out={swap_out:,} total={swap_io:,}")
+        except Exception as e:
+            if VERBOSE:
+                print(f"{prefix}HOST ssRawSwapIn/Out FAILED: {e}")
+
+        # --- Disk I/O (diskIOReadX / diskIOWriteX summed across all devices) ---
+        disk_read = disk_write = None
+        try:
+            read_items  = session.walk(OID_DISK_IO_READ)
+            write_items = session.walk(OID_DISK_IO_WRITE)
+            if read_items:
+                disk_read  = sum(int(item.value) for item in read_items)
+            if write_items:
+                disk_write = sum(int(item.value) for item in write_items)
+            if VERBOSE:
+                print(f"{prefix}HOST disk I/O: read={disk_read:,} write={disk_write:,}")
+        except Exception as e:
+            if VERBOSE:
+                print(f"{prefix}HOST diskIO walk FAILED: {e}")
+
+        # --- Hardware interrupts ---
+        interrupts = None
+        try:
+            interrupts = int(session.get(OID_SS_RAW_INTERRUPTS).value)
+            if VERBOSE:
+                print(f"{prefix}HOST interrupts: {interrupts:,}")
+        except Exception as e:
+            if VERBOSE:
+                print(f"{prefix}HOST ssRawInterrupts FAILED: {e}")
+
+        if VERBOSE:
+            print(f"{prefix}HOST poll SUCCESS for '{name}': "
+                  f"cpu={f'{cpu_load:.1f}%' if cpu_load is not None else 'U'} "
+                  f"mem={f'{memory_pct:.1f}%' if memory_pct is not None else 'U'} "
+                  f"ctx={context_switches} swap_io={swap_io} "
+                  f"disk_r={disk_read} disk_w={disk_write} "
+                  f"disk_space={f'{disk_space_pct:.1f}%' if disk_space_pct is not None else 'U'} "
+                  f"swap_used={swap_used} interrupts={interrupts}")
+
+        # Persist disk_space_pct to state so generate_mrtg_config() / generate_mrtg_index()
+        # can embed the live value in PageTop and index cell headings without a live SNMP poll.
+        update_state({name: {**STATE.get(name, {}), 'disk_space_pct': disk_space_pct}})
+
+        # --- RRD update ---
+        if RRD_ENABLED:
+            check_every_n_secs = resource.get('check_every_n_secs', DEFAULT_CHECK_EVERY_N_SECS)
+            rrd_path           = get_rrd_path(name, 'snmp')
+            rras               = create_rrd_rras(check_every_n_secs)
+
+            # host uses empty interfaces dict — no per-interface DS
+            # fixed DS count = 0 per-interface + 11 network + 7 host = 18
+            interfaces        = {}
+            expected_ds_count = 18
+
+            if os.path.exists(rrd_path):
+                needs_recreation = False
+                try:
+                    info            = rrdtool.info(rrd_path)
+                    actual_ds_count = len([k for k in info if k.startswith('ds[') and k.endswith('].type')])
+                    if actual_ds_count < expected_ds_count:
+                        print(f"{prefix}HOST RRD deleted for recreation: {rrd_path} "
+                              f"(ds_count={actual_ds_count} < expected={expected_ds_count})")
+                        needs_recreation = True
+                except Exception as e:
+                    print(f"{prefix}HOST RRD introspection failed for '{rrd_path}': {e}, will recreate",
+                          file=sys.stderr)
+                    needs_recreation = True
+
+                if not needs_recreation and _check_rrd_needs_recreation(rrd_path, rras):
+                    print(f"{prefix}HOST RRD deleted for recreation: {rrd_path} (RRA rows under-provisioned)")
+                    needs_recreation = True
+
+                if needs_recreation:
+                    os.remove(rrd_path)
+
+            if not os.path.exists(rrd_path):
+                create_snmp_rrd(rrd_path, check_every_n_secs, interfaces)
+                if VERBOSE:
+                    print(f"{prefix}Created HOST RRD: {rrd_path}")
+
+            if os.path.exists(rrd_path):
+                rrd_err = update_snmp_rrd(
+                    rrd_path, datetime.now(), interfaces,
+                    None,        # tcp_retrans
+                    None, None,  # total_bits_in/out
+                    None, None,  # total_pkts_in/out
+                    None, None,  # total_errors_in/out
+                    cpu_load, memory_pct,
+                    None, None,  # total_pkts_ucast/bmcast
+                    context_switches=context_switches,
+                    swap_io=swap_io,
+                    disk_read=disk_read,
+                    disk_write=disk_write,
+                    disk_space_pct=disk_space_pct,
+                    swap_used=swap_used,
+                    interrupts=interrupts,
+                )
+                if rrd_err:
+                    return rrd_err, {}
+            else:
+                error_msg = f"RRD creation failed: {rrd_path} does not exist after create"
+                print(f"{prefix}HOST RRD FAILED for '{name}': {error_msg}", file=sys.stderr)
+                return error_msg, {}
+
+        return None, {}
+
+    except Exception as e:
+        error_msg = f"{type(e).__name__}: {e}"
+        print(f"{prefix}HOST check FAILED for '{name}' at '{address}': {error_msg}", file=sys.stderr)
+        if VERBOSE > 1:
+            traceback.print_exc(file=sys.stderr)
+        return error_msg, {}
+
+
+def check_ports_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Dict[str, Any]]:
+    """Poll SNMP device for interface metrics (bandwidth/packets/errors/CPU/memory) and
+    port state (oper/admin status + MAC forwarding table). Writes SNMP RRD if enabled.
+
+    Combines former check_snmp_resource() and check_ports_resource() into a single
+    SNMP session with one ifDescr walk shared across both metric and state collection.
+
+    Returns (error_msg, current_ports_state) where:
+    - error_msg:           None on success, string on any SNMP or RRD failure
+    - current_ports_state: dict of {if_index: {name, oper, admin, macs}} for all interfaces
+    """
+    try:
+        from easysnmp import Session
+    except ImportError as e:
+        error_msg = f"easysnmp library import failed: {e} (try: pip install easysnmp)"
+        prefix = getattr(thread_local, 'prefix', '')
+        print(f"{prefix}PORTS check FAILED: {error_msg}", file=sys.stderr)
+        return error_msg, {}
+
+    prefix = getattr(thread_local, 'prefix', '')
+    address = resource['address']
+    name    = resource['name']
+
+    parsed = urlparse(address)
+    if parsed.scheme != 'snmp':
+        error_msg = f"{parsed.scheme.upper()} protocol not supported for ports monitor, use snmp"
+        print(f"{prefix}PORTS check FAILED for '{name}': {error_msg}", file=sys.stderr)
+        return error_msg, {}
+
+    community = resource.get('community') or parsed.username or 'public'
+    hostname  = parsed.hostname
+    port      = parsed.port or 161
+
+    if not hostname:
+        error_msg = "ports monitor address must include hostname"
+        print(f"{prefix}PORTS check FAILED for '{name}': {error_msg}", file=sys.stderr)
+        return error_msg, {}
+
+    # Standard SNMP OIDs
+    OID_SYS_OBJECT_ID        = '1.3.6.1.2.1.1.2.0'
+    OID_IF_DESCR              = '1.3.6.1.2.1.2.2.1.2'
+    OID_IF_OPER_STATUS        = '1.3.6.1.2.1.2.2.1.8'
+    OID_IF_ADMIN_STATUS       = '1.3.6.1.2.1.2.2.1.7'
+    OID_IF_IN_OCTETS          = '1.3.6.1.2.1.2.2.1.10'
+    OID_IF_OUT_OCTETS         = '1.3.6.1.2.1.2.2.1.16'
+    OID_IF_IN_ERRORS          = '1.3.6.1.2.1.2.2.1.14'
+    OID_IF_OUT_ERRORS         = '1.3.6.1.2.1.2.2.1.20'
+    OID_TCP_RETRANS_SEGS      = '1.3.6.1.2.1.6.12.0'
+
+    # IF-MIB high-capacity 64-bit packet counters
+    OID_IF_HC_IN_UCAST_PKTS  = '1.3.6.1.2.1.31.1.1.1.7'
+    OID_IF_HC_IN_MCAST_PKTS  = '1.3.6.1.2.1.31.1.1.1.8'
+    OID_IF_HC_IN_BCAST_PKTS  = '1.3.6.1.2.1.31.1.1.1.9'
+    OID_IF_HC_OUT_UCAST_PKTS = '1.3.6.1.2.1.31.1.1.1.11'
+    OID_IF_HC_OUT_MCAST_PKTS = '1.3.6.1.2.1.31.1.1.1.12'
+    OID_IF_HC_OUT_BCAST_PKTS = '1.3.6.1.2.1.31.1.1.1.13'
+
+    # HOST-RESOURCES-MIB
+    OID_HR_PROCESSOR_LOAD    = '1.3.6.1.2.1.25.3.3.1.2'
+    OID_HR_STORAGE_DESCR     = '1.3.6.1.2.1.25.2.3.1.3'
+    OID_HR_STORAGE_UNITS     = '1.3.6.1.2.1.25.2.3.1.4'
+    OID_HR_STORAGE_SIZE      = '1.3.6.1.2.1.25.2.3.1.5'
+    OID_HR_STORAGE_USED      = '1.3.6.1.2.1.25.2.3.1.6'
+
+    # Vendor-specific CPU OIDs
+    OID_CISCO_CPU_5SEC       = '1.3.6.1.4.1.9.9.109.1.1.1.1.7.1'
+    OID_CISCO_CPU_1MIN       = '1.3.6.1.4.1.9.9.109.1.1.1.1.5.1'
+    OID_HP_CPU_LOAD          = '1.3.6.1.4.1.11.2.14.11.5.1.9.6.1.0'
+    OID_JUNIPER_CPU          = '1.3.6.1.4.1.2636.3.1.13.1.8.9.1.0.0'
+    OID_UBNT_SYS_CPU         = '1.3.6.1.4.1.41112.1.4.1.2.1.0'
+
+    # Vendor-specific memory OIDs
+    OID_CISCO_MEM_POOL_USED  = '1.3.6.1.4.1.9.9.48.1.1.1.5.1'
+    OID_CISCO_MEM_POOL_FREE  = '1.3.6.1.4.1.9.9.48.1.1.1.6.1'
+    OID_HP_MEM_TOTAL         = '1.3.6.1.4.1.11.2.14.11.5.1.1.2.1.1.1.5.1'
+    OID_HP_MEM_FREE          = '1.3.6.1.4.1.11.2.14.11.5.1.1.2.1.1.1.6.1'
+    OID_JUNIPER_MEM_UTIL     = '1.3.6.1.4.1.2636.3.1.13.1.11.9.1.0.0'
+    OID_UBNT_SYS_MEM_TOTAL   = '1.3.6.1.4.1.41112.1.4.1.2.2.0'
+    OID_UBNT_SYS_MEM_FREE    = '1.3.6.1.4.1.41112.1.4.1.2.3.0'
+
+    # Q-BRIDGE-MIB (RFC 2674)
+    OID_DOT1Q_TP_FDB_PORT    = '1.3.6.1.2.1.17.7.1.2.2.1.2'
+    OID_DOT1Q_TP_FDB_STATUS  = '1.3.6.1.2.1.17.7.1.2.2.1.3'
+
+    OPER_STATUS = {
+        '1': 'up', '2': 'down', '3': 'testing',
+        '4': 'unknown', '5': 'dormant', '6': 'notPresent', '7': 'lowerLayerDown'
+    }
+    ADMIN_STATUS       = {'1': 'up', '2': 'down', '3': 'testing'}
+    FDB_STATUS_LEARNED = '3'
+
+    try:
+        session = Session(
+            hostname=hostname,
+            community=community,
+            version=2,
+            remote_port=port,
+            timeout=MAX_TRY_SECS,
+            retries=MAX_RETRIES - 1
+        )
+
+        # --- Vendor detection ---
         vendor = None
         try:
-            sys_obj_id_item = session.get(OID_SYS_OBJECT_ID)
-            sys_obj_id = sys_obj_id_item.value
-
+            sys_obj_id = session.get(OID_SYS_OBJECT_ID).value
             if VERBOSE > 1:
                 print(f"{prefix}SNMP sysObjectID: {sys_obj_id}")
-
-            # Vendor detection based on enterprise OID prefix
             if sys_obj_id.startswith('1.3.6.1.4.1.9.'):
                 vendor = 'cisco'
             elif sys_obj_id.startswith('1.3.6.1.4.1.11.'):
@@ -1590,332 +1778,206 @@ def check_snmp_resource(resource: Dict[str, Any]) -> Optional[str]:
                 vendor = 'juniper'
             elif sys_obj_id.startswith('1.3.6.1.4.1.41112.'):
                 vendor = 'ubiquiti'
-
             if VERBOSE and vendor:
                 print(f"{prefix}Detected vendor: {vendor}")
         except Exception as e:
             if VERBOSE > 1:
                 print(f"{prefix}SNMP sysObjectID query failed: {e}, will use HOST-RESOURCES-MIB")
 
-        # Walk interface table to discover all interfaces
-        interfaces = {}
-
+        # --- Single ifDescr walk shared by metrics and state collection ---
         try:
             if_descr_items = session.walk(OID_IF_DESCR)
-
-            for item in if_descr_items:
-                if_index = item.oid.split('.')[-1]
-                if_name = item.value
-                interfaces[if_index] = {'name': if_name}
         except Exception as e:
             error_msg = f"SNMP walk failed: {e}"
-            print(f"{prefix}SNMP check FAILED for '{name}': {error_msg}", file=sys.stderr)
-            return error_msg
+            print(f"{prefix}PORTS check FAILED for '{name}': {error_msg}", file=sys.stderr)
+            return error_msg, {}
 
-        if not interfaces:
+        if not if_descr_items:
             error_msg = "no interfaces found"
-            print(f"{prefix}SNMP check FAILED for '{name}': {error_msg}", file=sys.stderr)
-            return error_msg
+            print(f"{prefix}PORTS check FAILED for '{name}': {error_msg}", file=sys.stderr)
+            return error_msg, {}
 
-        # Initialize aggregate counters
-        total_octets_in = 0
-        total_octets_out = 0
-        total_pkts_ucast_in = 0
-        total_pkts_ucast_out = 0
-        total_pkts_bmcast_in = 0   # broadcast + multicast combined
-        total_pkts_bmcast_out = 0
-        total_pkts_in = 0
-        total_pkts_out = 0
-        total_errors_in = 0
-        total_errors_out = 0
+        interfaces = {
+            item.oid.split('.')[-1]: {'name': item.value}
+            for item in if_descr_items
+        }
 
-        # Poll byte counters and error counters for each interface
+        # --- IF-MIB oper/admin status ---
+        try:
+            oper_items  = session.walk(OID_IF_OPER_STATUS)
+            admin_items = session.walk(OID_IF_ADMIN_STATUS)
+        except Exception as e:
+            error_msg = f"SNMP walk failed: {e}"
+            print(f"{prefix}PORTS check FAILED for '{name}': {error_msg}", file=sys.stderr)
+            return error_msg, {}
+
+        oper_by_index  = {item.oid.split('.')[-1]: item.value for item in oper_items}
+        admin_by_index = {item.oid.split('.')[-1]: item.value for item in admin_items}
+
+        # --- Byte and error counters ---
+        total_octets_in = total_octets_out = 0
+        total_errors_in = total_errors_out = 0
+
         for if_index in interfaces:
-            # Get input octets
             try:
-                item = session.get(f"{OID_IF_IN_OCTETS}.{if_index}")
-                octets_in = int(item.value)
-                interfaces[if_index]['in_octets'] = octets_in
-                total_octets_in += octets_in
-                if VERBOSE:
-                    print(f"{prefix}SNMP GET {OID_IF_IN_OCTETS}.{if_index} (ifInOctets) = {octets_in}")
-            except Exception as e:
+                v = int(session.get(f"{OID_IF_IN_OCTETS}.{if_index}").value)
+                interfaces[if_index]['in_octets'] = v
+                total_octets_in += v
+            except Exception:
                 interfaces[if_index]['in_octets'] = None
-                if VERBOSE:
-                    print(f"{prefix}SNMP GET {OID_IF_IN_OCTETS}.{if_index} (ifInOctets) FAILED: {e}")
 
-            # Get output octets
             try:
-                item = session.get(f"{OID_IF_OUT_OCTETS}.{if_index}")
-                octets_out = int(item.value)
-                interfaces[if_index]['out_octets'] = octets_out
-                total_octets_out += octets_out
-                if VERBOSE:
-                    print(f"{prefix}SNMP GET {OID_IF_OUT_OCTETS}.{if_index} (ifOutOctets) = {octets_out}")
-            except Exception as e:
+                v = int(session.get(f"{OID_IF_OUT_OCTETS}.{if_index}").value)
+                interfaces[if_index]['out_octets'] = v
+                total_octets_out += v
+            except Exception:
                 interfaces[if_index]['out_octets'] = None
-                if VERBOSE:
-                    print(f"{prefix}SNMP GET {OID_IF_OUT_OCTETS}.{if_index} (ifOutOctets) FAILED: {e}")
 
-            # Get input errors
             try:
-                item = session.get(f"{OID_IF_IN_ERRORS}.{if_index}")
-                errors_in = int(item.value)
-                interfaces[if_index]['in_errors'] = errors_in
-                total_errors_in += errors_in
-                if VERBOSE:
-                    print(f"{prefix}SNMP GET {OID_IF_IN_ERRORS}.{if_index} (ifInErrors) = {errors_in}")
-            except Exception as e:
+                v = int(session.get(f"{OID_IF_IN_ERRORS}.{if_index}").value)
+                interfaces[if_index]['in_errors'] = v
+                total_errors_in += v
+            except Exception:
                 interfaces[if_index]['in_errors'] = None
-                if VERBOSE:
-                    print(f"{prefix}SNMP GET {OID_IF_IN_ERRORS}.{if_index} (ifInErrors) FAILED: {e}")
 
-            # Get output errors
             try:
-                item = session.get(f"{OID_IF_OUT_ERRORS}.{if_index}")
-                errors_out = int(item.value)
-                interfaces[if_index]['out_errors'] = errors_out
-                total_errors_out += errors_out
-                if VERBOSE:
-                    print(f"{prefix}SNMP GET {OID_IF_OUT_ERRORS}.{if_index} (ifOutErrors) = {errors_out}")
-            except Exception as e:
+                v = int(session.get(f"{OID_IF_OUT_ERRORS}.{if_index}").value)
+                interfaces[if_index]['out_errors'] = v
+                total_errors_out += v
+            except Exception:
                 interfaces[if_index]['out_errors'] = None
-                if VERBOSE:
-                    print(f"{prefix}SNMP GET {OID_IF_OUT_ERRORS}.{if_index} (ifOutErrors) FAILED: {e}")
 
-        # Poll packet counters for each interface (IF-MIB high-capacity 64-bit counters)
+        # --- Packet counters ---
+        total_pkts_ucast_in = total_pkts_ucast_out = 0
+        total_pkts_bmcast_in = total_pkts_bmcast_out = 0
+        total_pkts_in = total_pkts_out = 0
+
         for if_index in interfaces:
-            if_pkts_in = 0
-            if_pkts_out = 0
+            if_pkts_in = if_pkts_out = 0
 
-            # Input packets (unicast + multicast + broadcast)
-            try:
-                item = session.get(f"{OID_IF_HC_IN_UCAST_PKTS}.{if_index}")
-                v = int(item.value)
-                if_pkts_in += v
-                total_pkts_ucast_in += v
-            except Exception as e:
-                if VERBOSE > 1:
-                    print(f"{prefix}SNMP GET {OID_IF_HC_IN_UCAST_PKTS}.{if_index} (ifHCInUcastPkts) FAILED: {e}")
+            for oid, is_in, is_ucast in [
+                (OID_IF_HC_IN_UCAST_PKTS,   True,  True),
+                (OID_IF_HC_IN_MCAST_PKTS,   True,  False),
+                (OID_IF_HC_IN_BCAST_PKTS,   True,  False),
+                (OID_IF_HC_OUT_UCAST_PKTS,  False, True),
+                (OID_IF_HC_OUT_MCAST_PKTS,  False, False),
+                (OID_IF_HC_OUT_BCAST_PKTS,  False, False),
+            ]:
+                try:
+                    v = int(session.get(f"{oid}.{if_index}").value)
+                    if is_in:
+                        if_pkts_in += v
+                        if is_ucast: total_pkts_ucast_in  += v
+                        else:        total_pkts_bmcast_in += v
+                    else:
+                        if_pkts_out += v
+                        if is_ucast: total_pkts_ucast_out  += v
+                        else:        total_pkts_bmcast_out += v
+                except Exception:
+                    pass
 
-            try:
-                item = session.get(f"{OID_IF_HC_IN_MCAST_PKTS}.{if_index}")
-                v = int(item.value)
-                if_pkts_in += v
-                total_pkts_bmcast_in += v
-            except Exception as e:
-                if VERBOSE > 1:
-                    print(f"{prefix}SNMP GET {OID_IF_HC_IN_MCAST_PKTS}.{if_index} (ifHCInMulticastPkts) FAILED: {e}")
-
-            try:
-                item = session.get(f"{OID_IF_HC_IN_BCAST_PKTS}.{if_index}")
-                v = int(item.value)
-                if_pkts_in += v
-                total_pkts_bmcast_in += v
-            except Exception as e:
-                if VERBOSE > 1:
-                    print(f"{prefix}SNMP GET {OID_IF_HC_IN_BCAST_PKTS}.{if_index} (ifHCInBroadcastPkts) FAILED: {e}")
-
-            # Output packets (unicast + multicast + broadcast)
-            try:
-                item = session.get(f"{OID_IF_HC_OUT_UCAST_PKTS}.{if_index}")
-                v = int(item.value)
-                if_pkts_out += v
-                total_pkts_ucast_out += v
-            except Exception as e:
-                if VERBOSE > 1:
-                    print(f"{prefix}SNMP GET {OID_IF_HC_OUT_UCAST_PKTS}.{if_index} (ifHCOutUcastPkts) FAILED: {e}")
-
-            try:
-                item = session.get(f"{OID_IF_HC_OUT_MCAST_PKTS}.{if_index}")
-                v = int(item.value)
-                if_pkts_out += v
-                total_pkts_bmcast_out += v
-            except Exception as e:
-                if VERBOSE > 1:
-                    print(f"{prefix}SNMP GET {OID_IF_HC_OUT_MCAST_PKTS}.{if_index} (ifHCOutMulticastPkts) FAILED: {e}")
-
-            try:
-                item = session.get(f"{OID_IF_HC_OUT_BCAST_PKTS}.{if_index}")
-                v = int(item.value)
-                if_pkts_out += v
-                total_pkts_bmcast_out += v
-            except Exception as e:
-                if VERBOSE > 1:
-                    print(f"{prefix}SNMP GET {OID_IF_HC_OUT_BCAST_PKTS}.{if_index} (ifHCOutBroadcastPkts) FAILED: {e}")
-
-            # Aggregate totals
-            total_pkts_in += if_pkts_in
+            total_pkts_in  += if_pkts_in
             total_pkts_out += if_pkts_out
 
             if VERBOSE:
                 print(f"{prefix}Interface {if_index} packets: in={if_pkts_in:,} out={if_pkts_out:,}")
 
-        # Convert octets to bits for total_bits metrics (1 byte = 8 bits)
-        total_bits_in = total_octets_in * 8
+        total_bits_in  = total_octets_in  * 8
         total_bits_out = total_octets_out * 8
-
-        # Unicast vs broadcast+multicast aggregates (in+out combined)
         total_pkts_ucast  = total_pkts_ucast_in  + total_pkts_ucast_out
-        total_pkts_bmcast = total_pkts_bmcast_in  + total_pkts_bmcast_out
+        total_pkts_bmcast = total_pkts_bmcast_in + total_pkts_bmcast_out
 
         if VERBOSE:
-            print(f"{prefix}Aggregate totals: bits_in={total_bits_in:,} bits_out={total_bits_out:,} pkts_in={total_pkts_in:,} pkts_out={total_pkts_out:,} errors_in={total_errors_in:,} errors_out={total_errors_out:,}")
+            print(f"{prefix}Aggregate totals: bits_in={total_bits_in:,} bits_out={total_bits_out:,} "
+                  f"pkts_in={total_pkts_in:,} pkts_out={total_pkts_out:,} "
+                  f"errors_in={total_errors_in:,} errors_out={total_errors_out:,}")
             print(f"{prefix}Packet type totals: ucast={total_pkts_ucast:,} bmcast={total_pkts_bmcast:,}")
 
-        # Get TCP retransmit segments (global counter)
+        # --- TCP retransmits ---
         tcp_retrans = None
         try:
-            item = session.get(OID_TCP_RETRANS_SEGS)
-            tcp_retrans = int(item.value)
+            tcp_retrans = int(session.get(OID_TCP_RETRANS_SEGS).value)
             if VERBOSE:
-                print(f"{prefix}SNMP GET {OID_TCP_RETRANS_SEGS} (tcpRetransSegs) = {tcp_retrans}")
+                print(f"{prefix}SNMP tcpRetransSegs = {tcp_retrans}")
         except Exception as e:
             if VERBOSE:
-                print(f"{prefix}SNMP GET {OID_TCP_RETRANS_SEGS} (tcpRetransSegs) FAILED: {e}")
+                print(f"{prefix}SNMP tcpRetransSegs FAILED: {e}")
 
-        # Poll CPU utilization (vendor-specific with HOST-RESOURCES-MIB fallback)
+        # --- CPU (vendor-specific → HOST-RESOURCES-MIB fallback) ---
         cpu_load = None
-
-        # Try vendor-specific OIDs first
         if vendor == 'cisco':
             try:
-                item = session.get(OID_CISCO_CPU_5SEC)
-                cpu_load = float(item.value)
-                if VERBOSE:
-                    print(f"{prefix}SNMP CPU (Cisco 5-sec): {cpu_load:.1f}%")
-            except Exception as e:
-                if VERBOSE:
-                    print(f"{prefix}SNMP GET Cisco CPU 5-sec FAILED: {e}, trying 1-min average")
+                cpu_load = float(session.get(OID_CISCO_CPU_5SEC).value)
+            except Exception:
                 try:
-                    item = session.get(OID_CISCO_CPU_1MIN)
-                    cpu_load = float(item.value)
-                    if VERBOSE:
-                        print(f"{prefix}SNMP CPU (Cisco 1-min): {cpu_load:.1f}%")
-                except Exception as e2:
-                    if VERBOSE:
-                        print(f"{prefix}SNMP GET Cisco CPU 1-min FAILED: {e2}")
-
+                    cpu_load = float(session.get(OID_CISCO_CPU_1MIN).value)
+                except Exception:
+                    pass
         elif vendor == 'hp':
             try:
-                item = session.get(OID_HP_CPU_LOAD)
-                cpu_load = float(item.value)
-                if VERBOSE:
-                    print(f"{prefix}SNMP CPU (HP): {cpu_load:.1f}%")
-            except Exception as e:
-                if VERBOSE:
-                    print(f"{prefix}SNMP GET HP CPU FAILED: {e}")
-
+                cpu_load = float(session.get(OID_HP_CPU_LOAD).value)
+            except Exception:
+                pass
         elif vendor == 'juniper':
             try:
-                item = session.get(OID_JUNIPER_CPU)
-                cpu_load = float(item.value)
-                if VERBOSE:
-                    print(f"{prefix}SNMP CPU (Juniper): {cpu_load:.1f}%")
-            except Exception as e:
-                if VERBOSE:
-                    print(f"{prefix}SNMP GET Juniper CPU FAILED: {e}")
-
+                cpu_load = float(session.get(OID_JUNIPER_CPU).value)
+            except Exception:
+                pass
         elif vendor == 'ubiquiti':
             try:
-                item = session.get(OID_UBNT_SYS_CPU)
-                cpu_load = float(item.value)
-                if VERBOSE:
-                    print(f"{prefix}SNMP CPU (Ubiquiti): {cpu_load:.1f}%")
-            except Exception as e:
-                if VERBOSE:
-                    print(f"{prefix}SNMP GET Ubiquiti CPU FAILED: {e}")
+                cpu_load = float(session.get(OID_UBNT_SYS_CPU).value)
+            except Exception:
+                pass
 
-        # Fallback to HOST-RESOURCES-MIB if vendor-specific failed or no vendor detected
         if cpu_load is None:
             try:
                 cpu_items = session.walk(OID_HR_PROCESSOR_LOAD)
                 if cpu_items:
-                    # Average all CPU cores
                     cpu_values = [int(item.value) for item in cpu_items]
-                    cpu_load = sum(cpu_values) / len(cpu_values)
+                    cpu_load   = sum(cpu_values) / len(cpu_values)
                     if VERBOSE:
-                        print(f"{prefix}SNMP CPU (HOST-RESOURCES-MIB): {len(cpu_values)} cores, average={cpu_load:.1f}%")
-                else:
-                    if VERBOSE:
-                        print(f"{prefix}SNMP CPU: no processors found (HOST-RESOURCES-MIB not supported)")
+                        print(f"{prefix}SNMP CPU (HOST-RESOURCES-MIB): {len(cpu_values)} cores, avg={cpu_load:.1f}%")
             except Exception as e:
                 if VERBOSE:
-                    print(f"{prefix}SNMP GET hrProcessorLoad FAILED: {e}")
+                    print(f"{prefix}SNMP hrProcessorLoad FAILED: {e}")
 
-        # Poll memory utilization (vendor-specific with HOST-RESOURCES-MIB fallback)
+        # --- Memory (vendor-specific → HOST-RESOURCES-MIB fallback) ---
         memory_pct = None
-
-        # Try vendor-specific OIDs first
         if vendor == 'cisco':
             try:
-                used_item = session.get(OID_CISCO_MEM_POOL_USED)
-                free_item = session.get(OID_CISCO_MEM_POOL_FREE)
-                mem_used = int(used_item.value)
-                mem_free = int(free_item.value)
+                mem_used  = int(session.get(OID_CISCO_MEM_POOL_USED).value)
+                mem_free  = int(session.get(OID_CISCO_MEM_POOL_FREE).value)
                 mem_total = mem_used + mem_free
-
                 if mem_total > 0:
                     memory_pct = (mem_used / mem_total) * 100.0
-                    if VERBOSE:
-                        print(f"{prefix}SNMP memory (Cisco): used={mem_used:,} total={mem_total:,} ({memory_pct:.1f}%)")
-            except Exception as e:
-                if VERBOSE:
-                    print(f"{prefix}SNMP GET Cisco memory FAILED: {e}")
-
+            except Exception:
+                pass
         elif vendor == 'hp':
             try:
-                total_item = session.get(OID_HP_MEM_TOTAL)
-                free_item = session.get(OID_HP_MEM_FREE)
-                mem_total = int(total_item.value)
-                mem_free = int(free_item.value)
-                mem_used = mem_total - mem_free
-
+                mem_total = int(session.get(OID_HP_MEM_TOTAL).value)
+                mem_free  = int(session.get(OID_HP_MEM_FREE).value)
                 if mem_total > 0:
-                    memory_pct = (mem_used / mem_total) * 100.0
-                    if VERBOSE:
-                        print(f"{prefix}SNMP memory (HP): used={mem_used:,} total={mem_total:,} ({memory_pct:.1f}%)")
-            except Exception as e:
-                if VERBOSE:
-                    print(f"{prefix}SNMP GET HP memory FAILED: {e}")
-
+                    memory_pct = ((mem_total - mem_free) / mem_total) * 100.0
+            except Exception:
+                pass
         elif vendor == 'juniper':
             try:
-                item = session.get(OID_JUNIPER_MEM_UTIL)
-                memory_pct = float(item.value)
-                if VERBOSE:
-                    print(f"{prefix}SNMP memory (Juniper): {memory_pct:.1f}%")
-            except Exception as e:
-                if VERBOSE:
-                    print(f"{prefix}SNMP GET Juniper memory FAILED: {e}")
-
+                memory_pct = float(session.get(OID_JUNIPER_MEM_UTIL).value)
+            except Exception:
+                pass
         elif vendor == 'ubiquiti':
             try:
-                total_item = session.get(OID_UBNT_SYS_MEM_TOTAL)
-                free_item = session.get(OID_UBNT_SYS_MEM_FREE)
-                mem_total = int(total_item.value)
-                mem_free = int(free_item.value)
-                mem_used = mem_total - mem_free
-
+                mem_total = int(session.get(OID_UBNT_SYS_MEM_TOTAL).value)
+                mem_free  = int(session.get(OID_UBNT_SYS_MEM_FREE).value)
                 if mem_total > 0:
-                    memory_pct = (mem_used / mem_total) * 100.0
-                    if VERBOSE:
-                        print(f"{prefix}SNMP memory (Ubiquiti): used={mem_used:,} total={mem_total:,} ({memory_pct:.1f}%)")
-            except Exception as e:
-                if VERBOSE:
-                    print(f"{prefix}SNMP GET Ubiquiti memory FAILED: {e}")
+                    memory_pct = ((mem_total - mem_free) / mem_total) * 100.0
+            except Exception:
+                pass
 
-        # Fallback to HOST-RESOURCES-MIB if vendor-specific failed or no vendor detected
         if memory_pct is None:
             try:
                 storage_items = session.walk(OID_HR_STORAGE_DESCR)
-
-                # Find physical memory entry (description contains "memory" or "RAM")
-                # Known descriptions by platform:
-                #   Debian/Ubuntu net-snmp:  "Physical memory"
-                #   Some BSD/Linux net-snmp: "Real Memory"
-                #   Generic fallback:        "Memory" or contains "RAM"
-                memory_index = None
+                memory_index  = None
                 for item in storage_items:
                     descr = item.value.lower()
                     if 'physical memory' in descr or 'real memory' in descr or 'ram' in descr or descr == 'memory':
@@ -1923,58 +1985,94 @@ def check_snmp_resource(resource: Dict[str, Any]) -> Optional[str]:
                         if VERBOSE:
                             print(f"{prefix}Found memory storage entry: index={memory_index} descr='{item.value}'")
                         break
-
                 if memory_index:
-                    # Get allocation units (bytes per unit)
-                    units_item = session.get(f"{OID_HR_STORAGE_UNITS}.{memory_index}")
-                    units = int(units_item.value)
-
-                    # Get total size (in allocation units)
-                    size_item = session.get(f"{OID_HR_STORAGE_SIZE}.{memory_index}")
-                    size = int(size_item.value)
-
-                    # Get used size (in allocation units)
-                    used_item = session.get(f"{OID_HR_STORAGE_USED}.{memory_index}")
-                    used = int(used_item.value)
-
-                    # Calculate percentage
+                    units = int(session.get(f"{OID_HR_STORAGE_UNITS}.{memory_index}").value)
+                    size  = int(session.get(f"{OID_HR_STORAGE_SIZE}.{memory_index}").value)
+                    used  = int(session.get(f"{OID_HR_STORAGE_USED}.{memory_index}").value)
                     if size > 0:
                         memory_pct = (used / size) * 100.0
-
                         if VERBOSE:
-                            memory_total_bytes = size * units
-                            memory_used_bytes = used * units
-                            print(f"{prefix}SNMP memory (HOST-RESOURCES-MIB): used={memory_used_bytes:,} total={memory_total_bytes:,} ({memory_pct:.1f}%)")
-                    else:
-                        if VERBOSE:
-                            print(f"{prefix}SNMP memory: size=0, cannot calculate percentage")
-                else:
-                    if VERBOSE:
-                        print(f"{prefix}SNMP memory: no physical memory entry found in hrStorage table")
+                            print(f"{prefix}SNMP memory (HOST-RESOURCES-MIB): "
+                                  f"used={used * units:,} total={size * units:,} ({memory_pct:.1f}%)")
             except Exception as e:
                 if VERBOSE:
-                    print(f"{prefix}SNMP GET hrStorage FAILED: {e}")
+                    print(f"{prefix}SNMP hrStorage FAILED: {e}")
 
-        # Update RRD database if enabled
+        # --- Q-BRIDGE-MIB MAC table ---
+        macs_by_ifindex: Dict[str, list] = {}
+        try:
+            fdb_port_items   = session.walk(OID_DOT1Q_TP_FDB_PORT)
+            fdb_status_items = session.walk(OID_DOT1Q_TP_FDB_STATUS)
+
+            fdb_status_by_oid = {
+                '.'.join(item.oid.split('.')[-7:]): item.value
+                for item in fdb_status_items
+            }
+
+            for item in fdb_port_items:
+                oid_tail   = '.'.join(item.oid.split('.')[-7:])
+                mac_octets = oid_tail.split('.')[1:]
+                if_index   = item.value
+
+                if fdb_status_by_oid.get(oid_tail) != FDB_STATUS_LEARNED:
+                    continue
+                if len(mac_octets) != 6:
+                    continue
+
+                mac_str = ':'.join(f'{int(o):02X}' for o in mac_octets)
+                macs_by_ifindex.setdefault(if_index, []).append(mac_str)
+
+            if VERBOSE:
+                total_macs = sum(len(v) for v in macs_by_ifindex.values())
+                print(f"{prefix}PORTS MAC table: {total_macs} learned MACs across {len(macs_by_ifindex)} interfaces")
+
+        except Exception as e:
+            if VERBOSE:
+                print(f"{prefix}PORTS Q-BRIDGE FDB walk failed for '{name}' (MACs unavailable): {e}")
+
+        # --- Build current_ports_state (numeric sort on if_index) ---
+        current_ports_state = {}
+        for if_index in sorted(interfaces.keys(), key=lambda x: int(x)):
+            oper_raw  = oper_by_index.get(if_index, '4')
+            admin_raw = admin_by_index.get(if_index, '2')
+            current_ports_state[if_index] = {
+                'name':  interfaces[if_index]['name'],
+                'oper':  OPER_STATUS.get(oper_raw, oper_raw),
+                'admin': ADMIN_STATUS.get(admin_raw, admin_raw),
+                'macs':  sorted(macs_by_ifindex.get(if_index, [])),
+            }
+
+        if VERBOSE:
+            print(f"{prefix}PORTS poll SUCCESS for '{name}': {len(current_ports_state)} interfaces")
+            for if_index, iface in current_ports_state.items():
+                mac_str = ', '.join(iface['macs']) if iface['macs'] else 'none'
+                in_val  = interfaces[if_index].get('in_octets')
+                out_val = interfaces[if_index].get('out_octets')
+                print(f"{prefix}  Interface {if_index} ({iface['name']}): "
+                      f"oper={iface['oper']} admin={iface['admin']} "
+                      f"in={f'{in_val:,}' if in_val is not None else 'N/A'} "
+                      f"out={f'{out_val:,}' if out_val is not None else 'N/A'} "
+                      f"macs=[{mac_str}]")
+
+        # --- RRD update ---
         if RRD_ENABLED:
             check_every_n_secs = resource.get('check_every_n_secs', DEFAULT_CHECK_EVERY_N_SECS)
-            rrd_path = get_rrd_path(name, 'snmp')
-            rras = create_rrd_rras(check_every_n_secs)
+            rrd_path           = get_rrd_path(name, 'snmp')
+            rras               = create_rrd_rras(check_every_n_secs)
 
-            # Auto-heal: recreate if DS count is less than expected OR any RRA has fewer rows
-            # than configured. Expected DS count = 2 per interface + 11 fixed DS.
             if os.path.exists(rrd_path):
-                expected_ds_count = 2 * len(interfaces) + 11
-                needs_recreation = False
+                expected_ds_count = 2 * len(interfaces) + 18  # per-interface pairs + 18 fixed DS
+                needs_recreation  = False
                 try:
-                    info = rrdtool.info(rrd_path)
+                    info            = rrdtool.info(rrd_path)
                     actual_ds_count = len([k for k in info if k.startswith('ds[') and k.endswith('].type')])
                     if actual_ds_count < expected_ds_count:
                         print(f"{prefix}SNMP RRD deleted for recreation: {rrd_path} "
                               f"(ds_count={actual_ds_count} < expected={expected_ds_count})")
                         needs_recreation = True
                 except Exception as e:
-                    print(f"{prefix}SNMP RRD introspection failed for '{rrd_path}': {e}, will recreate", file=sys.stderr)
+                    print(f"{prefix}SNMP RRD introspection failed for '{rrd_path}': {e}, will recreate",
+                          file=sys.stderr)
                     needs_recreation = True
 
                 if not needs_recreation and _check_rrd_needs_recreation(rrd_path, rras):
@@ -1989,216 +2087,32 @@ def check_snmp_resource(resource: Dict[str, Any]) -> Optional[str]:
                 if VERBOSE:
                     print(f"{prefix}Created SNMP RRD: {rrd_path}")
 
-            if not os.path.exists(rrd_path):
+            if os.path.exists(rrd_path):
+                rrd_err = update_snmp_rrd(
+                    rrd_path, datetime.now(), interfaces,
+                    tcp_retrans,
+                    total_bits_in, total_bits_out,
+                    total_pkts_in, total_pkts_out,
+                    total_errors_in, total_errors_out,
+                    cpu_load, memory_pct,
+                    total_pkts_ucast, total_pkts_bmcast,
+                    # host DS — U for ports
+                )
+                if rrd_err:
+                    return rrd_err, {}
+            else:
                 error_msg = f"RRD creation failed: {rrd_path} does not exist after create"
-                print(f"{prefix}SNMP check FAILED for '{name}': {error_msg}", file=sys.stderr)
-                return error_msg
+                print(f"{prefix}SNMP RRD FAILED for '{name}': {error_msg}", file=sys.stderr)
+                return error_msg, {}
 
-            error_msg = update_snmp_rrd(rrd_path, datetime.now(), interfaces, tcp_retrans,
-                                        total_bits_in, total_bits_out, total_pkts_in, total_pkts_out,
-                                        total_errors_in, total_errors_out, cpu_load, memory_pct,
-                                        total_pkts_ucast, total_pkts_bmcast)
-            if error_msg != None:
-                return error_msg
-
-            if not os.path.exists(rrd_path):
-                error_msg = f"RRD file disappeared after update: {rrd_path}"
-                print(f"{prefix}SNMP check FAILED for '{name}': {error_msg}", file=sys.stderr)
-                return error_msg
-
-            if VERBOSE:
-                print(f"{prefix}RRD updated: {rrd_path}")
-
-        elif VERBOSE:
-            print(f"{prefix}RRD disabled (would use: {get_rrd_path(name, 'snmp')})")
-
-        # Verbose output
-        if VERBOSE:
-            summary_parts = [f"{len(interfaces)} interfaces"]
-            if tcp_retrans is not None:
-                summary_parts.append(f"tcp_retrans={tcp_retrans}")
-            if cpu_load is not None:
-                summary_parts.append(f"cpu={cpu_load:.1f}%")
-            else:
-                summary_parts.append("cpu=unavailable")
-            if memory_pct is not None:
-                summary_parts.append(f"memory={memory_pct:.1f}%")
-            else:
-                summary_parts.append("memory=unavailable")
-            summary_parts.append(f"errors_in={total_errors_in:,} errors_out={total_errors_out:,}")
-
-            print(f"{prefix}SNMP poll SUCCESS for '{name}': {', '.join(summary_parts)}")
-            for if_index in sorted(interfaces.keys()):
-                if_data = interfaces[if_index]
-                in_octets = if_data.get('in_octets', 'N/A')
-                out_octets = if_data.get('out_octets', 'N/A')
-                in_errors = if_data.get('in_errors', 'N/A')
-                out_errors = if_data.get('out_errors', 'N/A')
-                in_str = f"{in_octets:,}" if in_octets != 'N/A' else 'N/A'
-                out_str = f"{out_octets:,}" if out_octets != 'N/A' else 'N/A'
-                err_in_str = f"{in_errors:,}" if in_errors != 'N/A' else 'N/A'
-                err_out_str = f"{out_errors:,}" if out_errors != 'N/A' else 'N/A'
-                print(f"{prefix}  Interface {if_index} ({if_data['name']}): in={in_str} out={out_str} err_in={err_in_str} err_out={err_out_str}")
-
-        return None  # Success
+        return None, current_ports_state
 
     except Exception as e:
         error_msg = f"{type(e).__name__}: {e}"
-        print(f"{prefix}SNMP check FAILED for '{name}' at '{address}': {error_msg}", file=sys.stderr)
+        print(f"{prefix}PORTS check FAILED for '{name}' at '{address}': {error_msg}", file=sys.stderr)
         if VERBOSE > 1:
             traceback.print_exc(file=sys.stderr)
-        return error_msg
-
-
-def check_ports_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Dict[str, Any]]:
-    """Poll SNMP device for switch port (interface) oper/admin status and MAC forwarding table.
-
-    Uses IF-MIB for port status and Q-BRIDGE-MIB (RFC 2674) dot1qTpFdbTable for MAC addresses.
-    Q-BRIDGE-MIB OID tail encodes <vlan_id>.<6 MAC octets>, value is bridge port number (= ifIndex).
-
-    Returns (error_msg, current_ports_state) where:
-    - error_msg: None on success, string on SNMP failure
-    - current_ports_state: dict of {if_index: {name, oper, admin, macs}} for all interfaces
-    """
-    try:
-        from easysnmp import Session
-    except ImportError as e:
-        error_msg = f"easysnmp library import failed: {e} (try: pip install easysnmp)"
-        prefix = getattr(thread_local, 'prefix', '')
-        print(f"{prefix}PORTS check FAILED: {error_msg}", file=sys.stderr)
         return error_msg, {}
-
-    prefix = getattr(thread_local, 'prefix', '')
-    address = resource['address']
-    name = resource['name']
-
-    # Parse SNMP configuration from address (format: snmp://community@host:port)
-    parsed = urlparse(address)
-    if parsed.scheme != 'snmp':
-        error_msg = f"{parsed.scheme.upper()} protocol not supported for ports monitor, use snmp"
-        print(f"{prefix}PORTS check FAILED for '{name}': {error_msg}", file=sys.stderr)
-        return error_msg, {}
-
-    # Extract community string - priority: monitor config > URL userinfo > default 'public'
-    community = resource.get('community') or parsed.username or 'public'
-    hostname = parsed.hostname
-    port = parsed.port or 161
-
-    if not hostname:
-        error_msg = "ports monitor address must include hostname"
-        print(f"{prefix}PORTS check FAILED for '{name}': {error_msg}", file=sys.stderr)
-        return error_msg, {}
-
-    # IF-MIB OIDs
-    OID_IF_DESCR        = '1.3.6.1.2.1.2.2.1.2'    # IF-MIB::ifDescr
-    OID_IF_OPER_STATUS  = '1.3.6.1.2.1.2.2.1.8'    # IF-MIB::ifOperStatus
-    OID_IF_ADMIN_STATUS = '1.3.6.1.2.1.2.2.1.7'    # IF-MIB::ifAdminStatus
-
-    # Q-BRIDGE-MIB OIDs (RFC 2674)
-    # OID tail: <vlan_id>.<6 MAC octets>, value = bridge port number (= ifIndex on most switches)
-    OID_DOT1Q_TP_FDB_PORT   = '1.3.6.1.2.1.17.7.1.2.2.1.2'  # dot1qTpFdbPort
-    OID_DOT1Q_TP_FDB_STATUS = '1.3.6.1.2.1.17.7.1.2.2.1.3'  # dot1qTpFdbStatus - 3=learned
-
-    # IF-MIB integer -> human-readable status
-    OPER_STATUS = {
-        '1': 'up', '2': 'down', '3': 'testing',
-        '4': 'unknown', '5': 'dormant', '6': 'notPresent', '7': 'lowerLayerDown'
-    }
-    ADMIN_STATUS = {
-        '1': 'up', '2': 'down', '3': 'testing'
-    }
-
-    # dot1qTpFdbStatus - only learned MACs are dynamically associated with a port
-    FDB_STATUS_LEARNED = '3'
-
-    try:
-        session = Session(
-            hostname=hostname,
-            community=community,
-            version=2,
-            remote_port=port,
-            timeout=MAX_TRY_SECS,
-            retries=MAX_RETRIES - 1
-        )
-
-        # Walk all three IF-MIB tables
-        descr_items  = session.walk(OID_IF_DESCR)
-        oper_items   = session.walk(OID_IF_OPER_STATUS)
-        admin_items  = session.walk(OID_IF_ADMIN_STATUS)
-
-    except Exception as e:
-        error_msg = f"SNMP walk failed: {e}"
-        print(f"{prefix}PORTS check FAILED for '{name}': {error_msg}", file=sys.stderr)
-        return error_msg, {}
-
-    # Index by interface index
-    descr_by_index = {item.oid.split('.')[-1]: item.value for item in descr_items}
-    oper_by_index  = {item.oid.split('.')[-1]: item.value for item in oper_items}
-    admin_by_index = {item.oid.split('.')[-1]: item.value for item in admin_items}
-
-    if not descr_by_index:
-        error_msg = "no interfaces found"
-        print(f"{prefix}PORTS check FAILED for '{name}': {error_msg}", file=sys.stderr)
-        return error_msg, {}
-
-    # Build ifIndex -> sorted list of learned MAC addresses from dot1qTpFdbTable
-    # OID tail is 7 octets: <vlan_id>.<6 MAC octets>
-    # Value is bridge port number, which equals ifIndex directly on most switches
-    macs_by_ifindex: Dict[str, list] = {}
-    try:
-        fdb_port_items   = session.walk(OID_DOT1Q_TP_FDB_PORT)
-        fdb_status_items = session.walk(OID_DOT1Q_TP_FDB_STATUS)
-
-        # Index status by 7-octet OID tail for O(1) lookup
-        fdb_status_by_oid = {
-            '.'.join(item.oid.split('.')[-7:]): item.value
-            for item in fdb_status_items
-        }
-
-        for item in fdb_port_items:
-            oid_tail    = '.'.join(item.oid.split('.')[-7:])  # e.g. "1.36.90.76.31.80.156"
-            mac_octets  = oid_tail.split('.')[1:]             # strip vlan_id, keep 6 MAC octets
-            if_index    = item.value                          # = ifIndex directly on this switch
-
-            # Only include learned MACs (status=3); skip self, mgmt, invalid, other
-            if fdb_status_by_oid.get(oid_tail) != FDB_STATUS_LEARNED:
-                continue
-
-            if len(mac_octets) != 6:
-                continue
-
-            mac_str = ':'.join(f'{int(o):02X}' for o in mac_octets)
-            macs_by_ifindex.setdefault(if_index, []).append(mac_str)
-
-        if VERBOSE:
-            total_macs = sum(len(v) for v in macs_by_ifindex.values())
-            print(f"{prefix}PORTS MAC table: {total_macs} learned MACs across {len(macs_by_ifindex)} interfaces")
-
-    except Exception as e:
-        # Non-fatal: proceed without MAC data
-        if VERBOSE:
-            print(f"{prefix}PORTS Q-BRIDGE FDB walk failed for '{name}' (MACs unavailable): {e}")
-
-    # Build current state - numeric sort on interface index
-    current_ports_state = {}
-    for if_index in sorted(descr_by_index.keys(), key=lambda x: int(x)):
-        oper_raw  = oper_by_index.get(if_index, '4')   # default: unknown
-        admin_raw = admin_by_index.get(if_index, '2')  # default: down
-        macs      = sorted(macs_by_ifindex.get(if_index, []))  # sorted for stable set comparison
-        current_ports_state[if_index] = {
-            'name':  descr_by_index[if_index],
-            'oper':  OPER_STATUS.get(oper_raw, oper_raw),
-            'admin': ADMIN_STATUS.get(admin_raw, admin_raw),
-            'macs':  macs,
-        }
-
-    if VERBOSE:
-        print(f"{prefix}PORTS poll SUCCESS for '{name}': {len(current_ports_state)} interfaces found")
-        for if_index, iface in current_ports_state.items():
-            mac_str = ', '.join(iface['macs']) if iface['macs'] else 'none'
-            print(f"{prefix}  Interface {if_index} ({iface['name']}): oper={iface['oper']} admin={iface['admin']} macs=[{mac_str}]")
-
-    return None, current_ports_state
 
 
 def check_port_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Optional[str], Optional[str]]:
@@ -2224,18 +2138,17 @@ def check_port_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Option
         print(f"{prefix}PORT check FAILED: {error_msg}", file=sys.stderr)
         return error_msg, None, None
 
-    prefix = getattr(thread_local, 'prefix', '')
-    address = resource['address']
-    name = resource['name']
-    if_index = str(resource['port'])  # ifIndex as string for OID suffix
+    prefix     = getattr(thread_local, 'prefix', '')
+    address    = resource['address']
+    name       = resource['name']
+    if_index   = str(resource['port'])
     pinned_mac = resource['mac'].upper()
-    always_up = to_natural_language_boolean(resource.get('always_up', False))
+    always_up  = to_natural_language_boolean(resource.get('always_up', False))
 
-    # Parse SNMP transport config
-    parsed = urlparse(address)
+    parsed    = urlparse(address)
     community = resource.get('community') or parsed.username or 'public'
-    hostname = parsed.hostname
-    port = parsed.port or 161
+    hostname  = parsed.hostname
+    port      = parsed.port or 161
 
     if not hostname:
         error_msg = "port monitor address must include hostname"
@@ -2243,32 +2156,31 @@ def check_port_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Option
         return error_msg, None, None
 
     # IF-MIB OIDs
-    OID_IF_DESCR        = '1.3.6.1.2.1.2.2.1.2'   # IF-MIB::ifDescr
-    OID_IF_OPER_STATUS  = '1.3.6.1.2.1.2.2.1.8'   # IF-MIB::ifOperStatus
-    OID_IF_ADMIN_STATUS = '1.3.6.1.2.1.2.2.1.7'   # IF-MIB::ifAdminStatus
-    OID_IF_IN_OCTETS    = '1.3.6.1.2.1.2.2.1.10'  # IF-MIB::ifInOctets
-    OID_IF_OUT_OCTETS   = '1.3.6.1.2.1.2.2.1.16'  # IF-MIB::ifOutOctets
-    OID_IF_IN_ERRORS    = '1.3.6.1.2.1.2.2.1.14'  # IF-MIB::ifInErrors
-    OID_IF_OUT_ERRORS   = '1.3.6.1.2.1.2.2.1.20'  # IF-MIB::ifOutErrors
+    OID_IF_DESCR         = '1.3.6.1.2.1.2.2.1.2'
+    OID_IF_OPER_STATUS   = '1.3.6.1.2.1.2.2.1.8'
+    OID_IF_ADMIN_STATUS  = '1.3.6.1.2.1.2.2.1.7'
+    OID_IF_IN_OCTETS     = '1.3.6.1.2.1.2.2.1.10'
+    OID_IF_OUT_OCTETS    = '1.3.6.1.2.1.2.2.1.16'
+    OID_IF_IN_ERRORS     = '1.3.6.1.2.1.2.2.1.14'
+    OID_IF_OUT_ERRORS    = '1.3.6.1.2.1.2.2.1.20'
 
-    # Interface packet counters (high-capacity 64-bit) — same OIDs as check_snmp_resource
-    OID_IF_HC_IN_UCAST_PKTS  = '1.3.6.1.2.1.31.1.1.1.7'   # IF-MIB::ifHCInUcastPkts
-    OID_IF_HC_IN_MCAST_PKTS  = '1.3.6.1.2.1.31.1.1.1.8'   # IF-MIB::ifHCInMulticastPkts
-    OID_IF_HC_IN_BCAST_PKTS  = '1.3.6.1.2.1.31.1.1.1.9'   # IF-MIB::ifHCInBroadcastPkts
-    OID_IF_HC_OUT_UCAST_PKTS = '1.3.6.1.2.1.31.1.1.1.11'  # IF-MIB::ifHCOutUcastPkts
-    OID_IF_HC_OUT_MCAST_PKTS = '1.3.6.1.2.1.31.1.1.1.12'  # IF-MIB::ifHCOutMulticastPkts
-    OID_IF_HC_OUT_BCAST_PKTS = '1.3.6.1.2.1.31.1.1.1.13'  # IF-MIB::ifHCOutBroadcastPkts
+    # IF-MIB high-capacity 64-bit packet counters
+    OID_IF_HC_IN_UCAST_PKTS  = '1.3.6.1.2.1.31.1.1.1.7'
+    OID_IF_HC_IN_MCAST_PKTS  = '1.3.6.1.2.1.31.1.1.1.8'
+    OID_IF_HC_IN_BCAST_PKTS  = '1.3.6.1.2.1.31.1.1.1.9'
+    OID_IF_HC_OUT_UCAST_PKTS = '1.3.6.1.2.1.31.1.1.1.11'
+    OID_IF_HC_OUT_MCAST_PKTS = '1.3.6.1.2.1.31.1.1.1.12'
+    OID_IF_HC_OUT_BCAST_PKTS = '1.3.6.1.2.1.31.1.1.1.13'
 
-    # Q-BRIDGE-MIB OIDs (RFC 2674) — same semantics as check_ports_resource
-    # OID tail: <vlan_id>.<6 MAC octets>, value = bridge port number (= ifIndex on this switch family)
-    OID_DOT1Q_TP_FDB_PORT   = '1.3.6.1.2.1.17.7.1.2.2.1.2'  # dot1qTpFdbPort
-    OID_DOT1Q_TP_FDB_STATUS = '1.3.6.1.2.1.17.7.1.2.2.1.3'  # dot1qTpFdbStatus - 3=learned
+    # Q-BRIDGE-MIB OIDs (RFC 2674)
+    OID_DOT1Q_TP_FDB_PORT   = '1.3.6.1.2.1.17.7.1.2.2.1.2'
+    OID_DOT1Q_TP_FDB_STATUS = '1.3.6.1.2.1.17.7.1.2.2.1.3'
 
     OPER_STATUS = {
         '1': 'up', '2': 'down', '3': 'testing',
         '4': 'unknown', '5': 'dormant', '6': 'notPresent', '7': 'lowerLayerDown'
     }
-    ADMIN_STATUS = {'1': 'up', '2': 'down', '3': 'testing'}
+    ADMIN_STATUS       = {'1': 'up', '2': 'down', '3': 'testing'}
     FDB_STATUS_LEARNED = '3'
 
     try:
@@ -2283,8 +2195,8 @@ def check_port_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Option
 
         oper_raw  = session.get(f"{OID_IF_OPER_STATUS}.{if_index}").value
         admin_raw = session.get(f"{OID_IF_ADMIN_STATUS}.{if_index}").value
-        oper  = OPER_STATUS.get(oper_raw, oper_raw)
-        admin = ADMIN_STATUS.get(admin_raw, admin_raw)
+        oper      = OPER_STATUS.get(oper_raw, oper_raw)
+        admin     = ADMIN_STATUS.get(admin_raw, admin_raw)
 
         if VERBOSE:
             print(f"{prefix}PORT poll ifIndex={if_index}: oper={oper} admin={admin}")
@@ -2294,23 +2206,21 @@ def check_port_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Option
         print(f"{prefix}PORT check FAILED for '{name}': {error_msg}", file=sys.stderr)
         return error_msg, None, None
 
-    # MAC walk — non-fatal, mirrors check_ports_resource pattern
-    # dot1dTpFdbTable returns 0 entries on VLAN-aware switches; Q-BRIDGE-MIB is correct
+    # MAC walk — non-fatal
     current_mac = None
     try:
         fdb_port_items   = session.walk(OID_DOT1Q_TP_FDB_PORT)
         fdb_status_items = session.walk(OID_DOT1Q_TP_FDB_STATUS)
 
-        # Index status by 7-octet OID tail for O(1) lookup
         fdb_status_by_oid = {
             '.'.join(item.oid.split('.')[-7:]): item.value
             for item in fdb_status_items
         }
 
         for item in fdb_port_items:
-            oid_tail     = '.'.join(item.oid.split('.')[-7:])  # e.g. "1.36.90.76.31.80.156"
-            mac_octets   = oid_tail.split('.')[1:]             # strip vlan_id, keep 6 MAC octets
-            port_ifindex = item.value                          # = ifIndex directly on this switch family
+            oid_tail     = '.'.join(item.oid.split('.')[-7:])
+            mac_octets   = oid_tail.split('.')[1:]
+            port_ifindex = item.value
 
             if port_ifindex != if_index:
                 continue
@@ -2320,13 +2230,12 @@ def check_port_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Option
                 continue
 
             current_mac = ':'.join(f'{int(o):02X}' for o in mac_octets)
-            break  # one MAC per pinned port; take first learned
+            break
 
         if VERBOSE:
             print(f"{prefix}PORT mac on ifIndex={if_index}: {current_mac or 'none'} (pinned={pinned_mac})")
 
     except Exception as e:
-        # Non-fatal: proceed with current_mac=None, consistent with check_ports_resource MAC walk failure
         if VERBOSE:
             print(f"{prefix}PORT Q-BRIDGE FDB walk failed for '{name}' (MAC unavailable): {e}")
 
@@ -2339,23 +2248,20 @@ def check_port_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Option
         if current_mac != pinned_mac:
             return f"port ifIndex={if_index} wrong MAC: expected {pinned_mac}, got {current_mac}", oper, current_mac
     else:
-        # always_up=False: alarm only when a non-pinned MAC is present on the port
         if current_mac is not None and current_mac != pinned_mac:
             return f"port ifIndex={if_index} wrong MAC: expected {pinned_mac}, got {current_mac}", oper, current_mac
 
-    # Collect SNMP metrics for this single interface and update RRD (identical schema to snmp monitor)
+    # --- RRD update (single-interface schema) ---
     if RRD_ENABLED:
         check_every_n_secs = resource.get('check_every_n_secs', DEFAULT_CHECK_EVERY_N_SECS)
-        rrd_path = get_rrd_path(name, 'snmp')
+        rrd_path           = get_rrd_path(name, 'snmp')
 
-        # Single-entry interfaces dict — reuses create/update_snmp_rrd unchanged
         try:
             if_name = session.get(f"{OID_IF_DESCR}.{if_index}").value
         except Exception:
             if_name = f"if{if_index}"
         interfaces = {if_index: {'name': if_name}}
 
-        # Poll byte counters
         try:
             octets_in = int(session.get(f"{OID_IF_IN_OCTETS}.{if_index}").value)
             interfaces[if_index]['in_octets'] = octets_in
@@ -2380,7 +2286,6 @@ def check_port_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Option
         except Exception:
             interfaces[if_index]['out_errors'] = None
 
-        # Packet counters — accumulate ucast/bmcast in/out separately for aggregate DS
         ucast_in = bmcast_in = ucast_out = bmcast_out = 0
         for oid, bucket in [
             (OID_IF_HC_IN_UCAST_PKTS,  'ucast_in'),
@@ -2411,21 +2316,20 @@ def check_port_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Option
                   f"pkts_in={total_pkts_in:,} pkts_out={total_pkts_out:,} "
                   f"ucast={total_pkts_ucast:,} bmcast={total_pkts_bmcast:,}")
 
-        # Auto-heal: recreate if DS count < expected OR any RRA has fewer rows than configured.
-        # 1 interface → expected DS = 2*1 + 11 = 13
         rras = create_rrd_rras(check_every_n_secs)
         if os.path.exists(rrd_path):
-            expected_ds_count = 2 * len(interfaces) + 11
-            needs_recreation = False
+            expected_ds_count = 2 * len(interfaces) + 18  # per-interface pairs + 18 fixed DS
+            needs_recreation  = False
             try:
-                info = rrdtool.info(rrd_path)
+                info            = rrdtool.info(rrd_path)
                 actual_ds_count = len([k for k in info if k.startswith('ds[') and k.endswith('].type')])
                 if actual_ds_count < expected_ds_count:
                     print(f"{prefix}PORT RRD deleted for recreation: {rrd_path} "
                           f"(ds_count={actual_ds_count} < expected={expected_ds_count})")
                     needs_recreation = True
             except Exception as e:
-                print(f"{prefix}PORT RRD introspection failed for '{rrd_path}': {e}, will recreate", file=sys.stderr)
+                print(f"{prefix}PORT RRD introspection failed for '{rrd_path}': {e}, will recreate",
+                      file=sys.stderr)
                 needs_recreation = True
 
             if not needs_recreation and _check_rrd_needs_recreation(rrd_path, rras):
@@ -2441,10 +2345,14 @@ def check_port_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Option
                 print(f"{prefix}Created PORT RRD: {rrd_path}")
 
         rrd_err = update_snmp_rrd(
-            rrd_path, datetime.now(), interfaces, None,
-            total_bits_in, total_bits_out, total_pkts_in, total_pkts_out,
-            0, 0, None, None,
+            rrd_path, datetime.now(), interfaces,
+            None,               # tcp_retrans — not polled for single port
+            total_bits_in, total_bits_out,
+            total_pkts_in, total_pkts_out,
+            None, None,         # errors — not aggregated for single port
+            None, None,         # cpu_load / memory_pct — not polled for single port
             total_pkts_ucast, total_pkts_bmcast,
+            # host DS — all None for port
         )
         if rrd_err and VERBOSE:
             print(f"{prefix}PORT RRD update failed: {rrd_err}", file=sys.stderr)
@@ -2465,28 +2373,31 @@ def check_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Optional[in
         start_time_ms = int(time.time() * 1000)
 
         if resource['type'] == 'ping':
-            error_msg = check_ping_resource(resource)
+            error_msg   = check_ping_resource(resource)
             ports_state = None
-        elif resource['type'] == 'snmp':
-            error_msg = check_snmp_resource(resource)
-            ports_state = None
+
         elif resource['type'] == 'ports':
             error_msg, ports_state = check_ports_resource(resource)
+
+        elif resource['type'] == 'host':
+            error_msg, ports_state = check_host_resource(resource)
+
         elif resource['type'] == 'port':
             error_msg, oper, mac = check_port_resource(resource)
             ports_state = {'oper': oper, 'mac': mac}
+
         elif resource['type'] in ('http', 'quic', 'tcp', 'udp'):
-            error_msg = check_url_resource(resource)
+            error_msg   = check_url_resource(resource)
             ports_state = None
+
         else:
             raise ConfigError(f"Unknown resource type: {resource['type']} for monitor {resource['name']}")
 
-        end_time_ms = int(time.time() * 1000)
+        end_time_ms      = int(time.time() * 1000)
         response_time_ms = end_time_ms - start_time_ms
 
         if error_msg is None:
-            last_response_time_ms = response_time_ms
-            return None, last_response_time_ms, ports_state
+            return None, response_time_ms, ports_state
 
         if attempt < MAX_RETRIES:
             time.sleep(MAX_TRY_SECS)
@@ -2900,12 +2811,12 @@ def is_heartbeat_due(
         return True, None
 
 
-def get_rrd_path(monitor_name: str, metric_type: str = 'availability') -> str:
+def get_rrd_path(monitor_name: str, rrd_type: str) -> str:
     """Generate filesystem-safe RRD file path for a monitor.
 
     Args:
         monitor_name: Name of the monitor
-        metric_type: Type of metrics ('availability' or 'snmp')
+        rrd_type: Type of RRD file ('availability', 'ports', 'port', 'host')
 
     Returns:
         str: Full path to RRD file
@@ -2915,7 +2826,7 @@ def get_rrd_path(monitor_name: str, metric_type: str = 'availability') -> str:
     base_path = Path(STATEFILE)
     rrd_dir = base_path.parent / (base_path.stem + '.rrd')
 
-    return str(rrd_dir / f"{safe_name}-{metric_type}.rrd")
+    return str(rrd_dir / f"{safe_name}-{rrd_type}.rrd")
 
 
 def _check_rrd_needs_recreation(rrd_path: str, expected_rras: List[str]) -> bool:
@@ -3030,58 +2941,61 @@ def update_rrd(rrd_path: str, timestamp: datetime, response_time_ms: Optional[in
 
 
 def create_snmp_rrd(rrd_path: str, step_secs: int, interfaces: Dict[str, Dict[str, Any]]) -> None:
-    """Create RRD file for SNMP interface metrics and system resources.
+    """Create RRD file for SNMP interface metrics, system resources, and host performance metrics.
+
+    Unified schema for port, ports, and host monitor types:
+    - Per-interface DS pairs (ports/port only, empty for host)
+    - 11 fixed aggregate network DS (ports/port populated, host stores U)
+    - 7 fixed host performance DS (host populated, ports/port store U)
 
     Args:
         rrd_path: Full path to RRD file to create
         step_secs: Update interval in seconds
         interfaces: Dict mapping interface index to interface data (with 'name' key)
 
-    NB: existing SNMP RRDs must be deleted before next run whenever DS layout changes.
+    NB: existing RRDs must be deleted before next run whenever DS layout changes.
     """
     global RRD_ELAPSED_MS
     prefix = getattr(thread_local, 'prefix', '')
 
-    # Ensure RRD directory exists
     os.makedirs(os.path.dirname(rrd_path), exist_ok=True)
 
-    # Calculate heartbeat (2x step allows one missed update)
     heartbeat = step_secs * 2
 
-    # Build data sources dynamically for each interface
     data_sources = []
 
-    for if_index, if_data in interfaces.items():
-        # Use interface index as DS name base (guarantees uniqueness)
+    # Per-interface byte counters (ports/port only — empty for host)
+    for if_index in interfaces:
         safe_if_name = f"if{if_index}"
-
-        # COUNTER type for cumulative byte counters (handles wraps at 32/64-bit boundaries)
         data_sources.append(f'DS:{safe_if_name}_in:COUNTER:{heartbeat}:0:U')
         data_sources.append(f'DS:{safe_if_name}_out:COUNTER:{heartbeat}:0:U')
 
-    # Add TCP retransmit counter
+    # Fixed aggregate network DS (ports/port populated, host stores U)
     data_sources.append(f'DS:tcp_retrans:COUNTER:{heartbeat}:0:U')
-
-    # Add aggregate interface metrics (COUNTER for cumulative values)
     data_sources.append(f'DS:total_bits_in:COUNTER:{heartbeat}:0:U')
     data_sources.append(f'DS:total_bits_out:COUNTER:{heartbeat}:0:U')
     data_sources.append(f'DS:total_pkts_in:COUNTER:{heartbeat}:0:U')
     data_sources.append(f'DS:total_pkts_out:COUNTER:{heartbeat}:0:U')
     data_sources.append(f'DS:total_errors_in:COUNTER:{heartbeat}:0:U')
     data_sources.append(f'DS:total_errors_out:COUNTER:{heartbeat}:0:U')
-
-    # Unicast vs broadcast+multicast packet type split (in+out combined)
     data_sources.append(f'DS:total_pkts_ucast:COUNTER:{heartbeat}:0:U')
     data_sources.append(f'DS:total_pkts_bmcast:COUNTER:{heartbeat}:0:U')
 
-    # Add system resource metrics (GAUGE for instantaneous values)
-    data_sources.append(f'DS:cpu_load:GAUGE:{heartbeat}:0:100')  # Percentage 0-100
-    data_sources.append(f'DS:memory_pct:GAUGE:{heartbeat}:0:100')  # Percentage 0-100
+    # System resource DS (all types)
+    data_sources.append(f'DS:cpu_load:GAUGE:{heartbeat}:0:100')
+    data_sources.append(f'DS:memory_pct:GAUGE:{heartbeat}:0:100')
 
-    # Generate RRAs
+    # Fixed host performance DS (host populated, ports/port store U)
+    data_sources.append(f'DS:context_switches:COUNTER:{heartbeat}:0:U')
+    data_sources.append(f'DS:swap_io:COUNTER:{heartbeat}:0:U')
+    data_sources.append(f'DS:disk_read:COUNTER:{heartbeat}:0:U')
+    data_sources.append(f'DS:disk_write:COUNTER:{heartbeat}:0:U')
+    data_sources.append(f'DS:disk_space_pct:GAUGE:{heartbeat}:0:100')
+    data_sources.append(f'DS:swap_used:GAUGE:{heartbeat}:0:U')
+    data_sources.append(f'DS:interrupts:COUNTER:{heartbeat}:0:U')
+
     rras = create_rrd_rras(step_secs)
 
-    # Create RRD
     try:
         _t = int(time.time() * 1000)
         rrdtool.create(
@@ -3100,90 +3014,96 @@ def create_snmp_rrd(rrd_path: str, step_secs: int, interfaces: Dict[str, Dict[st
 
 
 def update_snmp_rrd(rrd_path: str, timestamp: datetime, interfaces: Dict[str, Dict[str, Any]],
-                    tcp_retrans: Optional[int], total_bits_in: int, total_bits_out: int,
-                    total_pkts_in: int, total_pkts_out: int,
-                    total_errors_in: int, total_errors_out: int,
+                    tcp_retrans: Optional[int],
+                    total_bits_in: Optional[int], total_bits_out: Optional[int],
+                    total_pkts_in: Optional[int], total_pkts_out: Optional[int],
+                    total_errors_in: Optional[int], total_errors_out: Optional[int],
                     cpu_load: Optional[float], memory_pct: Optional[float],
-                    total_pkts_ucast: int = 0, total_pkts_bmcast: int = 0) -> Optional[str]:
-    """Update SNMP RRD file with latest interface metrics and system resources.
+                    total_pkts_ucast: Optional[int] = None, total_pkts_bmcast: Optional[int] = None,
+                    context_switches: Optional[int] = None, swap_io: Optional[int] = None,
+                    disk_read: Optional[int] = None, disk_write: Optional[int] = None,
+                    disk_space_pct: Optional[float] = None, swap_used: Optional[int] = None,
+                    interrupts: Optional[int] = None) -> Optional[str]:
+    """Update SNMP RRD file with latest interface metrics, system resources, and host performance.
+
+    All numeric parameters accept None → stored as 'U' (unknown) in RRD.
+    Network DS (total_bits_*, total_pkts_*, total_errors_*, tcp_retrans) should be
+    passed as None for host monitors. Host DS (context_switches etc.) should be
+    passed as None for ports/port monitors.
 
     Args:
         rrd_path: Full path to RRD file
         timestamp: Timestamp of the measurement
         interfaces: Dict mapping interface index to metrics (with 'in_octets', 'out_octets')
-        tcp_retrans: TCP retransmit segments counter
-        total_bits_in: Aggregate inbound bits across all interfaces
-        total_bits_out: Aggregate outbound bits across all interfaces
-        total_pkts_in: Aggregate inbound packets across all interfaces
-        total_pkts_out: Aggregate outbound packets across all interfaces
-        total_errors_in: Aggregate inbound errors across all interfaces
-        total_errors_out: Aggregate outbound errors across all interfaces
+        tcp_retrans: TCP retransmit segments counter (ports only)
+        total_bits_in: Aggregate inbound bits across all interfaces (ports/port only)
+        total_bits_out: Aggregate outbound bits across all interfaces (ports/port only)
+        total_pkts_in: Aggregate inbound packets across all interfaces (ports/port only)
+        total_pkts_out: Aggregate outbound packets across all interfaces (ports/port only)
+        total_errors_in: Aggregate inbound errors across all interfaces (ports/port only)
+        total_errors_out: Aggregate outbound errors across all interfaces (ports/port only)
         cpu_load: Average CPU utilization percentage (0-100)
         memory_pct: Memory utilization percentage (0-100)
-        total_pkts_ucast: Total unicast packets (in+out combined)
-        total_pkts_bmcast: Total broadcast+multicast packets (in+out combined)
+        total_pkts_ucast: Total unicast packets in+out combined (ports/port only)
+        total_pkts_bmcast: Total broadcast+multicast packets in+out combined (ports/port only)
+        context_switches: Raw context switch counter (host only)
+        swap_io: Raw swap in+out counter (host only)
+        disk_read: Summed disk read bytes counter (host only)
+        disk_write: Summed disk write bytes counter (host only)
+        disk_space_pct: Root filesystem utilization percentage (host only)
+        swap_used: Swap used bytes (host only)
+        interrupts: Raw hardware interrupt counter (host only)
     """
     global RRD_ELAPSED_MS
     prefix = getattr(thread_local, 'prefix', '')
 
-    # Convert to epoch timestamp
     epoch = int(timestamp.timestamp())
 
-    # Build template string (DS names in order)
+    def _v(val: Any) -> str:
+        """Format value for RRD update — None becomes 'U'."""
+        if val is None:
+            return 'U'
+        if isinstance(val, float):
+            return f'{val:.2f}'
+        return str(val)
+
     ds_names = []
-    values = []
+    values   = []
 
-    for if_index in sorted(interfaces.keys()):  # Stable sort for deterministic DS order
-        if_data = interfaces[if_index]
+    # Per-interface byte counters
+    for if_index in sorted(interfaces.keys()):
+        if_data      = interfaces[if_index]
         safe_if_name = f"if{if_index}"
-
         ds_names.append(f'{safe_if_name}_in')
         ds_names.append(f'{safe_if_name}_out')
+        values.append(_v(if_data.get('in_octets')))
+        values.append(_v(if_data.get('out_octets')))
 
-        in_octets = if_data.get('in_octets')
-        out_octets = if_data.get('out_octets')
+    # Fixed aggregate network DS
+    ds_names.append('tcp_retrans');       values.append(_v(tcp_retrans))
+    ds_names.append('total_bits_in');     values.append(_v(total_bits_in))
+    ds_names.append('total_bits_out');    values.append(_v(total_bits_out))
+    ds_names.append('total_pkts_in');     values.append(_v(total_pkts_in))
+    ds_names.append('total_pkts_out');    values.append(_v(total_pkts_out))
+    ds_names.append('total_errors_in');   values.append(_v(total_errors_in))
+    ds_names.append('total_errors_out');  values.append(_v(total_errors_out))
+    ds_names.append('total_pkts_ucast');  values.append(_v(total_pkts_ucast))
+    ds_names.append('total_pkts_bmcast'); values.append(_v(total_pkts_bmcast))
 
-        values.append(str(in_octets) if in_octets is not None else 'U')
-        values.append(str(out_octets) if out_octets is not None else 'U')
+    # System resource DS
+    ds_names.append('cpu_load');   values.append(_v(cpu_load))
+    ds_names.append('memory_pct'); values.append(_v(memory_pct))
 
-    # Add TCP retransmit
-    ds_names.append('tcp_retrans')
-    values.append(str(tcp_retrans) if tcp_retrans is not None else 'U')
+    # Fixed host performance DS
+    ds_names.append('context_switches'); values.append(_v(context_switches))
+    ds_names.append('swap_io');          values.append(_v(swap_io))
+    ds_names.append('disk_read');        values.append(_v(disk_read))
+    ds_names.append('disk_write');       values.append(_v(disk_write))
+    ds_names.append('disk_space_pct');   values.append(_v(disk_space_pct))
+    ds_names.append('swap_used');        values.append(_v(swap_used))
+    ds_names.append('interrupts');       values.append(_v(interrupts))
 
-    # Add aggregate metrics
-    ds_names.append('total_bits_in')
-    values.append(str(total_bits_in))
-
-    ds_names.append('total_bits_out')
-    values.append(str(total_bits_out))
-
-    ds_names.append('total_pkts_in')
-    values.append(str(total_pkts_in))
-
-    ds_names.append('total_pkts_out')
-    values.append(str(total_pkts_out))
-
-    ds_names.append('total_errors_in')
-    values.append(str(total_errors_in))
-
-    ds_names.append('total_errors_out')
-    values.append(str(total_errors_out))
-
-    # Add packet type split
-    ds_names.append('total_pkts_ucast')
-    values.append(str(total_pkts_ucast))
-
-    ds_names.append('total_pkts_bmcast')
-    values.append(str(total_pkts_bmcast))
-
-    # Add system resources
-    ds_names.append('cpu_load')
-    values.append(f'{cpu_load:.2f}' if cpu_load is not None else 'U')
-
-    ds_names.append('memory_pct')
-    values.append(f'{memory_pct:.2f}' if memory_pct is not None else 'U')
-
-    template = ':'.join(ds_names)
+    template  = ':'.join(ds_names)
     value_str = ':'.join(values)
 
     try:
@@ -3196,7 +3116,7 @@ def update_snmp_rrd(rrd_path: str, timestamp: datetime, interfaces: Dict[str, Di
         with RRD_ELAPSED_LOCK:
             RRD_ELAPSED_MS += int(time.time() * 1000) - _t
         if VERBOSE > 1:
-            print(f"{prefix}Updated SNMP RRD: {rrd_path} @ {epoch} ({len(interfaces)} interfaces, aggregates, system)")
+            print(f"{prefix}Updated SNMP RRD: {rrd_path} @ {epoch} ({len(interfaces)} interfaces, aggregates, system, host)")
     except rrdtool.OperationalError as e:
         error_msg = f"Failed to update SNMP RRD file '{rrd_path}': {e}"
         print(f"{prefix}{error_msg}", file=sys.stderr)
@@ -3291,7 +3211,6 @@ def check_and_heartbeat_r(resource: Dict[str, Any], site_config: Dict[str, Any])
         if VERBOSE:
             print(f"{prefix}heartbeat due for {resource['name']}, checking immediately")
 
-    # Skip if check not due
     if not should_check:
         return
 
@@ -3306,7 +3225,7 @@ def check_and_heartbeat_r(resource: Dict[str, Any], site_config: Dict[str, Any])
         prev_notified_count = prev_state.get('notified_count', 0)
         prev_ports_state = prev_state.get('ports_state')  # None on first poll
 
-    # Check resource and ping heartbeat URL
+    # Check resource
     error_reason, last_response_time_ms, current_ports_state = check_resource(resource)
     is_up = error_reason is None
     last_successful_heartbeat = prev_last_successful_heartbeat
@@ -3331,13 +3250,12 @@ def check_and_heartbeat_r(resource: Dict[str, Any], site_config: Dict[str, Any])
             print(f"{prefix}skipping heartbeat for {resource['name']} (heartbeat sent {format_time_ago(prev_last_successful_heartbeat)} ago)")
 
     # Handle ports monitor diff/notify logic
+    # 'host' skips this block — it has no port state to diff
     if resource['type'] == 'ports' and is_up and current_ports_state:
         if prev_ports_state is None:
-            # First poll - establish baseline, no alerts
             if VERBOSE:
                 print(f"{prefix}PORTS baseline established for '{resource['name']}': {len(current_ports_state)} interfaces")
         else:
-            # Collect all interface indices across both states - numeric sort
             all_indices = set(prev_ports_state.keys()) | set(current_ports_state.keys())
 
             for if_index in sorted(all_indices, key=lambda x: int(x)):
@@ -3354,9 +3272,7 @@ def check_and_heartbeat_r(resource: Dict[str, Any], site_config: Dict[str, Any])
                         for webhook in site_config['outage_webhooks']:
                             notify_resource_outage_with_webhook(webhook, site_config['name'], msg)
 
-                # --- Status change detection ---
                 def _status_tuple(iface):
-                    """Comparable status fields, excluding macs."""
                     if iface is None:
                         return None
                     return (iface['name'], iface['oper'], iface['admin'])
@@ -3383,7 +3299,6 @@ def check_and_heartbeat_r(resource: Dict[str, Any], site_config: Dict[str, Any])
                     print(f"{prefix}##### PORT CHANGE: {change_msg} #####", file=sys.stderr)
                     _notify(change_msg)
 
-                # --- MAC change detection (only when interface exists both sides) ---
                 if curr_iface is not None and prev_iface is not None:
                     appeared    = sorted(set(curr_iface['macs']) - set(prev_iface['macs']))
                     disappeared = sorted(set(prev_iface['macs']) - set(curr_iface['macs']))
@@ -3401,16 +3316,11 @@ def check_and_heartbeat_r(resource: Dict[str, Any], site_config: Dict[str, Any])
                         print(f"{prefix}##### PORT MAC CHANGE: {mac_change_msg} #####", file=sys.stderr)
                         _notify(mac_change_msg)
 
-    # Normal up/down/recovery logic (all types except 'ports')
+    # Normal up/down/recovery logic (all types except 'ports' diff path)
     else:
-        # Calculate new down_count, last_alarm_started, and last_notified
         if is_up:
-            # Check if this is a transition from down to up
             if not prev_is_up:
-                # Calculate outage duration
                 outage_duration = format_time_ago(prev_last_alarm_started)
-
-                # Send recovery notification
                 recovery_message = f"{resource['name']} in {site_config['name']} is UP ({resource['address']}) at {timestamp_str}, outage lasted {outage_duration}"
                 print(f"{prefix}##### RECOVERY: {recovery_message} #####", file=sys.stderr)
 
@@ -3432,12 +3342,11 @@ def check_and_heartbeat_r(resource: Dict[str, Any], site_config: Dict[str, Any])
             last_alarm_started = prev_last_alarm_started
         else:
             down_count = prev_down_count + 1
-            # Set last_alarm_started on fresh DOWN transition, preserve on continued DOWN
-            if prev_is_up:  # Fresh transition from UP to DOWN
+            if prev_is_up:
                 last_alarm_started = now.isoformat()
                 prev_last_notified = None
                 prev_notified_count = 0
-            else:  # Resource was already down, preserve existing alarm start time
+            else:
                 last_alarm_started = prev_last_alarm_started
 
             if prev_is_up:
@@ -3449,7 +3358,6 @@ def check_and_heartbeat_r(resource: Dict[str, Any], site_config: Dict[str, Any])
 
             should_notify = True
 
-            # Calculate seconds since first notification of current outage
             secs_since_first_notification = 0
             if last_alarm_started:
                 try:
@@ -3458,8 +3366,9 @@ def check_and_heartbeat_r(resource: Dict[str, Any], site_config: Dict[str, Any])
                 except:
                     secs_since_first_notification = 0
 
-            # Calculate should_notify & next_notification_delay_secs
-            next_notification_delay_secs = calc_next_notification_delay_secs(notify_every_n_secs, after_every_n_notifications, secs_since_first_notification, prev_notified_count)
+            next_notification_delay_secs = calc_next_notification_delay_secs(
+                notify_every_n_secs, after_every_n_notifications,
+                secs_since_first_notification, prev_notified_count)
             seconds_since_notify = False
             if prev_last_notified:
                 try:
@@ -3470,10 +3379,8 @@ def check_and_heartbeat_r(resource: Dict[str, Any], site_config: Dict[str, Any])
                     should_notify = True
 
             if should_notify:
-                # Determine notification type (first notification is 'outage', subsequent are 'reminder')
                 notification_type = 'outage' if prev_notified_count == 0 else 'reminder'
 
-                # Send outage notifications
                 if monitor_email_enabled and 'outage_emails' in site_config:
                     for email_entry in site_config['outage_emails']:
                         notify_resource_outage_with_email(email_entry, site_config['name'], error_message, site_config, notification_type)
@@ -3482,7 +3389,6 @@ def check_and_heartbeat_r(resource: Dict[str, Any], site_config: Dict[str, Any])
                     for webhook in site_config['outage_webhooks']:
                         notify_resource_outage_with_webhook(webhook, site_config['name'], error_message)
 
-                # Record notification time and increment count
                 last_notified = now.isoformat()
                 notified_count = prev_notified_count + 1
             else:
@@ -3493,16 +3399,15 @@ def check_and_heartbeat_r(resource: Dict[str, Any], site_config: Dict[str, Any])
                         time_until_next_secs = next_notification_delay_secs - seconds_since_notify
                         print(f"{prefix}skipping {resource['name']} notification for {format_time_ago(time_until_next_secs)} (notified {format_time_ago(prev_last_notified)} ago)")
 
-                # Keep previous notification time and count
                 last_notified = prev_last_notified
                 notified_count = prev_notified_count
 
-    # Update RRD database for MRTG (availability monitors only)
-    if RRD_ENABLED and resource['type'] not in ('snmp'):
-        rrd_path = get_rrd_path(resource['name'])
+    # Update RRD database for availability monitors (ping, http, quic, tcp, udp)
+    # SNMP-family RRDs (ports, host, port) are handled in check_resource() / check_port_resource()
+    if RRD_ENABLED and resource['type'] not in ('ports', 'host', 'port'):
+        rrd_path = get_rrd_path(resource['name'], 'availability')
         rras = create_rrd_rras(check_every_n_secs)
 
-        # Auto-heal: recreate if any RRA has fewer rows than configured
         if os.path.exists(rrd_path) and _check_rrd_needs_recreation(rrd_path, rras):
             print(f"{prefix}Availability RRD deleted for recreation: {rrd_path} (RRA rows under-provisioned)")
             os.remove(rrd_path)
@@ -3523,7 +3428,6 @@ def check_and_heartbeat_r(resource: Dict[str, Any], site_config: Dict[str, Any])
         'last_config_checksum': resource_checksum,
     }
 
-    # Persist ports baseline for next poll
     if resource['type'] == 'ports' and current_ports_state:
         new_state['ports_state'] = current_ports_state
     else:
@@ -3597,17 +3501,18 @@ def create_pid_file_or_exit_on_unix(config_path: str) -> Optional[str]:
     return lockfile_path
 
 
-def generate_mrtg_config(config: Dict[str, Any], work_dir: str, mrtg_config_path: str) -> None:
+def generate_mrtg_config(config: Dict[str, Any], work_dir: str, mrtg_config_path: str,
+                          state: Dict[str, Any]) -> None:
     """Generate MRTG configuration from APMonitor config with atomic file rotation.
 
     Args:
         config: APMonitor configuration dict
         work_dir: MRTG working directory (where graphs will be generated)
         mrtg_config_path: Path to MRTG config file (will use .new/.old rotation)
+        state: APMonitor state dict — used to embed live disk_space_pct in host PageTop
     """
     prefix = getattr(thread_local, 'prefix', '')
 
-    # Build MRTG config content
     mrtg_lines = [
         "# MRTG Configuration - Generated by APMonitor",
         f"# Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
@@ -3620,150 +3525,228 @@ def generate_mrtg_config(config: Dict[str, Any], work_dir: str, mrtg_config_path
     ]
 
     for resource in config['monitors']:
-        safe_name = re.sub(r'[^\w\-.]', '_', resource['name'])
+        safe_name    = re.sub(r'[^\w\-.]', '_', resource['name'])
         monitor_type = resource['type']
 
-        # Skip monitors explicitly excluded from MRTG display (monitoring continues unaffected)
         if not to_natural_language_boolean(resource.get('display', True)):
             continue
 
-        if monitor_type in ('snmp', 'port'):
-            rrd_path = get_rrd_path(resource['name'], 'snmp')
-            percentile = resource.get('percentile') if monitor_type == 'snmp' else None
-
-            # Prefix monitor name with type for index and graph page identification
+        if monitor_type in ('ports', 'port', 'host'):
+            rrd_path     = get_rrd_path(resource['name'], 'snmp')
+            percentile   = resource.get('percentile') if monitor_type in ('ports', 'port') else None
             display_name = f"{monitor_type}: {resource['name']}"
 
-            # Target 1: Bandwidth (total_bits_in / total_bits_out)
-            mrtg_lines.extend([
-                f"######################################################################",
-                f"# {display_name} - Total Bandwidth",
-                f"",
-                f"Target[{safe_name}-bandwidth]: total_bits_in&total_bits_out:{rrd_path}",
-                f"MaxBytes[{safe_name}-bandwidth]: 10000000000",  # 10 Gbps max
-                f"Title[{safe_name}-bandwidth]: {display_name} - Total Bandwidth",
-                f"PageTop[{safe_name}-bandwidth]: <h1>{display_name} ({resource['address']})</h1><h2>Total Bandwidth In/Out</h2>",
-                f"Options[{safe_name}-bandwidth]: gauge,nopercent,growright,bits",
-                f"YLegend[{safe_name}-bandwidth]: Bits per second",
-                f"ShortLegend[{safe_name}-bandwidth]: b/s",
-                f"Legend1[{safe_name}-bandwidth]: Total Inbound Traffic",
-                f"Legend2[{safe_name}-bandwidth]: Total Outbound Traffic",
-                f"LegendI[{safe_name}-bandwidth]: In:",
-                f"LegendO[{safe_name}-bandwidth]: Out:",
-                f"WithPeak[{safe_name}-bandwidth]: dwmy",
-                *([f"Percentile[{safe_name}-bandwidth]: {percentile}"] if percentile else []),
-                f"",
-            ])
+            if monitor_type == 'host':
+                # Read disk_space_pct from state for PageTop annotation
+                disk_space_pct = state.get(resource['name'], {}).get('disk_space_pct')
+                disk_space_str = f"{disk_space_pct:.1f}%" if disk_space_pct is not None else "N/A"
 
-            # Target 2: Packets (total_pkts_in / total_pkts_out)
-            mrtg_lines.extend([
-                f"######################################################################",
-                f"# {display_name} - Total Packets",
-                f"",
-                f"Target[{safe_name}-packets]: total_pkts_in&total_pkts_out:{rrd_path}",
-                f"MaxBytes[{safe_name}-packets]: 10000000",  # 10M pps max
-                f"Title[{safe_name}-packets]: {display_name} - Total Packets",
-                f"PageTop[{safe_name}-packets]: <h1>{display_name} ({resource['address']})</h1><h2>Total Packets In/Out</h2>",
-                f"Options[{safe_name}-packets]: gauge,nopercent,growright",
-                f"YLegend[{safe_name}-packets]: Packets per second",
-                f"ShortLegend[{safe_name}-packets]: pps",
-                f"Legend1[{safe_name}-packets]: Total Inbound Packets",
-                f"Legend2[{safe_name}-packets]: Total Outbound Packets",
-                f"LegendI[{safe_name}-packets]: In:",
-                f"LegendO[{safe_name}-packets]: Out:",
-                f"WithPeak[{safe_name}-packets]: dwmy",
-                *([f"Percentile[{safe_name}-packets]: {percentile}"] if percentile else []),
-                f"",
-            ])
-
-            # Target 3: Packet type split (unicast vs broadcast+multicast, in+out combined)
-            mrtg_lines.extend([
-                f"######################################################################",
-                f"# {display_name} - Packet Type Split (Unicast vs Broadcast+Multicast)",
-                f"",
-                f"Target[{safe_name}-packets-type]: total_pkts_ucast&total_pkts_bmcast:{rrd_path}",
-                f"MaxBytes[{safe_name}-packets-type]: 10000000",  # 10M pps max
-                f"Title[{safe_name}-packets-type]: {display_name} - Packet Type Split",
-                f"PageTop[{safe_name}-packets-type]: <h1>{display_name} ({resource['address']})</h1><h2>Unicast vs Broadcast+Multicast Packets</h2>",
-                f"Options[{safe_name}-packets-type]: gauge,nopercent,growright",
-                f"YLegend[{safe_name}-packets-type]: Packets per second",
-                f"ShortLegend[{safe_name}-packets-type]: pps",
-                f"Legend1[{safe_name}-packets-type]: Unicast Packets (in+out)",
-                f"Legend2[{safe_name}-packets-type]: Broadcast+Multicast Packets (in+out)",
-                f"LegendI[{safe_name}-packets-type]: Ucast:",
-                f"LegendO[{safe_name}-packets-type]: B+Mcast:",
-                f"WithPeak[{safe_name}-packets-type]: dwmy",
-                *([f"Percentile[{safe_name}-packets-type]: {percentile}"] if percentile else []),
-                f"",
-            ])
-
-            # Target 4: Interface Errors (total_errors_in / total_errors_out)
-            mrtg_lines.extend([
-                f"######################################################################",
-                f"# {display_name} - Interface Errors",
-                f"",
-                f"Target[{safe_name}-errors]: total_errors_in&total_errors_out:{rrd_path}",
-                f"MaxBytes[{safe_name}-errors]: 1000000",
-                f"Title[{safe_name}-errors]: {display_name} - Interface Errors",
-                f"PageTop[{safe_name}-errors]: <h1>{display_name} ({resource['address']})</h1><h2>Interface Errors In/Out</h2>",
-                f"Options[{safe_name}-errors]: gauge,nopercent,growright",
-                f"YLegend[{safe_name}-errors]: Errors per second",
-                f"ShortLegend[{safe_name}-errors]: err/s",
-                f"Legend1[{safe_name}-errors]: Inbound Interface Errors",
-                f"Legend2[{safe_name}-errors]: Outbound Interface Errors",
-                f"LegendI[{safe_name}-errors]: In Err:",
-                f"LegendO[{safe_name}-errors]: Out Err:",
-                f"WithPeak[{safe_name}-errors]: dwmy",
-                *([f"Percentile[{safe_name}-errors]: {percentile}"] if percentile else []),
-                f"",
-            ])
-
-            if monitor_type == 'snmp':
-                # Target 5: TCP Retransmits (tcp_retrans / tcp_retrans - same DS for both to show single line)
+                # Chart 1: CPU & Load
                 mrtg_lines.extend([
                     f"######################################################################",
-                    f"# {display_name} - TCP Retransmits",
+                    f"# {display_name} - CPU & Load",
                     f"",
-                    f"Target[{safe_name}-retransmits]: tcp_retrans&tcp_retrans:{rrd_path}",
-                    f"MaxBytes[{safe_name}-retransmits]: 100000",  # 100k retrans/sec max
-                    f"Title[{safe_name}-retransmits]: {display_name} - TCP Retransmits",
-                    f"PageTop[{safe_name}-retransmits]: <h1>{display_name} ({resource['address']})</h1><h2>TCP Retransmits</h2>",
-                    f"Options[{safe_name}-retransmits]: gauge,nopercent,growright",
-                    f"YLegend[{safe_name}-retransmits]: Retransmits per second",
-                    f"ShortLegend[{safe_name}-retransmits]: retrans/s",
-                    f"Legend1[{safe_name}-retransmits]: TCP Retransmit Segments",
-                    f"Legend2[{safe_name}-retransmits]: TCP Retransmit Segments",
-                    f"LegendI[{safe_name}-retransmits]: Retrans:",
-                    f"LegendO[{safe_name}-retransmits]: Retrans:",
-                    f"WithPeak[{safe_name}-retransmits]: dwmy",
-                    *([f"Percentile[{safe_name}-retransmits]: {percentile}"] if percentile else []),
+                    f"Target[{safe_name}-system1]: cpu_load&context_switches:{rrd_path}",
+                    f"MaxBytes[{safe_name}-system1]: 100",
+                    f"Title[{safe_name}-system1]: {display_name} - CPU & Load",
+                    f"PageTop[{safe_name}-system1]: <h1>{display_name} ({resource['address']})</h1><h2>CPU Utilization & Context Switches/sec</h2>",
+                    f"Options[{safe_name}-system1]: gauge,nopercent,growright",
+                    f"YLegend[{safe_name}-system1]: CPU % / ctx/s",
+                    f"ShortLegend[{safe_name}-system1]: ",
+                    f"Legend1[{safe_name}-system1]: CPU Utilization %",
+                    f"Legend2[{safe_name}-system1]: Context Switches/sec",
+                    f"LegendI[{safe_name}-system1]: CPU:",
+                    f"LegendO[{safe_name}-system1]: Ctx/s:",
+                    f"WithPeak[{safe_name}-system1]: dwmy",
                     f"",
                 ])
 
-                # Target 6: System (cpu_load / memory_pct)
+                # Chart 2: Memory & Paging
                 mrtg_lines.extend([
                     f"######################################################################",
-                    f"# {display_name} - CPU & Memory Utilization",
+                    f"# {display_name} - Memory & Paging",
                     f"",
-                    f"Target[{safe_name}-system]: cpu_load&memory_pct:{rrd_path}",
-                    f"MaxBytes[{safe_name}-system]: 100",  # Percentage 0-100
-                    f"Title[{safe_name}-system]: {display_name} - System Resources",
-                    f"PageTop[{safe_name}-system]: <h1>{display_name} ({resource['address']})</h1><h2>CPU & Memory Utilization</h2>",
-                    f"Options[{safe_name}-system]: gauge,nopercent,growright",
-                    f"YLegend[{safe_name}-system]: Utilization %",
-                    f"ShortLegend[{safe_name}-system]: %",
-                    f"Legend1[{safe_name}-system]: CPU Load Average",
-                    f"Legend2[{safe_name}-system]: Memory Utilization",
-                    f"LegendI[{safe_name}-system]: CPU:",
-                    f"LegendO[{safe_name}-system]: Memory:",
-                    f"WithPeak[{safe_name}-system]: dwmy",
-                    *([f"Percentile[{safe_name}-system]: {percentile}"] if percentile else []),
+                    f"Target[{safe_name}-system2]: memory_pct&swap_io:{rrd_path}",
+                    f"MaxBytes[{safe_name}-system2]: 100",
+                    f"Title[{safe_name}-system2]: {display_name} - Memory & Paging",
+                    f"PageTop[{safe_name}-system2]: <h1>{display_name} ({resource['address']})</h1><h2>Memory Utilization % & Swap I/O Rate</h2>",
+                    f"Options[{safe_name}-system2]: gauge,nopercent,growright",
+                    f"YLegend[{safe_name}-system2]: Mem % / swap/s",
+                    f"ShortLegend[{safe_name}-system2]: ",
+                    f"Legend1[{safe_name}-system2]: Memory Utilization %",
+                    f"Legend2[{safe_name}-system2]: Swap I/O Rate",
+                    f"LegendI[{safe_name}-system2]: Mem:",
+                    f"LegendO[{safe_name}-system2]: Swap I/O:",
+                    f"WithPeak[{safe_name}-system2]: dwmy",
                     f"",
                 ])
+
+                # Chart 3: Disk I/O — disk_space_pct embedded in PageTop from state
+                mrtg_lines.extend([
+                    f"######################################################################",
+                    f"# {display_name} - Disk I/O",
+                    f"",
+                    f"Target[{safe_name}-system3]: disk_read&disk_write:{rrd_path}",
+                    f"MaxBytes[{safe_name}-system3]: 1000000000",
+                    f"Title[{safe_name}-system3]: {display_name} - Disk I/O",
+                    f"PageTop[{safe_name}-system3]: <h1>{display_name} ({resource['address']})</h1><h2>Disk Read/Write Throughput &mdash; Disk Use: {disk_space_str}</h2>",
+                    f"Options[{safe_name}-system3]: gauge,nopercent,growright",
+                    f"YLegend[{safe_name}-system3]: Bytes/sec",
+                    f"ShortLegend[{safe_name}-system3]: B/s",
+                    f"Legend1[{safe_name}-system3]: Disk Read Bytes/sec",
+                    f"Legend2[{safe_name}-system3]: Disk Write Bytes/sec",
+                    f"LegendI[{safe_name}-system3]: Read:",
+                    f"LegendO[{safe_name}-system3]: Write:",
+                    f"WithPeak[{safe_name}-system3]: dwmy",
+                    f"",
+                ])
+
+                # Chart 4: System Thrashing
+                mrtg_lines.extend([
+                    f"######################################################################",
+                    f"# {display_name} - System Thrashing",
+                    f"",
+                    f"Target[{safe_name}-system4]: swap_used&interrupts:{rrd_path}",
+                    f"MaxBytes[{safe_name}-system4]: 1000000000",
+                    f"Title[{safe_name}-system4]: {display_name} - System Thrashing",
+                    f"PageTop[{safe_name}-system4]: <h1>{display_name} ({resource['address']})</h1><h2>Swap Used (bytes) & Hardware Interrupts/sec</h2>",
+                    f"Options[{safe_name}-system4]: gauge,nopercent,growright",
+                    f"YLegend[{safe_name}-system4]: Bytes / interrupts/s",
+                    f"ShortLegend[{safe_name}-system4]: ",
+                    f"Legend1[{safe_name}-system4]: Swap Used (bytes)",
+                    f"Legend2[{safe_name}-system4]: Hardware Interrupts/sec",
+                    f"LegendI[{safe_name}-system4]: Swap:",
+                    f"LegendO[{safe_name}-system4]: IRQ/s:",
+                    f"WithPeak[{safe_name}-system4]: dwmy",
+                    f"",
+                ])
+
+            else:
+                # ports and port: full bandwidth/packets/errors target set
+                mrtg_lines.extend([
+                    f"######################################################################",
+                    f"# {display_name} - Total Bandwidth",
+                    f"",
+                    f"Target[{safe_name}-bandwidth]: total_bits_in&total_bits_out:{rrd_path}",
+                    f"MaxBytes[{safe_name}-bandwidth]: 10000000000",
+                    f"Title[{safe_name}-bandwidth]: {display_name} - Total Bandwidth",
+                    f"PageTop[{safe_name}-bandwidth]: <h1>{display_name} ({resource['address']})</h1><h2>Total Bandwidth In/Out</h2>",
+                    f"Options[{safe_name}-bandwidth]: gauge,nopercent,growright,bits",
+                    f"YLegend[{safe_name}-bandwidth]: Bits per second",
+                    f"ShortLegend[{safe_name}-bandwidth]: b/s",
+                    f"Legend1[{safe_name}-bandwidth]: Total Inbound Traffic",
+                    f"Legend2[{safe_name}-bandwidth]: Total Outbound Traffic",
+                    f"LegendI[{safe_name}-bandwidth]: In:",
+                    f"LegendO[{safe_name}-bandwidth]: Out:",
+                    f"WithPeak[{safe_name}-bandwidth]: dwmy",
+                    *([f"Percentile[{safe_name}-bandwidth]: {percentile}"] if percentile else []),
+                    f"",
+                ])
+
+                mrtg_lines.extend([
+                    f"######################################################################",
+                    f"# {display_name} - Total Packets",
+                    f"",
+                    f"Target[{safe_name}-packets]: total_pkts_in&total_pkts_out:{rrd_path}",
+                    f"MaxBytes[{safe_name}-packets]: 10000000",
+                    f"Title[{safe_name}-packets]: {display_name} - Total Packets",
+                    f"PageTop[{safe_name}-packets]: <h1>{display_name} ({resource['address']})</h1><h2>Total Packets In/Out</h2>",
+                    f"Options[{safe_name}-packets]: gauge,nopercent,growright",
+                    f"YLegend[{safe_name}-packets]: Packets per second",
+                    f"ShortLegend[{safe_name}-packets]: pps",
+                    f"Legend1[{safe_name}-packets]: Total Inbound Packets",
+                    f"Legend2[{safe_name}-packets]: Total Outbound Packets",
+                    f"LegendI[{safe_name}-packets]: In:",
+                    f"LegendO[{safe_name}-packets]: Out:",
+                    f"WithPeak[{safe_name}-packets]: dwmy",
+                    *([f"Percentile[{safe_name}-packets]: {percentile}"] if percentile else []),
+                    f"",
+                ])
+
+                mrtg_lines.extend([
+                    f"######################################################################",
+                    f"# {display_name} - Packet Type Split (Unicast vs Broadcast+Multicast)",
+                    f"",
+                    f"Target[{safe_name}-packets-type]: total_pkts_ucast&total_pkts_bmcast:{rrd_path}",
+                    f"MaxBytes[{safe_name}-packets-type]: 10000000",
+                    f"Title[{safe_name}-packets-type]: {display_name} - Packet Type Split",
+                    f"PageTop[{safe_name}-packets-type]: <h1>{display_name} ({resource['address']})</h1><h2>Unicast vs Broadcast+Multicast Packets</h2>",
+                    f"Options[{safe_name}-packets-type]: gauge,nopercent,growright",
+                    f"YLegend[{safe_name}-packets-type]: Packets per second",
+                    f"ShortLegend[{safe_name}-packets-type]: pps",
+                    f"Legend1[{safe_name}-packets-type]: Unicast Packets (in+out)",
+                    f"Legend2[{safe_name}-packets-type]: Broadcast+Multicast Packets (in+out)",
+                    f"LegendI[{safe_name}-packets-type]: Ucast:",
+                    f"LegendO[{safe_name}-packets-type]: B+Mcast:",
+                    f"WithPeak[{safe_name}-packets-type]: dwmy",
+                    *([f"Percentile[{safe_name}-packets-type]: {percentile}"] if percentile else []),
+                    f"",
+                ])
+
+                mrtg_lines.extend([
+                    f"######################################################################",
+                    f"# {display_name} - Interface Errors",
+                    f"",
+                    f"Target[{safe_name}-errors]: total_errors_in&total_errors_out:{rrd_path}",
+                    f"MaxBytes[{safe_name}-errors]: 1000000",
+                    f"Title[{safe_name}-errors]: {display_name} - Interface Errors",
+                    f"PageTop[{safe_name}-errors]: <h1>{display_name} ({resource['address']})</h1><h2>Interface Errors In/Out</h2>",
+                    f"Options[{safe_name}-errors]: gauge,nopercent,growright",
+                    f"YLegend[{safe_name}-errors]: Errors per second",
+                    f"ShortLegend[{safe_name}-errors]: err/s",
+                    f"Legend1[{safe_name}-errors]: Inbound Interface Errors",
+                    f"Legend2[{safe_name}-errors]: Outbound Interface Errors",
+                    f"LegendI[{safe_name}-errors]: In Err:",
+                    f"LegendO[{safe_name}-errors]: Out Err:",
+                    f"WithPeak[{safe_name}-errors]: dwmy",
+                    *([f"Percentile[{safe_name}-errors]: {percentile}"] if percentile else []),
+                    f"",
+                ])
+
+                if monitor_type == 'ports':
+                    mrtg_lines.extend([
+                        f"######################################################################",
+                        f"# {display_name} - TCP Retransmits",
+                        f"",
+                        f"Target[{safe_name}-retransmits]: tcp_retrans&tcp_retrans:{rrd_path}",
+                        f"MaxBytes[{safe_name}-retransmits]: 100000",
+                        f"Title[{safe_name}-retransmits]: {display_name} - TCP Retransmits",
+                        f"PageTop[{safe_name}-retransmits]: <h1>{display_name} ({resource['address']})</h1><h2>TCP Retransmits</h2>",
+                        f"Options[{safe_name}-retransmits]: gauge,nopercent,growright",
+                        f"YLegend[{safe_name}-retransmits]: Retransmits per second",
+                        f"ShortLegend[{safe_name}-retransmits]: retrans/s",
+                        f"Legend1[{safe_name}-retransmits]: TCP Retransmit Segments",
+                        f"Legend2[{safe_name}-retransmits]: TCP Retransmit Segments",
+                        f"LegendI[{safe_name}-retransmits]: Retrans:",
+                        f"LegendO[{safe_name}-retransmits]: Retrans:",
+                        f"WithPeak[{safe_name}-retransmits]: dwmy",
+                        *([f"Percentile[{safe_name}-retransmits]: {percentile}"] if percentile else []),
+                        f"",
+                    ])
+
+                    mrtg_lines.extend([
+                        f"######################################################################",
+                        f"# {display_name} - CPU & Memory Utilization",
+                        f"",
+                        f"Target[{safe_name}-system]: cpu_load&memory_pct:{rrd_path}",
+                        f"MaxBytes[{safe_name}-system]: 100",
+                        f"Title[{safe_name}-system]: {display_name} - System Resources",
+                        f"PageTop[{safe_name}-system]: <h1>{display_name} ({resource['address']})</h1><h2>CPU & Memory Utilization</h2>",
+                        f"Options[{safe_name}-system]: gauge,nopercent,growright",
+                        f"YLegend[{safe_name}-system]: Utilization %",
+                        f"ShortLegend[{safe_name}-system]: %",
+                        f"Legend1[{safe_name}-system]: CPU Load Average",
+                        f"Legend2[{safe_name}-system]: Memory Utilization",
+                        f"LegendI[{safe_name}-system]: CPU:",
+                        f"LegendO[{safe_name}-system]: Memory:",
+                        f"WithPeak[{safe_name}-system]: dwmy",
+                        *([f"Percentile[{safe_name}-system]: {percentile}"] if percentile else []),
+                        f"",
+                    ])
 
         else:
-            # Non-SNMP monitors (ping, http, quic, tcp, udp) - availability tracking
-            rrd_path = get_rrd_path(resource['name'])
+            # Non-SNMP monitors (ping, http, quic, tcp, udp) — availability tracking
+            rrd_path = get_rrd_path(resource['name'], 'availability')
 
             mrtg_lines.extend([
                 f"######################################################################",
@@ -3771,8 +3754,8 @@ def generate_mrtg_config(config: Dict[str, Any], work_dir: str, mrtg_config_path
                 f"",
                 f"Target[{safe_name}]: response_time&is_up:{rrd_path}",
                 f"MaxBytes[{safe_name}]: 100000",
-                f"MaxBytes1[{safe_name}]: 100000",  # Response time max (ms)
-                f"MaxBytes2[{safe_name}]: 100",  # Availability max (percentage)
+                f"MaxBytes1[{safe_name}]: 100000",
+                f"MaxBytes2[{safe_name}]: 100",
                 f"Title[{safe_name}]: {resource['name']} - Availability",
                 f"PageTop[{safe_name}]: <h1>{resource['name']} ({resource['address']})</h1>",
                 f"Options[{safe_name}]: gauge,nopercent,growright,dualaxis",
@@ -3788,23 +3771,18 @@ def generate_mrtg_config(config: Dict[str, Any], work_dir: str, mrtg_config_path
 
     config_content = "\n".join(mrtg_lines)
 
-    # Write to .new file
-    new_path = Path(mrtg_config_path + '.new')
-    old_path = Path(mrtg_config_path + '.old')
+    new_path    = Path(mrtg_config_path + '.new')
+    old_path    = Path(mrtg_config_path + '.old')
     config_path = Path(mrtg_config_path)
 
     try:
         with open(new_path, 'w') as f:
             f.write(config_content)
-
-        # Atomic rotation: current -> .old, .new -> current
         if config_path.exists():
             os.replace(config_path, old_path)
         os.replace(new_path, config_path)
-
         if VERBOSE:
             print(f"{prefix}Generated MRTG config: {mrtg_config_path}")
-
     except Exception as e:
         print(f"{prefix}Failed to generate MRTG config '{mrtg_config_path}': {e}", file=sys.stderr)
 
@@ -3856,10 +3834,12 @@ def generate_mrtg_index(all_config_files: List[str], index_path: str, site_name:
                     monitor_info['title'] = pagetop_match.group(1).strip()
                     monitor_info['address'] = pagetop_match.group(2).strip()
 
-                # Check if this is an SNMP target by known suffixes
+                # Check if this is an SNMP target by known suffixes.
+                # host monitors use -system1/-system2/-system3/-system4 suffixes.
                 snmp_suffixes = (
                     '-bandwidth', '-packets', '-packets-type',
                     '-retransmits', '-system', '-errors',
+                    '-system1', '-system2', '-system3', '-system4',
                 )
                 if any(target_name.endswith(s) for s in snmp_suffixes):
                     # Strip the matching suffix to get the base name
@@ -3941,7 +3921,7 @@ def generate_mrtg_index(all_config_files: List[str], index_path: str, site_name:
         "        .network-cell h4 { margin-top: 0; margin-bottom: 4px; font-size: 11px; color: #666; text-align: center; }",
         "        .network-cell a { display: block; text-align: center; }",
         "        .network-cell img { max-width: 100%; height: auto; max-height: 80px; }",
-        # port-label-row: same grid as the chart row below it, labels sit in col 1 and col 5
+        # port/host label row: same grid as the chart row below it
         "        .port-label-row { display: grid; gap: 20px; margin-bottom: 4px; }",
         "        .port-label-cell { display: flex; align-items: flex-end; }",
         "        .port-label-spacer { visibility: hidden; }",
@@ -4031,30 +4011,28 @@ def generate_mrtg_index(all_config_files: List[str], index_path: str, site_name:
             "    </div>",
         ])
 
-    def _emit_port_group(run: List[Tuple[str, Dict[str, Any]]]) -> None:
-        """Emit a contiguous run of port monitors as a single grid (8-up or 4-up).
+    def _emit_port_host_group(run: List[Tuple[str, Dict[str, Any]]]) -> None:
+        """Emit a contiguous run of port/host monitors as a single grid (8-up or 4-up).
+
+        Both port and host monitors have a 4-cell footprint:
+          - port: bandwidth / packets / packets-type / errors
+          - host: system1 / system2 / system3 / system4 (host performance charts)
 
         Layout: label row + chart row share the same column grid so labels sit
         directly above their respective 4-cell blocks on the grey background.
-
-        Label row columns:
-          - col 1: monitor name label
-          - cols 2-4: invisible spacers (maintain grid alignment)
-          - col 5 (if 2nd monitor): monitor name label
-          - cols 6-8: invisible spacers
         """
         col_count = 8 if len(run) >= 2 else 4
         col_narrow = min(col_count, 4)
         col_style = f"repeat({col_count}, 1fr); --cols-narrow: {col_narrow}"
 
         port_targets = [
-            ('-bandwidth',    'Bandwidth In/Out'),
-            ('-packets',      'Packets In/Out'),
+            ('-bandwidth', 'Bandwidth In/Out'),
+            ('-packets', 'Packets In/Out'),
             ('-packets-type', 'Unicast vs B+Mcast'),
-            ('-errors',       'Errors In/Out'),
+            ('-errors', 'Errors In/Out'),
         ]
 
-        # --- label row: one cell per column, labels at col 1 and col 5 ---
+        # --- label row ---
         html_lines.append(f"    <div class='port-label-row' style='grid-template-columns: {col_style};'>")
         for base_name, monitor in run:
             plain_name = re.sub(r'^[^:]+:\s*', '', monitor['title'])
@@ -4062,9 +4040,7 @@ def generate_mrtg_index(all_config_files: List[str], index_path: str, site_name:
             is_down = not monitor_state.get('is_up', True)
             label_class = "network-host-label down" if is_down else "network-host-label"
             outage_str = f" &nbsp;<span style='font-weight: normal; font-size: 13px;'>Down {format_time_ago(monitor_state.get('last_alarm_started'))}</span>" if is_down else ""
-            # Label cell at position 1 (or 5 for second monitor)
             html_lines.append(f"        <div class='port-label-cell'><span class='{label_class}'>{monitor['title']}{outage_str}</span></div>")
-            # Three invisible spacer cells to fill cols 2-4 (or 6-8)
             for _ in range(3):
                 html_lines.append("        <div class='port-label-cell port-label-spacer'></div>")
         html_lines.append("    </div>")
@@ -4076,8 +4052,23 @@ def generate_mrtg_index(all_config_files: List[str], index_path: str, site_name:
             monitor_state = state.get(plain_name, {}) if state else {}
             is_down = not monitor_state.get('is_up', True)
             cell_class = "network-cell down" if is_down else "network-cell"
+            is_host = monitor['title'].startswith('host: ')
 
-            for suffix, heading in port_targets:
+            if is_host:
+                # Build disk_space_pct annotation from state for -system3 heading
+                disk_space_pct = monitor_state.get('disk_space_pct')
+                disk_space_str = f"{disk_space_pct:.1f}%" if disk_space_pct is not None else "N/A"
+                host_targets = [
+                    ('-system1', 'CPU & Load'),
+                    ('-system2', 'Memory & Paging'),
+                    ('-system3', f'Disk I/O &mdash; Disk Use: {disk_space_str}'),
+                    ('-system4', 'System Thrashing'),
+                ]
+                targets = host_targets
+            else:
+                targets = port_targets
+
+            for suffix, heading in targets:
                 html_lines.extend([
                     f"        <div class='{cell_class}'>",
                     f"            <h4>{heading}</h4>",
@@ -4089,28 +4080,33 @@ def generate_mrtg_index(all_config_files: List[str], index_path: str, site_name:
         html_lines.append("    </div>")
 
     # Add Network Monitoring section — iterate snmp_monitors in insertion order,
-    # flushing contiguous runs of port monitors as grouped grids.
+    # flushing contiguous runs of port/host monitors as grouped grids.
     if snmp_monitors:
         html_lines.append("    <h2>L2/L3 Network Monitoring</h2>")
 
-        port_run: List[Tuple[str, Dict[str, Any]]] = []
+        port_host_run: List[Tuple[str, Dict[str, Any]]] = []
         port_count_total = 0
+        host_count_total = 0
 
         for base_name, monitor in snmp_monitors.items():
             is_port = monitor['title'].startswith('port: ')
-            if is_port:
-                port_run.append((base_name, monitor))
-                port_count_total += 1
+            is_host = monitor['title'].startswith('host: ')
+            if is_port or is_host:
+                port_host_run.append((base_name, monitor))
+                if is_port:
+                    port_count_total += 1
+                else:
+                    host_count_total += 1
             else:
-                # Flush any buffered port run before this snmp row
-                if port_run:
-                    _emit_port_group(port_run)
-                    port_run = []
+                # Flush any buffered port/host run before this snmp row
+                if port_host_run:
+                    _emit_port_host_group(port_host_run)
+                    port_host_run = []
                 _emit_snmp_row(base_name, monitor)
 
-        # Flush any trailing port run
-        if port_run:
-            _emit_port_group(port_run)
+        # Flush any trailing port/host run
+        if port_host_run:
+            _emit_port_host_group(port_host_run)
 
     # Add Availability Monitoring section (non-SNMP monitors)
     if all_monitors:
@@ -4178,10 +4174,10 @@ def generate_mrtg_index(all_config_files: List[str], index_path: str, site_name:
         os.replace(new_path, current_path)
 
         if VERBOSE:
-            snmp_count = sum(1 for m in snmp_monitors.values() if not m['title'].startswith('port: '))
+            snmp_count = sum(1 for m in snmp_monitors.values() if not m['title'].startswith(('port: ', 'host: ')))
             avail_count = len(all_monitors)
             hidden_count = len(hidden_monitors) if hidden_monitors else 0
-            print(f"{prefix}Generated MRTG master index: {index_path} ({snmp_count} SNMP hosts, {port_count_total} port monitors, {avail_count} availability monitors, {hidden_count} hidden)")
+            print(f"{prefix}Generated MRTG master index: {index_path} ({snmp_count} SNMP hosts, {port_count_total} port monitors, {host_count_total} host monitors, {avail_count} availability monitors, {hidden_count} hidden)")
 
     except Exception as e:
         print(f"{prefix}Failed to generate MRTG master index '{index_path}': {e}", file=sys.stderr)
@@ -4348,7 +4344,7 @@ def main() -> None:
 
             mrtg_start_ms = int(datetime.now().timestamp() * 1000)
 
-            generate_mrtg_config(config, work_dir, mrtg_config_path)
+            generate_mrtg_config(config, work_dir, mrtg_config_path, STATE)
             all_config_files = update_mrtg_rrd_cgi_config(work_dir, mrtg_config_path)
 
             # Monitors with display=false are excluded from MRTG config but shown in audit footer

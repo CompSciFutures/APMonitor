@@ -9,6 +9,19 @@ Multithreaded high speed availability checking for SNMP, PING, TCP/UDP, QUIC & H
 Integrates w/Site24x7 heartbeat monitoring for failover alerts + MRTG + Slack & Pushover webhooks.
 Thread safe, reentrant, modifiable.
 
+# Release 1.3.3 (19-Mar-26): Managed Host Support
+- Documentation updates re: 4K
+- Prototyped the `type: host` monitor
+- Merged `type: snmp` and `type: ports` because `snmp` is a protocol
+- change the RRD filename to say instead of -snmp.rrd the type of the monitor (eg, port, ports, host, availability)
+- push the RRD code from check_resource into check_ports_resource
+- Added check_host_resource and 4-chart System Performance Tuning metrics to MRTG display
+- Changed back to -snmp.rrd and -availability.rrd for the RRD filename
+- Fixed incorrect headings for `type: host` monitors
+- Properly output disk use in `index.html` and MRTG detail pages
+- Display is now compliant with "System Performance Tuning" by Gian-Paolo D. Musumeci, Mike Loukides
+
+
 # Release 1.3.2 (18-Mar-26): Extended Storage
 - Changed 5 year storage to hourly
 
