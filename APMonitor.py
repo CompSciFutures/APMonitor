@@ -44,7 +44,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-__version__ = "1.3.3"
+__version__ = "1.3.4"
 __app_name__ = "APMonitor"
 
 import argparse
@@ -1360,6 +1360,278 @@ def check_ping_resource(resource: Dict[str, Any]) -> Optional[str]:
         return error_msg
 
 
+def collect_snmp_detail(
+        session: Any,
+        vendor: Optional[str],
+        interfaces: Dict[str, Dict[str, Any]],
+        macs_by_ifindex: Dict[str, list],
+        arp_by_mac: Dict[str, str]) -> Dict[str, Any]:
+    """Collect detail data for monitor detail page from an already-open SNMP session.
+
+    Gathers sysName/Location/Contact, ifAlias, ifSpeed, slot (ENTITY-MIB + ifDescr fallback),
+    LLDP/CDP neighbours, and ARP→IP→PTR hostname mapping.
+
+    DNS PTR lookups are capped at 50 per poll — warning logged if capped.
+
+    Args:
+        session:         Open easysnmp Session
+        vendor:          Detected vendor string ('cisco', 'hp', 'juniper', 'ubiquiti', None)
+        interfaces:      Dict {if_index: {'name': ifDescr, ...}} — already collected by caller
+        macs_by_ifindex: Dict {if_index: [mac, ...]} — already collected by caller
+        arp_by_mac:      Dict {mac: ip} — already collected by caller
+
+    Returns:
+        detail dict suitable for storage under state[name]['detail']
+    """
+    import socket
+
+    prefix = getattr(thread_local, 'prefix', '')
+
+    # Standard MIB-II OIDs
+    OID_SYS_NAME = '1.3.6.1.2.1.1.5.0'
+    OID_SYS_LOCATION = '1.3.6.1.2.1.1.6.0'
+    OID_SYS_CONTACT = '1.3.6.1.2.1.1.4.0'
+    OID_IF_ALIAS = '1.3.6.1.2.1.31.1.1.1.18'
+    OID_IF_HIGH_SPEED = '1.3.6.1.2.1.31.1.1.1.15'  # ifHighSpeed (Mbps)
+    OID_IF_SPEED = '1.3.6.1.2.1.2.2.1.5'  # ifSpeed (bps)
+
+    # ENTITY-MIB OIDs
+    OID_ENTITY_ALIAS_MAP = '1.3.6.1.2.1.47.2.1.1.1.2'  # entAliasMappingIdentifier
+    OID_ENTITY_CONTAINED = '1.3.6.1.2.1.47.1.1.1.1.4'  # entPhysicalContainedIn
+    OID_ENTITY_CLASS = '1.3.6.1.2.1.47.1.1.1.1.5'  # entPhysicalClass
+    OID_ENTITY_DESCR = '1.3.6.1.2.1.47.1.1.1.1.2'  # entPhysicalDescr
+
+    # LLDP OIDs
+    OID_LLDP_REM_SYS_NAME = '1.0.8802.1.1.2.1.4.1.1.9'  # lldpRemSysName
+    OID_LLDP_REM_PORT_DESC = '1.0.8802.1.1.2.1.4.1.1.8'  # lldpRemPortDesc
+
+    # CDP OIDs (Cisco only)
+    OID_CDP_CACHE_DEVICE_ID = '1.3.6.1.4.1.9.9.23.1.2.1.1.6'  # cdpCacheDeviceId
+    OID_CDP_CACHE_DEVICE_PORT = '1.3.6.1.4.1.9.9.23.1.2.1.1.7'  # cdpCacheDevicePort
+
+    # ifDescr slot parsing patterns — tried in order, first match wins
+    # Group 1 captures the slot number
+    SLOT_PATTERNS = [
+        (r'[A-Za-z\-]+(\d+)/\d+/\d+', 1),  # Cisco 3-part (Gi1/0/24), Juniper (ge-0/0/1)
+        (r'[A-Za-z\-]*(\d+)/\d+', 1),  # Cisco 2-part (Gi0/24), HP (1/0/24)
+    ]
+
+    # ENTITY-MIB physical class values
+    ENTITY_CLASS_SLOT = '5'
+    ENTITY_CLASS_MODULE = '6'
+
+    detail: Dict[str, Any] = {
+        'sys_name': None,
+        'sys_location': None,
+        'sys_contact': None,
+        'interfaces': {},
+    }
+
+    # --- sysName / sysLocation / sysContact ---
+    for key, oid in [('sys_name', OID_SYS_NAME), ('sys_location', OID_SYS_LOCATION), ('sys_contact', OID_SYS_CONTACT)]:
+        try:
+            detail[key] = session.get(oid).value
+        except Exception as e:
+            if VERBOSE:
+                print(f"{prefix}DETAIL {key} FAILED: {e}")
+
+    # --- ifAlias walk ---
+    alias_by_index: Dict[str, str] = {}
+    try:
+        for item in session.walk(OID_IF_ALIAS):
+            alias_by_index[item.oid.split('.')[-1]] = item.value
+    except Exception as e:
+        if VERBOSE:
+            print(f"{prefix}DETAIL ifAlias walk FAILED: {e}")
+
+    # --- ifHighSpeed / ifSpeed walk ---
+    speed_by_index: Dict[str, int] = {}  # Mbps
+    try:
+        for item in session.walk(OID_IF_HIGH_SPEED):
+            idx = item.oid.split('.')[-1]
+            try:
+                speed_by_index[idx] = int(item.value)
+            except Exception:
+                pass
+    except Exception as e:
+        if VERBOSE:
+            print(f"{prefix}DETAIL ifHighSpeed walk FAILED: {e}")
+
+    # ifSpeed fallback for interfaces where ifHighSpeed == 0
+    try:
+        for item in session.walk(OID_IF_SPEED):
+            idx = item.oid.split('.')[-1]
+            if speed_by_index.get(idx, 0) == 0:
+                try:
+                    speed_by_index[idx] = int(item.value) // 1_000_000  # bps → Mbps
+                except Exception:
+                    pass
+    except Exception as e:
+        if VERBOSE:
+            print(f"{prefix}DETAIL ifSpeed walk FAILED: {e}")
+
+    # --- ENTITY-MIB slot resolution ---
+    # Build: ifIndex → entPhysicalIndex (port entity) via entAliasMappingTable
+    # Then walk up entPhysicalContainedIn tree to first class-5 or class-6 ancestor.
+    slot_by_ifindex: Dict[str, str] = {}
+    try:
+        # entAliasMappingIdentifier value is an OID ending in ifIndex.N — extract N
+        alias_map: Dict[str, str] = {}  # entPhysicalIndex → ifIndex
+        for item in session.walk(OID_ENTITY_ALIAS_MAP):
+            # OID tail: entPhysicalIndex.logicalIndex
+            ent_phys_index = item.oid.split('.')[-2]
+            # value is OID like 1.3.6.1.2.1.2.2.1.1.N — last element is ifIndex
+            try:
+                if_index = item.value.split('.')[-1]
+                alias_map[ent_phys_index] = if_index
+            except Exception:
+                pass
+
+        if alias_map:
+            # Walk ENTITY-MIB trees once
+            contained_in: Dict[str, str] = {}
+            entity_class: Dict[str, str] = {}
+            entity_descr: Dict[str, str] = {}
+
+            for item in session.walk(OID_ENTITY_CONTAINED):
+                contained_in[item.oid.split('.')[-1]] = item.value
+            for item in session.walk(OID_ENTITY_CLASS):
+                entity_class[item.oid.split('.')[-1]] = item.value
+            for item in session.walk(OID_ENTITY_DESCR):
+                entity_descr[item.oid.split('.')[-1]] = item.value
+
+            for ent_phys_index, if_index in alias_map.items():
+                # Walk up containment tree to first slot or module ancestor
+                current = contained_in.get(ent_phys_index)
+                slot_label = None
+                seen = set()
+                while current and current != '0' and current not in seen:
+                    seen.add(current)
+                    cls = entity_class.get(current)
+                    if cls in (ENTITY_CLASS_SLOT, ENTITY_CLASS_MODULE):
+                        slot_label = entity_descr.get(current)
+                        break
+                    current = contained_in.get(current)
+
+                if slot_label:
+                    slot_by_ifindex[if_index] = slot_label
+                    if VERBOSE > 1:
+                        print(f"{prefix}DETAIL slot ifIndex={if_index}: {slot_label}")
+
+        if VERBOSE and alias_map:
+            print(f"{prefix}DETAIL ENTITY-MIB slot resolution: {len(slot_by_ifindex)}/{len(alias_map)} interfaces resolved")
+
+    except Exception as e:
+        if VERBOSE:
+            print(f"{prefix}DETAIL ENTITY-MIB slot walk FAILED (will use ifDescr fallback): {e}")
+
+    # ifDescr fallback for interfaces without ENTITY-MIB slot
+    def _parse_slot_from_descr(descr: str) -> Optional[str]:
+        import re as _re
+        for pattern, group in SLOT_PATTERNS:
+            m = _re.match(pattern, descr)
+            if m:
+                return m.group(group)
+        return None
+
+    # --- LLDP neighbour walk ---
+    # OID tail: timeMark.localPortNum.remoteIndex — localPortNum maps to ifIndex on most gear
+    lldp_sys_by_ifindex: Dict[str, str] = {}
+    lldp_port_by_ifindex: Dict[str, str] = {}
+    try:
+        for item in session.walk(OID_LLDP_REM_SYS_NAME):
+            local_port = item.oid.split('.')[-2]
+            lldp_sys_by_ifindex[local_port] = item.value
+        for item in session.walk(OID_LLDP_REM_PORT_DESC):
+            local_port = item.oid.split('.')[-2]
+            lldp_port_by_ifindex[local_port] = item.value
+        if VERBOSE and lldp_sys_by_ifindex:
+            print(f"{prefix}DETAIL LLDP: {len(lldp_sys_by_ifindex)} neighbours")
+    except Exception as e:
+        if VERBOSE:
+            print(f"{prefix}DETAIL LLDP walk FAILED: {e}")
+
+    # --- CDP neighbour walk (Cisco only) ---
+    cdp_device_by_ifindex: Dict[str, str] = {}
+    cdp_port_by_ifindex: Dict[str, str] = {}
+    if vendor == 'cisco':
+        try:
+            for item in session.walk(OID_CDP_CACHE_DEVICE_ID):
+                if_index = item.oid.split('.')[-2]
+                cdp_device_by_ifindex[if_index] = item.value
+            for item in session.walk(OID_CDP_CACHE_DEVICE_PORT):
+                if_index = item.oid.split('.')[-2]
+                cdp_port_by_ifindex[if_index] = item.value
+            if VERBOSE and cdp_device_by_ifindex:
+                print(f"{prefix}DETAIL CDP: {len(cdp_device_by_ifindex)} neighbours")
+        except Exception as e:
+            if VERBOSE:
+                print(f"{prefix}DETAIL CDP walk FAILED: {e}")
+
+    # --- DNS PTR lookups (capped at 50) ---
+    # Build ip→hostname map across all IPs in arp_by_mac
+    PTR_LOOKUP_CAP = 50
+    all_ips = list(set(arp_by_mac.values()))
+    if len(all_ips) > PTR_LOOKUP_CAP:
+        print(f"{prefix}DETAIL PTR lookup capped at {PTR_LOOKUP_CAP} (total IPs: {len(all_ips)})", file=sys.stderr)
+        all_ips = all_ips[:PTR_LOOKUP_CAP]
+
+    hostname_by_ip: Dict[str, str] = {}
+    for ip in all_ips:
+        try:
+            hostname_by_ip[ip] = socket.gethostbyaddr(ip)[0]
+        except Exception:
+            hostname_by_ip[ip] = ''
+
+    if VERBOSE:
+        resolved = sum(1 for h in hostname_by_ip.values() if h)
+        print(f"{prefix}DETAIL PTR: {resolved}/{len(hostname_by_ip)} IPs resolved")
+
+    # --- Build per-interface detail dict ---
+    # mac → ip reverse map for ARP join
+    ip_by_mac = arp_by_mac  # mac → ip (already built by caller)
+
+    for if_index in sorted(interfaces.keys(), key=lambda x: int(x)):
+        descr = interfaces[if_index]['name']
+
+        # Slot: ENTITY-MIB first, ifDescr parse fallback
+        slot = slot_by_ifindex.get(if_index) or _parse_slot_from_descr(descr)
+
+        # Neighbour: LLDP preferred, CDP fallback
+        neighbour_host = lldp_sys_by_ifindex.get(if_index) or cdp_device_by_ifindex.get(if_index)
+        neighbour_port = lldp_port_by_ifindex.get(if_index) or cdp_port_by_ifindex.get(if_index)
+        neighbour_proto = None
+        if lldp_sys_by_ifindex.get(if_index):
+            neighbour_proto = 'LLDP'
+        elif cdp_device_by_ifindex.get(if_index):
+            neighbour_proto = 'CDP'
+
+        # MACs on this port
+        macs = sorted(macs_by_ifindex.get(if_index, []))
+
+        # ARP entries for MACs on this port
+        arp_entries = []
+        for mac in macs:
+            ip = ip_by_mac.get(mac, '')
+            hostname = hostname_by_ip.get(ip, '') if ip else ''
+            arp_entries.append({'mac': mac, 'ip': ip, 'hostname': hostname})
+
+        detail['interfaces'][if_index] = {
+            'descr': descr,
+            'alias': alias_by_index.get(if_index, ''),
+            'slot': slot,
+            'speed_mbps': speed_by_index.get(if_index, 0),
+            'oper': interfaces[if_index].get('oper', ''),
+            'admin': interfaces[if_index].get('admin', ''),
+            'neighbour_host': neighbour_host,
+            'neighbour_port': neighbour_port,
+            'neighbour_proto': neighbour_proto,
+            'arp': arp_entries,
+        }
+
+    return detail
+
+
 def check_host_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Dict[str, Any]]:
     """Poll SNMP device for host performance metrics and write RRD if enabled.
 
@@ -1370,7 +1642,9 @@ def check_host_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Dict[s
       - Chart 4 (-system4): Swap used bytes + hardware interrupts/sec (System Thrashing)
 
     Network DS (total_bits_*, total_pkts_*, total_errors_*, tcp_retrans) stored as U.
+    Tamper/network DS (ports_up_count, nvram_flash_bytes, mac_count, arp_count) stored as U.
     disk_space_pct is persisted to state for use by generate_mrtg_config() / generate_mrtg_index().
+    Detail data (sysName/Location/Contact, interfaces, ARP) persisted for detail page.
 
     Returns (error_msg, {}) — empty ports_state, consistent with check_resource() interface.
     """
@@ -1424,6 +1698,21 @@ def check_host_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Dict[s
     OID_DISK_IO_READ  = '1.3.6.1.4.1.2021.13.15.1.1.5'  # diskIOReadX (64-bit bytes)
     OID_DISK_IO_WRITE = '1.3.6.1.4.1.2021.13.15.1.1.6'  # diskIOWriteX (64-bit bytes)
 
+    # IF-MIB for host network interfaces (detail page)
+    OID_IF_DESCR        = '1.3.6.1.2.1.2.2.1.2'
+    OID_IF_OPER_STATUS  = '1.3.6.1.2.1.2.2.1.8'
+    OID_IF_ADMIN_STATUS = '1.3.6.1.2.1.2.2.1.7'
+
+    # ARP tables (RFC 4293 preferred, RFC 2011 fallback)
+    OID_IP_NET_TO_PHYSICAL = '1.3.6.1.2.1.4.35.1.4'
+    OID_IP_NET_TO_MEDIA    = '1.3.6.1.2.1.4.22.1.2'
+
+    OPER_STATUS  = {
+        '1': 'up', '2': 'down', '3': 'testing',
+        '4': 'unknown', '5': 'dormant', '6': 'notPresent', '7': 'lowerLayerDown'
+    }
+    ADMIN_STATUS = {'1': 'up', '2': 'down', '3': 'testing'}
+
     try:
         session = Session(
             hostname=hostname,
@@ -1435,6 +1724,8 @@ def check_host_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Dict[s
         )
 
         # --- CPU utilisation (hrProcessorLoad averaged across cores) ---
+        # First mandatory SNMP operation — fail fast on timeout/error rather than
+        # attempting all subsequent walks against an unreachable host.
         cpu_load = None
         try:
             cpu_items = session.walk(OID_HR_PROCESSOR_LOAD)
@@ -1444,8 +1735,9 @@ def check_host_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Dict[s
                 if VERBOSE:
                     print(f"{prefix}HOST CPU: {len(cpu_values)} cores, avg={cpu_load:.1f}%")
         except Exception as e:
-            if VERBOSE:
-                print(f"{prefix}HOST hrProcessorLoad FAILED: {e}")
+            error_msg = f"{type(e).__name__}: {e}"
+            print(f"{prefix}HOST check FAILED for '{name}' at '{address}': {error_msg}", file=sys.stderr)
+            return error_msg, {}
 
         # --- Memory utilisation + swap used + disk space (hrStorage walk) ---
         memory_pct     = None
@@ -1592,6 +1884,60 @@ def check_host_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Dict[s
         # can embed the live value in PageTop and index cell headings without a live SNMP poll.
         update_state({name: {**STATE.get(name, {}), 'disk_space_pct': disk_space_pct}})
 
+        # --- Detail page: collect host interfaces and ARP ---
+        interfaces: Dict[str, Dict[str, Any]] = {}
+        try:
+            for item in session.walk(OID_IF_DESCR):
+                interfaces[item.oid.split('.')[-1]] = {'name': item.value}
+            oper_items  = session.walk(OID_IF_OPER_STATUS)
+            admin_items = session.walk(OID_IF_ADMIN_STATUS)
+            for item in oper_items:
+                idx = item.oid.split('.')[-1]
+                if idx in interfaces:
+                    interfaces[idx]['oper'] = OPER_STATUS.get(item.value, item.value)
+            for item in admin_items:
+                idx = item.oid.split('.')[-1]
+                if idx in interfaces:
+                    interfaces[idx]['admin'] = ADMIN_STATUS.get(item.value, item.value)
+        except Exception as e:
+            if VERBOSE:
+                print(f"{prefix}HOST interface walk FAILED for detail page: {e}")
+
+        arp_by_mac: Dict[str, str] = {}
+        try:
+            arp_items = session.walk(OID_IP_NET_TO_PHYSICAL)
+            for item in arp_items:
+                try:
+                    parts = item.oid.split('.')
+                    ip    = '.'.join(parts[-4:])
+                    raw   = item.value
+                    if raw:
+                        mac_str = ':'.join(f'{int(b):02X}' for b in raw.split() if b) if ' ' in raw \
+                                  else ':'.join(f'{ord(c):02X}' for c in raw)
+                        arp_by_mac[mac_str] = ip
+                except Exception:
+                    pass
+            if not arp_by_mac:
+                arp_items = session.walk(OID_IP_NET_TO_MEDIA)
+                for item in arp_items:
+                    try:
+                        parts = item.oid.split('.')
+                        ip    = '.'.join(parts[-4:])
+                        raw   = item.value
+                        if raw:
+                            mac_str = ':'.join(f'{int(b):02X}' for b in raw.split() if b) if ' ' in raw \
+                                      else ':'.join(f'{ord(c):02X}' for c in raw)
+                            arp_by_mac[mac_str] = ip
+                    except Exception:
+                        pass
+        except Exception as e:
+            if VERBOSE:
+                print(f"{prefix}HOST ARP walk FAILED for detail page: {e}")
+
+        # host has no FDB — empty macs_by_ifindex
+        detail = collect_snmp_detail(session, None, interfaces, {}, arp_by_mac)
+        update_state({name: {**STATE.get(name, {}), 'detail': detail}})
+
         # --- RRD update ---
         if RRD_ENABLED:
             check_every_n_secs = resource.get('check_every_n_secs', DEFAULT_CHECK_EVERY_N_SECS)
@@ -1599,9 +1945,9 @@ def check_host_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Dict[s
             rras               = create_rrd_rras(check_every_n_secs)
 
             # host uses empty interfaces dict — no per-interface DS
-            # fixed DS count = 0 per-interface + 11 network + 7 host = 18
-            interfaces        = {}
-            expected_ds_count = 18
+            # fixed DS count = 0 per-interface + 22 fixed DS total
+            interfaces_rrd    = {}
+            expected_ds_count = 22
 
             if os.path.exists(rrd_path):
                 needs_recreation = False
@@ -1625,13 +1971,13 @@ def check_host_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Dict[s
                     os.remove(rrd_path)
 
             if not os.path.exists(rrd_path):
-                create_snmp_rrd(rrd_path, check_every_n_secs, interfaces)
+                create_snmp_rrd(rrd_path, check_every_n_secs, interfaces_rrd)
                 if VERBOSE:
                     print(f"{prefix}Created HOST RRD: {rrd_path}")
 
             if os.path.exists(rrd_path):
                 rrd_err = update_snmp_rrd(
-                    rrd_path, datetime.now(), interfaces,
+                    rrd_path, datetime.now(), interfaces_rrd,
                     None,        # tcp_retrans
                     None, None,  # total_bits_in/out
                     None, None,  # total_pkts_in/out
@@ -1645,6 +1991,7 @@ def check_host_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Dict[s
                     disk_space_pct=disk_space_pct,
                     swap_used=swap_used,
                     interrupts=interrupts,
+                    # tamper/network DS — U for host
                 )
                 if rrd_err:
                     return rrd_err, {}
@@ -1664,8 +2011,10 @@ def check_host_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Dict[s
 
 
 def check_ports_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Dict[str, Any]]:
-    """Poll SNMP device for interface metrics (bandwidth/packets/errors/CPU/memory) and
-    port state (oper/admin status + MAC forwarding table). Writes SNMP RRD if enabled.
+    """Poll SNMP device for interface metrics (bandwidth/packets/errors/CPU/memory),
+    port state (oper/admin status + MAC forwarding table), tamper/network capacity
+    metrics (active port count, NVRAM/flash bytes, MAC count, ARP count), and
+    full detail data for the monitor detail page. Writes SNMP RRD if enabled.
 
     Combines former check_snmp_resource() and check_ports_resource() into a single
     SNMP session with one ifDescr walk shared across both metric and state collection.
@@ -1747,12 +2096,23 @@ def check_ports_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Dict[
     OID_DOT1Q_TP_FDB_PORT    = '1.3.6.1.2.1.17.7.1.2.2.1.2'
     OID_DOT1Q_TP_FDB_STATUS  = '1.3.6.1.2.1.17.7.1.2.2.1.3'
 
+    # ARP tables (RFC 4293 preferred, RFC 2011 fallback)
+    OID_IP_NET_TO_PHYSICAL   = '1.3.6.1.2.1.4.35.1.4'  # ipNetToPhysicalPhysAddress
+    OID_IP_NET_TO_MEDIA      = '1.3.6.1.2.1.4.22.1.2'   # ipNetToMediaPhysAddress
+
+    # ARP IP address columns (parallel to the physical address OIDs above)
+    OID_IP_NET_TO_PHYSICAL_ADDR = '1.3.6.1.2.1.4.35.1.4'  # value IS the MAC; IP is in OID tail
+    OID_IP_NET_TO_MEDIA_ADDR    = '1.3.6.1.2.1.4.22.1.2'   # value IS the MAC; IP is in OID tail
+
     OPER_STATUS = {
         '1': 'up', '2': 'down', '3': 'testing',
         '4': 'unknown', '5': 'dormant', '6': 'notPresent', '7': 'lowerLayerDown'
     }
     ADMIN_STATUS       = {'1': 'up', '2': 'down', '3': 'testing'}
     FDB_STATUS_LEARNED = '3'
+
+    # hrStorage description keywords for NVRAM/flash detection (case-insensitive match)
+    NVRAM_FLASH_KEYWORDS = {'nvram', 'flash', 'bootflash', 'nvmram'}
 
     try:
         session = Session(
@@ -2042,6 +2402,96 @@ def check_ports_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Dict[
                 'macs':  sorted(macs_by_ifindex.get(if_index, [])),
             }
 
+        # --- Tamper detection: active port count (free — derived from current_ports_state) ---
+        ports_up_count = sum(1 for s in current_ports_state.values() if s['oper'] == 'up')
+        if VERBOSE:
+            print(f"{prefix}PORTS up count: {ports_up_count}/{len(current_ports_state)}")
+
+        # --- Tamper detection: NVRAM + flash used bytes (vendor-neutral hrStorage walk) ---
+        # Keywords matched case-insensitively; sum used×units across all matching entries.
+        # Silent U if no matching entries — consistent with partial-data philosophy.
+        nvram_flash_bytes = None
+        try:
+            storage_descr_items = session.walk(OID_HR_STORAGE_DESCR)
+            for item in storage_descr_items:
+                if any(kw in item.value.lower() for kw in NVRAM_FLASH_KEYWORDS):
+                    st_index = item.oid.split('.')[-1]
+                    try:
+                        units = int(session.get(f"{OID_HR_STORAGE_UNITS}.{st_index}").value)
+                        used  = int(session.get(f"{OID_HR_STORAGE_USED}.{st_index}").value)
+                        nvram_flash_bytes = (nvram_flash_bytes or 0) + used * units
+                        if VERBOSE:
+                            print(f"{prefix}PORTS NVRAM/flash '{item.value}': {used * units:,} bytes used")
+                    except Exception as e:
+                        if VERBOSE:
+                            print(f"{prefix}PORTS NVRAM/flash entry '{item.value}' FAILED: {e}")
+        except Exception as e:
+            if VERBOSE:
+                print(f"{prefix}PORTS hrStorage NVRAM/flash walk FAILED: {e}")
+
+        # --- Network capacity: MAC count (free — already have macs_by_ifindex from FDB walk) ---
+        mac_count = sum(len(v) for v in macs_by_ifindex.values())
+        if VERBOSE:
+            print(f"{prefix}PORTS MAC count: {mac_count}")
+
+        # --- Network capacity: ARP entry count + build mac→ip map for detail page ---
+        # ipNetToPhysicalTable (RFC 4293) preferred; ipNetToMediaTable (RFC 2011) fallback.
+        # OID tail for ipNetToPhysicalTable: ifIndex.ipVersion.ip1.ip2.ip3.ip4
+        # OID tail for ipNetToMediaTable:    ifIndex.ip1.ip2.ip3.ip4
+        arp_count  = None
+        arp_by_mac: Dict[str, str] = {}  # mac → ip
+
+        def _parse_arp_physical(items: list) -> Dict[str, str]:
+            """Parse ipNetToPhysicalTable items → {mac: ip}."""
+            result = {}
+            for item in items:
+                try:
+                    # OID tail: ifIndex.addrType.ip1.ip2.ip3.ip4
+                    parts = item.oid.split('.')
+                    ip = '.'.join(parts[-4:])
+                    # value is MAC as hex octets separated by spaces or as raw bytes
+                    raw = item.value
+                    if raw:
+                        mac_str = ':'.join(f'{int(b):02X}' for b in raw.split() if b) if ' ' in raw \
+                                  else ':'.join(f'{ord(c):02X}' for c in raw)
+                        result[mac_str] = ip
+                except Exception:
+                    pass
+            return result
+
+        def _parse_arp_media(items: list) -> Dict[str, str]:
+            """Parse ipNetToMediaTable items → {mac: ip}."""
+            result = {}
+            for item in items:
+                try:
+                    parts = item.oid.split('.')
+                    ip = '.'.join(parts[-4:])
+                    raw = item.value
+                    if raw:
+                        mac_str = ':'.join(f'{int(b):02X}' for b in raw.split() if b) if ' ' in raw \
+                                  else ':'.join(f'{ord(c):02X}' for c in raw)
+                        result[mac_str] = ip
+                except Exception:
+                    pass
+            return result
+
+        try:
+            arp_items = session.walk(OID_IP_NET_TO_PHYSICAL)
+            arp_count = len(arp_items)
+            arp_by_mac = _parse_arp_physical(arp_items)
+            if VERBOSE:
+                print(f"{prefix}PORTS ARP count (ipNetToPhysicalTable): {arp_count}")
+            if arp_count == 0:
+                # Fallback — some devices only populate the older table
+                arp_items = session.walk(OID_IP_NET_TO_MEDIA)
+                arp_count = len(arp_items)
+                arp_by_mac = _parse_arp_media(arp_items)
+                if VERBOSE:
+                    print(f"{prefix}PORTS ARP count (ipNetToMediaTable fallback): {arp_count}")
+        except Exception as e:
+            if VERBOSE:
+                print(f"{prefix}PORTS ARP walk FAILED: {e}")
+
         if VERBOSE:
             print(f"{prefix}PORTS poll SUCCESS for '{name}': {len(current_ports_state)} interfaces")
             for if_index, iface in current_ports_state.items():
@@ -2054,6 +2504,17 @@ def check_ports_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Dict[
                       f"out={f'{out_val:,}' if out_val is not None else 'N/A'} "
                       f"macs=[{mac_str}]")
 
+        # --- Detail page data collection ---
+        # Enrich interfaces dict with oper/admin strings for collect_snmp_detail
+        for if_index in interfaces:
+            oper_raw  = oper_by_index.get(if_index, '4')
+            admin_raw = admin_by_index.get(if_index, '2')
+            interfaces[if_index]['oper']  = OPER_STATUS.get(oper_raw, oper_raw)
+            interfaces[if_index]['admin'] = ADMIN_STATUS.get(admin_raw, admin_raw)
+
+        detail = collect_snmp_detail(session, vendor, interfaces, macs_by_ifindex, arp_by_mac)
+        update_state({name: {**STATE.get(name, {}), 'detail': detail}})
+
         # --- RRD update ---
         if RRD_ENABLED:
             check_every_n_secs = resource.get('check_every_n_secs', DEFAULT_CHECK_EVERY_N_SECS)
@@ -2061,7 +2522,7 @@ def check_ports_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Dict[
             rras               = create_rrd_rras(check_every_n_secs)
 
             if os.path.exists(rrd_path):
-                expected_ds_count = 2 * len(interfaces) + 18  # per-interface pairs + 18 fixed DS
+                expected_ds_count = 2 * len(interfaces) + 22  # per-interface pairs + 22 fixed DS
                 needs_recreation  = False
                 try:
                     info            = rrdtool.info(rrd_path)
@@ -2097,6 +2558,10 @@ def check_ports_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Dict[
                     cpu_load, memory_pct,
                     total_pkts_ucast, total_pkts_bmcast,
                     # host DS — U for ports
+                    ports_up_count=ports_up_count,
+                    nvram_flash_bytes=nvram_flash_bytes,
+                    mac_count=mac_count,
+                    arp_count=arp_count,
                 )
                 if rrd_err:
                     return rrd_err, {}
@@ -2176,6 +2641,10 @@ def check_port_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Option
     OID_DOT1Q_TP_FDB_PORT   = '1.3.6.1.2.1.17.7.1.2.2.1.2'
     OID_DOT1Q_TP_FDB_STATUS = '1.3.6.1.2.1.17.7.1.2.2.1.3'
 
+    # ARP tables (RFC 4293 preferred, RFC 2011 fallback)
+    OID_IP_NET_TO_PHYSICAL  = '1.3.6.1.2.1.4.35.1.4'
+    OID_IP_NET_TO_MEDIA     = '1.3.6.1.2.1.4.22.1.2'
+
     OPER_STATUS = {
         '1': 'up', '2': 'down', '3': 'testing',
         '4': 'unknown', '5': 'dormant', '6': 'notPresent', '7': 'lowerLayerDown'
@@ -2208,6 +2677,7 @@ def check_port_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Option
 
     # MAC walk — non-fatal
     current_mac = None
+    macs_by_ifindex: Dict[str, list] = {}
     try:
         fdb_port_items   = session.walk(OID_DOT1Q_TP_FDB_PORT)
         fdb_status_items = session.walk(OID_DOT1Q_TP_FDB_STATUS)
@@ -2222,15 +2692,16 @@ def check_port_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Option
             mac_octets   = oid_tail.split('.')[1:]
             port_ifindex = item.value
 
-            if port_ifindex != if_index:
-                continue
             if fdb_status_by_oid.get(oid_tail) != FDB_STATUS_LEARNED:
                 continue
             if len(mac_octets) != 6:
                 continue
 
-            current_mac = ':'.join(f'{int(o):02X}' for o in mac_octets)
-            break
+            mac_str = ':'.join(f'{int(o):02X}' for o in mac_octets)
+            macs_by_ifindex.setdefault(port_ifindex, []).append(mac_str)
+
+            if port_ifindex == if_index and current_mac is None:
+                current_mac = mac_str
 
         if VERBOSE:
             print(f"{prefix}PORT mac on ifIndex={if_index}: {current_mac or 'none'} (pinned={pinned_mac})")
@@ -2251,40 +2722,78 @@ def check_port_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Option
         if current_mac is not None and current_mac != pinned_mac:
             return f"port ifIndex={if_index} wrong MAC: expected {pinned_mac}, got {current_mac}", oper, current_mac
 
+    # --- ARP collection for detail page ---
+    arp_by_mac: Dict[str, str] = {}
+    try:
+        arp_items = session.walk(OID_IP_NET_TO_PHYSICAL)
+        for item in arp_items:
+            try:
+                parts = item.oid.split('.')
+                ip    = '.'.join(parts[-4:])
+                raw   = item.value
+                if raw:
+                    mac_str = ':'.join(f'{int(b):02X}' for b in raw.split() if b) if ' ' in raw \
+                              else ':'.join(f'{ord(c):02X}' for c in raw)
+                    arp_by_mac[mac_str] = ip
+            except Exception:
+                pass
+        if not arp_by_mac:
+            arp_items = session.walk(OID_IP_NET_TO_MEDIA)
+            for item in arp_items:
+                try:
+                    parts = item.oid.split('.')
+                    ip    = '.'.join(parts[-4:])
+                    raw   = item.value
+                    if raw:
+                        mac_str = ':'.join(f'{int(b):02X}' for b in raw.split() if b) if ' ' in raw \
+                                  else ':'.join(f'{ord(c):02X}' for c in raw)
+                        arp_by_mac[mac_str] = ip
+                except Exception:
+                    pass
+    except Exception as e:
+        if VERBOSE:
+            print(f"{prefix}PORT ARP walk FAILED for detail page: {e}")
+
+    # --- Detail page data collection ---
+    try:
+        if_name = session.get(f"{OID_IF_DESCR}.{if_index}").value
+    except Exception:
+        if_name = f"if{if_index}"
+
+    interfaces = {if_index: {'name': if_name, 'oper': oper, 'admin': admin}}
+    detail = collect_snmp_detail(session, None, interfaces, macs_by_ifindex, arp_by_mac)
+    update_state({name: {**STATE.get(name, {}), 'detail': detail}})
+
     # --- RRD update (single-interface schema) ---
     if RRD_ENABLED:
         check_every_n_secs = resource.get('check_every_n_secs', DEFAULT_CHECK_EVERY_N_SECS)
         rrd_path           = get_rrd_path(name, 'snmp')
 
-        try:
-            if_name = session.get(f"{OID_IF_DESCR}.{if_index}").value
-        except Exception:
-            if_name = f"if{if_index}"
-        interfaces = {if_index: {'name': if_name}}
+        interfaces_rrd = {if_index: {'name': if_name}}
 
         try:
             octets_in = int(session.get(f"{OID_IF_IN_OCTETS}.{if_index}").value)
-            interfaces[if_index]['in_octets'] = octets_in
+            interfaces_rrd[if_index]['in_octets'] = octets_in
         except Exception:
-            interfaces[if_index]['in_octets'] = None
+            interfaces_rrd[if_index]['in_octets'] = None
             octets_in = 0
 
         try:
             octets_out = int(session.get(f"{OID_IF_OUT_OCTETS}.{if_index}").value)
-            interfaces[if_index]['out_octets'] = octets_out
+            interfaces_rrd[if_index]['out_octets'] = octets_out
         except Exception:
-            interfaces[if_index]['out_octets'] = None
+            interfaces_rrd[if_index]['out_octets'] = None
             octets_out = 0
 
         try:
-            interfaces[if_index]['in_errors'] = int(session.get(f"{OID_IF_IN_ERRORS}.{if_index}").value)
+            interfaces_rrd[if_index]['in_errors'] = int(session.get(f"{OID_IF_IN_ERRORS}.{if_index}").value)
         except Exception:
-            interfaces[if_index]['in_errors'] = None
+            interfaces_rrd[if_index]['in_errors'] = None
 
         try:
-            interfaces[if_index]['out_errors'] = int(session.get(f"{OID_IF_OUT_ERRORS}.{if_index}").value)
+            interfaces_rrd[if_index]['out_errors'] = int(session.get(f"{OID_IF_OUT_ERRORS}.{if_index}").value)
         except Exception:
-            interfaces[if_index]['out_errors'] = None
+            interfaces_rrd[if_index]['out_errors'] = None
 
         ucast_in = bmcast_in = ucast_out = bmcast_out = 0
         for oid, bucket in [
@@ -2318,7 +2827,7 @@ def check_port_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Option
 
         rras = create_rrd_rras(check_every_n_secs)
         if os.path.exists(rrd_path):
-            expected_ds_count = 2 * len(interfaces) + 18  # per-interface pairs + 18 fixed DS
+            expected_ds_count = 2 * len(interfaces_rrd) + 22  # per-interface pairs + 22 fixed DS
             needs_recreation  = False
             try:
                 info            = rrdtool.info(rrd_path)
@@ -2340,12 +2849,12 @@ def check_port_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Option
                 os.remove(rrd_path)
 
         if not os.path.exists(rrd_path):
-            create_snmp_rrd(rrd_path, check_every_n_secs, interfaces)
+            create_snmp_rrd(rrd_path, check_every_n_secs, interfaces_rrd)
             if VERBOSE:
                 print(f"{prefix}Created PORT RRD: {rrd_path}")
 
         rrd_err = update_snmp_rrd(
-            rrd_path, datetime.now(), interfaces,
+            rrd_path, datetime.now(), interfaces_rrd,
             None,               # tcp_retrans — not polled for single port
             total_bits_in, total_bits_out,
             total_pkts_in, total_pkts_out,
@@ -2353,6 +2862,7 @@ def check_port_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Option
             None, None,         # cpu_load / memory_pct — not polled for single port
             total_pkts_ucast, total_pkts_bmcast,
             # host DS — all None for port
+            # tamper/network DS — all None for port
         )
         if rrd_err and VERBOSE:
             print(f"{prefix}PORT RRD update failed: {rrd_err}", file=sys.stderr)
@@ -2947,13 +3457,14 @@ def create_snmp_rrd(rrd_path: str, step_secs: int, interfaces: Dict[str, Dict[st
     - Per-interface DS pairs (ports/port only, empty for host)
     - 11 fixed aggregate network DS (ports/port populated, host stores U)
     - 7 fixed host performance DS (host populated, ports/port store U)
+    - 4 fixed tamper/network DS (ports only — port/host store U)
 
     Args:
         rrd_path: Full path to RRD file to create
         step_secs: Update interval in seconds
         interfaces: Dict mapping interface index to interface data (with 'name' key)
 
-    NB: existing RRDs must be deleted before next run whenever DS layout changes.
+    NB: DS count is now 22 fixed. Existing RRDs with <22 fixed DS will be auto-healed (deleted and recreated).
     """
     global RRD_ELAPSED_MS
     prefix = getattr(thread_local, 'prefix', '')
@@ -2994,6 +3505,12 @@ def create_snmp_rrd(rrd_path: str, step_secs: int, interfaces: Dict[str, Dict[st
     data_sources.append(f'DS:swap_used:GAUGE:{heartbeat}:0:U')
     data_sources.append(f'DS:interrupts:COUNTER:{heartbeat}:0:U')
 
+    # Fixed tamper/network capacity DS (ports only — port/host store U)
+    data_sources.append(f'DS:ports_up_count:GAUGE:{heartbeat}:0:U')
+    data_sources.append(f'DS:nvram_flash_bytes:GAUGE:{heartbeat}:0:U')
+    data_sources.append(f'DS:mac_count:GAUGE:{heartbeat}:0:U')
+    data_sources.append(f'DS:arp_count:GAUGE:{heartbeat}:0:U')
+
     rras = create_rrd_rras(step_secs)
 
     try:
@@ -3023,13 +3540,17 @@ def update_snmp_rrd(rrd_path: str, timestamp: datetime, interfaces: Dict[str, Di
                     context_switches: Optional[int] = None, swap_io: Optional[int] = None,
                     disk_read: Optional[int] = None, disk_write: Optional[int] = None,
                     disk_space_pct: Optional[float] = None, swap_used: Optional[int] = None,
-                    interrupts: Optional[int] = None) -> Optional[str]:
+                    interrupts: Optional[int] = None,
+                    ports_up_count: Optional[int] = None, nvram_flash_bytes: Optional[int] = None,
+                    mac_count: Optional[int] = None, arp_count: Optional[int] = None) -> Optional[str]:
     """Update SNMP RRD file with latest interface metrics, system resources, and host performance.
 
     All numeric parameters accept None → stored as 'U' (unknown) in RRD.
     Network DS (total_bits_*, total_pkts_*, total_errors_*, tcp_retrans) should be
     passed as None for host monitors. Host DS (context_switches etc.) should be
     passed as None for ports/port monitors.
+    Tamper/network DS (ports_up_count, nvram_flash_bytes, mac_count, arp_count) should be
+    passed as None for port and host monitors — these are ports-only metrics.
 
     Args:
         rrd_path: Full path to RRD file
@@ -3053,6 +3574,10 @@ def update_snmp_rrd(rrd_path: str, timestamp: datetime, interfaces: Dict[str, Di
         disk_space_pct: Root filesystem utilization percentage (host only)
         swap_used: Swap used bytes (host only)
         interrupts: Raw hardware interrupt counter (host only)
+        ports_up_count: Count of oper=up interfaces (ports only)
+        nvram_flash_bytes: Sum of used bytes across NVRAM/flash hrStorage entries (ports only)
+        mac_count: Count of learned FDB entries via Q-BRIDGE-MIB (ports only)
+        arp_count: Count of ARP entries via ipNetToPhysicalTable / ipNetToMediaTable (ports only)
     """
     global RRD_ELAPSED_MS
     prefix = getattr(thread_local, 'prefix', '')
@@ -3102,6 +3627,12 @@ def update_snmp_rrd(rrd_path: str, timestamp: datetime, interfaces: Dict[str, Di
     ds_names.append('disk_space_pct');   values.append(_v(disk_space_pct))
     ds_names.append('swap_used');        values.append(_v(swap_used))
     ds_names.append('interrupts');       values.append(_v(interrupts))
+
+    # Fixed tamper/network capacity DS (ports only — port/host pass None → U)
+    ds_names.append('ports_up_count');    values.append(_v(ports_up_count))
+    ds_names.append('nvram_flash_bytes'); values.append(_v(nvram_flash_bytes))
+    ds_names.append('mac_count');         values.append(_v(mac_count))
+    ds_names.append('arp_count');         values.append(_v(arp_count))
 
     template  = ':'.join(ds_names)
     value_str = ':'.join(values)
@@ -3418,23 +3949,32 @@ def check_and_heartbeat_r(resource: Dict[str, Any], site_config: Dict[str, Any])
             create_rrd(rrd_path, check_every_n_secs)
         update_rrd(rrd_path, now, last_response_time_ms, is_up)
 
-    # Update state for this resource
+    # Update state for this resource.
+    # Preserve 'detail' and 'disk_space_pct' written by check functions during this poll —
+    # both are stored via update_state() inside check_ports_resource / check_host_resource
+    # before this point, and must not be clobbered by the broader state update below.
+    with STATE_LOCK:
+        prev_detail       = STATE.get(resource['name'], {}).get('detail')
+        prev_disk_space   = STATE.get(resource['name'], {}).get('disk_space_pct')
+
     new_state = {
-        'is_up': is_up,
-        'last_checked': now.isoformat(),
-        'last_response_time_ms': last_response_time_ms,
+        'is_up':                    is_up,
+        'detail':                   prev_detail,       # preserve detail written by check functions
+        'disk_space_pct':           prev_disk_space,   # preserve disk_space_pct written by check_host_resource
+        'last_checked':             now.isoformat(),
+        'last_response_time_ms':    last_response_time_ms,
         'last_successful_heartbeat': last_successful_heartbeat,
-        'error_reason': error_reason,
-        'last_config_checksum': resource_checksum,
+        'error_reason':             error_reason,
+        'last_config_checksum':     resource_checksum,
     }
 
     if resource['type'] == 'ports' and current_ports_state:
         new_state['ports_state'] = current_ports_state
     else:
-        new_state['down_count'] = down_count
+        new_state['down_count']        = down_count
         new_state['last_alarm_started'] = prev_last_alarm_started if is_up else last_alarm_started
-        new_state['last_notified'] = last_notified if is_up else (last_notified if should_notify else prev_last_notified)
-        new_state['notified_count'] = notified_count
+        new_state['last_notified']      = last_notified if is_up else (last_notified if should_notify else prev_last_notified)
+        new_state['notified_count']     = notified_count
 
     update_state({resource['name']: new_state})
 
@@ -3499,6 +4039,209 @@ def create_pid_file_or_exit_on_unix(config_path: str) -> Optional[str]:
         sys.exit(1)
 
     return lockfile_path
+
+
+def generate_monitor_detail_page(resource: Dict[str, Any], detail: Dict[str, Any],
+                                  work_dir: str) -> None:
+    """Generate a per-monitor detail HTML page with system info, interface table, and MAC/IP/hostname table.
+
+    Written to {work_dir}/{monitor_type}-{safe_name}-detail.html alongside index.html,
+    with atomic .new/.old rotation. Auto-refreshes every 95 seconds matching index.html.
+
+    Args:
+        resource: Monitor config dict (needs 'name', 'type', 'address')
+        detail:   Detail dict from state[name]['detail'] — populated by collect_snmp_detail()
+        work_dir: MRTG working directory — detail page written here alongside index.html
+    """
+    prefix = getattr(thread_local, 'prefix', '')
+
+    if not detail:
+        if VERBOSE:
+            print(f"{prefix}DETAIL page skipped for '{resource['name']}': no detail data in state yet")
+        return
+
+    safe_name    = re.sub(r'[^\w\-.]', '_', resource['name'])
+    monitor_type = resource['type']
+    display_name = f"{monitor_type}: {resource['name']}"
+    output_path  = str(Path(work_dir) / f"{monitor_type}-{safe_name}-detail.html")
+
+    sys_name     = detail.get('sys_name')     or '—'
+    sys_location = detail.get('sys_location') or '—'
+    sys_contact  = detail.get('sys_contact')  or '—'
+    interfaces   = detail.get('interfaces', {})
+
+    generated_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+    def _fmt_speed(mbps: int) -> str:
+        if not mbps:
+            return '—'
+        if mbps >= 1000:
+            return f"{mbps // 1000} Gbps"
+        return f"{mbps} Mbps"
+
+    # -------------------------------------------------------------------------
+    # Interface table rows
+    # -------------------------------------------------------------------------
+    iface_rows = []
+    for if_index in sorted(interfaces.keys(), key=lambda x: int(x)):
+        iface = interfaces[if_index]
+        oper  = iface.get('oper', '—')
+        oper_class = 'oper-up' if oper == 'up' else ('oper-down' if oper == 'down' else 'oper-other')
+
+        neighbour = '—'
+        if iface.get('neighbour_host'):
+            proto = iface.get('neighbour_proto', '')
+            port  = iface.get('neighbour_port', '')
+            neighbour = f"{iface['neighbour_host']}"
+            if port:
+                neighbour += f" &nbsp;<span class='sub'>{port}</span>"
+            if proto:
+                neighbour += f" &nbsp;<span class='proto'>{proto}</span>"
+
+        iface_rows.append(
+            f"<tr>"
+            f"<td class='mono'>{if_index}</td>"
+            f"<td class='mono'>{iface.get('slot') or '—'}</td>"
+            f"<td class='mono'>{iface.get('descr', '—')}</td>"
+            f"<td>{iface.get('alias', '') or '—'}</td>"
+            f"<td>{_fmt_speed(iface.get('speed_mbps', 0))}</td>"
+            f"<td class='{oper_class}'>{oper}</td>"
+            f"<td>{iface.get('admin', '—')}</td>"
+            f"<td>{neighbour}</td>"
+            f"</tr>"
+        )
+
+    iface_table = "\n".join(iface_rows) if iface_rows else \
+        "<tr><td colspan='8' class='empty'>No interface data available</td></tr>"
+
+    # -------------------------------------------------------------------------
+    # MAC / IP / Hostname table rows
+    # -------------------------------------------------------------------------
+    seen_macs: set = set()
+    arp_rows  = []
+    for if_index in sorted(interfaces.keys(), key=lambda x: int(x)):
+        iface = interfaces[if_index]
+        for entry in iface.get('arp', []):
+            mac = entry.get('mac', '')
+            if mac in seen_macs:
+                continue
+            seen_macs.add(mac)
+            ip         = entry.get('ip', '')       or '—'
+            hostname   = entry.get('hostname', '') or '—'
+            port_label = f"{iface.get('descr', '')} <span class='sub'>if{if_index}</span>"
+            arp_rows.append(
+                f"<tr>"
+                f"<td>{port_label}</td>"
+                f"<td class='mono'>{mac or '—'}</td>"
+                f"<td class='mono'>{ip}</td>"
+                f"<td>{hostname}</td>"
+                f"</tr>"
+            )
+
+    arp_table = "\n".join(arp_rows) if arp_rows else \
+        "<tr><td colspan='4' class='empty'>No MAC/ARP data available</td></tr>"
+
+    # -------------------------------------------------------------------------
+    # HTML assembly
+    # -------------------------------------------------------------------------
+    html = f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset='UTF-8'>
+    <meta http-equiv='refresh' content='95'>
+    <title>{display_name}</title>
+    <style>
+        body {{ font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5;
+                max-width: 600px; min-width: min-content; }}
+        h1 {{ color: #333; margin-bottom: 4px; }}
+        h2 {{ color: #555; margin-top: 32px; margin-bottom: 12px; border-bottom: 2px solid #ddd; padding-bottom: 6px; }}
+        .sysinfo {{ display: flex; gap: 40px; margin-bottom: 8px; flex-wrap: wrap; }}
+        .sysinfo-item {{ font-size: 14px; color: #555; }}
+        .sysinfo-item span {{ font-weight: bold; color: #333; }}
+        table {{ border-collapse: collapse; min-width: 100%; background: white;
+                 box-shadow: 0 2px 4px rgba(0,0,0,0.1); border-radius: 5px; overflow: hidden; }}
+        th {{ background: #4a4a4a; color: white; padding: 10px 12px; text-align: left;
+              font-size: 13px; font-weight: bold; white-space: nowrap; }}
+        td {{ padding: 8px 12px; font-size: 13px; border-bottom: 1px solid #eee; vertical-align: top;
+              white-space: nowrap; }}
+        tr:last-child td {{ border-bottom: none; }}
+        tr:hover td {{ background: #f9f9f9; }}
+        .mono {{ font-family: monospace; font-size: 12px; }}
+        .oper-up {{ color: #2a7a2a; font-weight: bold; }}
+        .oper-down {{ color: #cc0000; font-weight: bold; }}
+        .oper-other {{ color: #888; }}
+        .sub {{ font-size: 11px; color: #888; }}
+        .proto {{ font-size: 11px; color: #fff; background: #5a7ab8; padding: 1px 5px;
+                  border-radius: 3px; }}
+        .empty {{ color: #aaa; font-style: italic; text-align: center; padding: 20px; }}
+        .back {{ margin-bottom: 20px; font-size: 14px; }}
+        .back a {{ color: #5a7ab8; text-decoration: none; }}
+        .back a:hover {{ text-decoration: underline; }}
+        .footer {{ margin-top: 20px; text-align: center; color: #888; font-size: 12px; }}
+    </style>
+</head>
+<body>
+    <div class='back'><a href='index.html'>&larr; Back to monitoring index</a></div>
+    <h1>{display_name}</h1>
+    <div class='sysinfo'>
+        <div class='sysinfo-item'>Name: <span>{sys_name}</span></div>
+        <div class='sysinfo-item'>Location: <span>{sys_location}</span></div>
+        <div class='sysinfo-item'>Contact: <span>{sys_contact}</span></div>
+        <div class='sysinfo-item'>Address: <span>{resource['address']}</span></div>
+    </div>
+
+    <h2>Interfaces</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>ifIndex</th>
+                <th>Slot</th>
+                <th>Name</th>
+                <th>Alias / Description</th>
+                <th>Speed</th>
+                <th>Oper</th>
+                <th>Admin</th>
+                <th>Neighbour (LLDP/CDP)</th>
+            </tr>
+        </thead>
+        <tbody>
+{iface_table}
+        </tbody>
+    </table>
+
+    <h2>MAC / IP / Hostname</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Port</th>
+                <th>MAC Address</th>
+                <th>IP Address</th>
+                <th>Hostname (PTR)</th>
+            </tr>
+        </thead>
+        <tbody>
+{arp_table}
+        </tbody>
+    </table>
+
+    <p class='footer'>Generated by <a href='https://github.com/CompSciFutures/APMonitor/'>APMonitor v{__version__}</a> at {generated_at}</p>
+</body>
+</html>"""
+
+    new_path     = Path(output_path + '.new')
+    old_path     = Path(output_path + '.old')
+    current_path = Path(output_path)
+
+    try:
+        with open(new_path, 'w') as f:
+            f.write(html)
+        if current_path.exists():
+            os.replace(current_path, old_path)
+        os.replace(new_path, current_path)
+        if VERBOSE:
+            print(f"{prefix}Generated detail page: {output_path}")
+    except Exception as e:
+        print(f"{prefix}Failed to generate detail page '{output_path}': {e}", file=sys.stderr)
 
 
 def generate_mrtg_config(config: Dict[str, Any], work_dir: str, mrtg_config_path: str,
@@ -3744,6 +4487,46 @@ def generate_mrtg_config(config: Dict[str, Any], work_dir: str, mrtg_config_path
                         f"",
                     ])
 
+                    mrtg_lines.extend([
+                        f"######################################################################",
+                        f"# {display_name} - Tamper Detection",
+                        f"",
+                        f"Target[{safe_name}-tamper]: ports_up_count&nvram_flash_bytes:{rrd_path}",
+                        f"MaxBytes[{safe_name}-tamper]: 1000000000",
+                        f"Title[{safe_name}-tamper]: {display_name} - Tamper Detection",
+                        f"PageTop[{safe_name}-tamper]: <h1>{display_name} ({resource['address']})</h1><h2>Active Ports & NVRAM/Flash Used Bytes</h2>",
+                        f"Options[{safe_name}-tamper]: gauge,nopercent,growright",
+                        f"YLegend[{safe_name}-tamper]: Ports / Bytes",
+                        f"ShortLegend[{safe_name}-tamper]: ",
+                        f"Legend1[{safe_name}-tamper]: Active (oper=up) Port Count",
+                        f"Legend2[{safe_name}-tamper]: NVRAM + Flash Used Bytes",
+                        f"LegendI[{safe_name}-tamper]: Ports Up:",
+                        f"LegendO[{safe_name}-tamper]: NVRAM/Flash:",
+                        f"WithPeak[{safe_name}-tamper]: dwmy",
+                        *([f"Percentile[{safe_name}-tamper]: {percentile}"] if percentile else []),
+                        f"",
+                    ])
+
+                    mrtg_lines.extend([
+                        f"######################################################################",
+                        f"# {display_name} - Network Provisioning",
+                        f"",
+                        f"Target[{safe_name}-network]: mac_count&arp_count:{rrd_path}",
+                        f"MaxBytes[{safe_name}-network]: 100000",
+                        f"Title[{safe_name}-network]: {display_name} - Network Provisioning",
+                        f"PageTop[{safe_name}-network]: <h1>{display_name} ({resource['address']})</h1><h2>Learned MAC Count &amp; ARP Table Entries</h2>",
+                        f"Options[{safe_name}-network]: gauge,nopercent,growright",
+                        f"YLegend[{safe_name}-network]: Entry Count",
+                        f"ShortLegend[{safe_name}-network]: entries",
+                        f"Legend1[{safe_name}-network]: Learned MAC Table Entries",
+                        f"Legend2[{safe_name}-network]: ARP Table Entries",
+                        f"LegendI[{safe_name}-network]: MACs:",
+                        f"LegendO[{safe_name}-network]: ARP:",
+                        f"WithPeak[{safe_name}-network]: dwmy",
+                        *([f"Percentile[{safe_name}-network]: {percentile}"] if percentile else []),
+                        f"",
+                    ])
+
         else:
             # Non-SNMP monitors (ping, http, quic, tcp, udp) — availability tracking
             rrd_path = get_rrd_path(resource['name'], 'availability')
@@ -3799,9 +4582,8 @@ def generate_mrtg_index(all_config_files: List[str], index_path: str, site_name:
     """
     prefix = getattr(thread_local, 'prefix', '')
 
-    # Collect all monitors from all config files
-    all_monitors = []
-    snmp_monitors = {}  # Dict to deduplicate SNMP monitors by base name
+    all_monitors  = []
+    snmp_monitors = {}
 
     for config_file in all_config_files:
         if not os.path.exists(config_file):
@@ -3810,54 +4592,45 @@ def generate_mrtg_index(all_config_files: List[str], index_path: str, site_name:
             continue
 
         try:
-            # Parse MRTG config to extract targets
             with open(config_file, 'r') as f:
                 content = f.read()
 
-            # Find all Target[name]: entries
             target_pattern = r'Target\[([^\]]+)\]:'
             targets = re.findall(target_pattern, content)
 
             for target_name in targets:
-                # Extract metadata for this target
-                title_match = re.search(rf'Title\[{re.escape(target_name)}\]:\s*(.+)', content)
+                title_match   = re.search(rf'Title\[{re.escape(target_name)}\]:\s*(.+)', content)
                 pagetop_match = re.search(rf'PageTop\[{re.escape(target_name)}\]:\s*<h1>([^<]+)\s*\(([^)]+)\)</h1>', content)
 
                 monitor_info = {
-                    'name': target_name,
-                    'title': title_match.group(1).strip() if title_match else target_name,
-                    'type': 'monitor',
+                    'name':    target_name,
+                    'title':   title_match.group(1).strip() if title_match else target_name,
+                    'type':    'monitor',
                     'address': ''
                 }
 
                 if pagetop_match:
-                    monitor_info['title'] = pagetop_match.group(1).strip()
+                    monitor_info['title']   = pagetop_match.group(1).strip()
                     monitor_info['address'] = pagetop_match.group(2).strip()
 
-                # Check if this is an SNMP target by known suffixes.
-                # host monitors use -system1/-system2/-system3/-system4 suffixes.
                 snmp_suffixes = (
                     '-bandwidth', '-packets', '-packets-type',
                     '-retransmits', '-system', '-errors',
                     '-system1', '-system2', '-system3', '-system4',
+                    '-tamper', '-network',
                 )
                 if any(target_name.endswith(s) for s in snmp_suffixes):
-                    # Strip the matching suffix to get the base name
                     base_name = target_name
                     for s in snmp_suffixes:
                         if target_name.endswith(s):
                             base_name = target_name[:-len(s)]
                             break
 
-                    # Store metadata once per base name; accumulate target set for cell gating.
-                    # Insertion order is preserved (Python 3.7+ dict) — display order follows
-                    # config file order, which is controlled by the user via the monitors: list.
                     if base_name not in snmp_monitors:
                         monitor_info['targets'] = set()
                         snmp_monitors[base_name] = monitor_info
                     snmp_monitors[base_name]['targets'].add(target_name)
                 else:
-                    # Regular availability monitor
                     all_monitors.append(monitor_info)
 
         except Exception as e:
@@ -3868,7 +4641,6 @@ def generate_mrtg_index(all_config_files: List[str], index_path: str, site_name:
         print(f"{prefix}Warning: No monitors found in any config files", file=sys.stderr)
         return
 
-    # Build world clock display for header
     world_clocks = [
         ('California',  'America/Los_Angeles'),
         ('New York',    'America/New_York'),
@@ -3879,7 +4651,6 @@ def generate_mrtg_index(all_config_files: List[str], index_path: str, site_name:
         ('Melbourne',   'Australia/Melbourne'),
     ]
 
-    # zoneinfo available Python 3.9+; fallback to UTC if unavailable
     try:
         from zoneinfo import ZoneInfo
         def _fmt_tz(tz_name: str, fmt: str) -> str:
@@ -3888,13 +4659,12 @@ def generate_mrtg_index(all_config_files: List[str], index_path: str, site_name:
         def _fmt_tz(tz_name: str, fmt: str) -> str:
             return datetime.utcnow().strftime(fmt).lstrip('0') or '12'
 
-    local_time_str = _fmt_tz('Australia/Melbourne', '%a %I:%M %p')
+    local_time_str    = _fmt_tz('Australia/Melbourne', '%a %I:%M %p')
     world_clock_parts = ' &nbsp;&nbsp; '.join(
         f"{city}: <b>{_fmt_tz(tz, '%I:%M %p')}</b>"
         for city, tz in world_clocks
     )
 
-    # Build HTML content
     html_lines = [
         "<!DOCTYPE html>",
         "<html>",
@@ -3915,13 +4685,14 @@ def generate_mrtg_index(all_config_files: List[str], index_path: str, site_name:
         "        .monitor img { max-width: 100%; height: auto; }",
         "        .network-host-label { font-size: 16px; font-weight: bold; color: #333; margin-bottom: 10px; padding: 6px 10px; border-radius: 4px; display: inline-block; }",
         "        .network-host-label.down { background: #ffe8e8; color: #cc0000; }",
+        "        .network-host-label a { text-decoration: none; color: inherit; }",
+        "        .network-host-label a:hover { text-decoration: underline; }",
         "        .network-row { display: grid; gap: 20px; margin-bottom: 20px; }",
         "        .network-cell { background: white; padding: 8px; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }",
         "        .network-cell.down { background: #ffe8e8; }",
         "        .network-cell h4 { margin-top: 0; margin-bottom: 4px; font-size: 11px; color: #666; text-align: center; }",
         "        .network-cell a { display: block; text-align: center; }",
         "        .network-cell img { max-width: 100%; height: auto; max-height: 80px; }",
-        # port/host label row: same grid as the chart row below it
         "        .port-label-row { display: grid; gap: 20px; margin-bottom: 4px; }",
         "        .port-label-cell { display: flex; align-items: flex-end; }",
         "        .port-label-spacer { visibility: hidden; }",
@@ -3948,25 +4719,37 @@ def generate_mrtg_index(all_config_files: List[str], index_path: str, site_name:
         f"    <h1>{site_name}</h1>",
     ]
 
+    def _detail_href(monitor_title: str, base_name: str) -> str:
+        """Derive detail page href from monitor title and base_name.
+
+        Title format is 'type: name' — extract type prefix for filename.
+        Detail pages live alongside index.html, so href is relative with no path prefix.
+        """
+        type_prefix = monitor_title.split(':')[0].strip() if ':' in monitor_title else 'ports'
+        return f"{type_prefix}-{base_name}-detail.html"
+
     def _emit_snmp_row(base_name: str, monitor: Dict[str, Any]) -> None:
-        """Emit one snmp monitor row (label + network-row grid)."""
-        targets = monitor.get('targets', set())
+        """Emit one snmp monitor row (label + network-row grid). Label links to detail page."""
+        targets         = monitor.get('targets', set())
         has_retransmits = f"{base_name}-retransmits" in targets
         has_system      = f"{base_name}-system"      in targets
+        has_tamper      = f"{base_name}-tamper"       in targets
+        has_network     = f"{base_name}-network"      in targets
 
-        col_count = 4 + int(has_retransmits) + int(has_system)
+        col_count  = 4 + int(has_retransmits) + int(has_system) + int(has_tamper) + int(has_network)
         col_narrow = min(col_count, 3)
-        col_style = f"repeat({col_count}, 1fr); --cols-narrow: {col_narrow}"
+        col_style  = f"repeat({col_count}, 1fr); --cols-narrow: {col_narrow}"
 
-        plain_name = re.sub(r'^[^:]+:\s*', '', monitor['title'])
+        plain_name    = re.sub(r'^[^:]+:\s*', '', monitor['title'])
         monitor_state = state.get(plain_name, {}) if state else {}
-        is_down = not monitor_state.get('is_up', True)
-        label_class = "network-host-label down" if is_down else "network-host-label"
-        cell_class  = "network-cell down" if is_down else "network-cell"
-        outage_str = f" &nbsp;<span style='font-weight: normal; font-size: 13px;'>Down {format_time_ago(monitor_state.get('last_alarm_started'))}</span>" if is_down else ""
+        is_down       = not monitor_state.get('is_up', True)
+        label_class   = "network-host-label down" if is_down else "network-host-label"
+        cell_class    = "network-cell down" if is_down else "network-cell"
+        outage_str    = f" &nbsp;<span style='font-weight: normal; font-size: 13px;'>Down {format_time_ago(monitor_state.get('last_alarm_started'))}</span>" if is_down else ""
+        detail_href   = _detail_href(monitor['title'], base_name)
 
         html_lines.extend([
-            f"    <div class='{label_class}'>{monitor['title']}{outage_str}</div>",
+            f"    <div class='{label_class}'><a href='{detail_href}'>{monitor['title']}</a>{outage_str}</div>",
             f"    <div class='network-row' style='grid-template-columns: {col_style};'>",
             f"        <div class='{cell_class}'>",
             "            <h4>Total Bandwidth In/Out</h4>",
@@ -4008,6 +4791,22 @@ def generate_mrtg_index(all_config_files: List[str], index_path: str, site_name:
                 "            </a>",
                 "        </div>",
             ] if has_system else []),
+            *([
+                f"        <div class='{cell_class}'>",
+                "            <h4>Active Ports & NVRAM/Flash</h4>",
+                f"            <a href='/mrtg-rrd/{base_name}-tamper.html'>",
+                f"                <img src='/mrtg-rrd/{base_name}-tamper-day.png' alt='{monitor['title']} Tamper'>",
+                "            </a>",
+                "        </div>",
+            ] if has_tamper else []),
+            *([
+                f"        <div class='{cell_class}'>",
+                "            <h4>MACs & ARP Entries</h4>",
+                f"            <a href='/mrtg-rrd/{base_name}-network.html'>",
+                f"                <img src='/mrtg-rrd/{base_name}-network-day.png' alt='{monitor['title']} Network'>",
+                "            </a>",
+                "        </div>",
+            ] if has_network else []),
             "    </div>",
         ])
 
@@ -4020,27 +4819,34 @@ def generate_mrtg_index(all_config_files: List[str], index_path: str, site_name:
 
         Layout: label row + chart row share the same column grid so labels sit
         directly above their respective 4-cell blocks on the grey background.
+        Labels link to per-monitor detail pages alongside index.html.
         """
-        col_count = 8 if len(run) >= 2 else 4
+        col_count  = 8 if len(run) >= 2 else 4
         col_narrow = min(col_count, 4)
-        col_style = f"repeat({col_count}, 1fr); --cols-narrow: {col_narrow}"
+        col_style  = f"repeat({col_count}, 1fr); --cols-narrow: {col_narrow}"
 
         port_targets = [
-            ('-bandwidth', 'Bandwidth In/Out'),
-            ('-packets', 'Packets In/Out'),
+            ('-bandwidth',    'Bandwidth In/Out'),
+            ('-packets',      'Packets In/Out'),
             ('-packets-type', 'Unicast vs B+Mcast'),
-            ('-errors', 'Errors In/Out'),
+            ('-errors',       'Errors In/Out'),
         ]
 
         # --- label row ---
         html_lines.append(f"    <div class='port-label-row' style='grid-template-columns: {col_style};'>")
         for base_name, monitor in run:
-            plain_name = re.sub(r'^[^:]+:\s*', '', monitor['title'])
+            plain_name    = re.sub(r'^[^:]+:\s*', '', monitor['title'])
             monitor_state = state.get(plain_name, {}) if state else {}
-            is_down = not monitor_state.get('is_up', True)
-            label_class = "network-host-label down" if is_down else "network-host-label"
-            outage_str = f" &nbsp;<span style='font-weight: normal; font-size: 13px;'>Down {format_time_ago(monitor_state.get('last_alarm_started'))}</span>" if is_down else ""
-            html_lines.append(f"        <div class='port-label-cell'><span class='{label_class}'>{monitor['title']}{outage_str}</span></div>")
+            is_down       = not monitor_state.get('is_up', True)
+            label_class   = "network-host-label down" if is_down else "network-host-label"
+            outage_str    = f" &nbsp;<span style='font-weight: normal; font-size: 13px;'>Down {format_time_ago(monitor_state.get('last_alarm_started'))}</span>" if is_down else ""
+            detail_href   = _detail_href(monitor['title'], base_name)
+            html_lines.append(
+                f"        <div class='port-label-cell'>"
+                f"<span class='{label_class}'>"
+                f"<a href='{detail_href}'>{monitor['title']}</a>"
+                f"{outage_str}</span></div>"
+            )
             for _ in range(3):
                 html_lines.append("        <div class='port-label-cell port-label-spacer'></div>")
         html_lines.append("    </div>")
@@ -4048,14 +4854,13 @@ def generate_mrtg_index(all_config_files: List[str], index_path: str, site_name:
         # --- chart row ---
         html_lines.append(f"    <div class='network-row' style='grid-template-columns: {col_style};'>")
         for base_name, monitor in run:
-            plain_name = re.sub(r'^[^:]+:\s*', '', monitor['title'])
+            plain_name    = re.sub(r'^[^:]+:\s*', '', monitor['title'])
             monitor_state = state.get(plain_name, {}) if state else {}
-            is_down = not monitor_state.get('is_up', True)
-            cell_class = "network-cell down" if is_down else "network-cell"
-            is_host = monitor['title'].startswith('host: ')
+            is_down       = not monitor_state.get('is_up', True)
+            cell_class    = "network-cell down" if is_down else "network-cell"
+            is_host       = monitor['title'].startswith('host: ')
 
             if is_host:
-                # Build disk_space_pct annotation from state for -system3 heading
                 disk_space_pct = monitor_state.get('disk_space_pct')
                 disk_space_str = f"{disk_space_pct:.1f}%" if disk_space_pct is not None else "N/A"
                 host_targets = [
@@ -4084,7 +4889,7 @@ def generate_mrtg_index(all_config_files: List[str], index_path: str, site_name:
     if snmp_monitors:
         html_lines.append("    <h2>L2/L3 Network Monitoring</h2>")
 
-        port_host_run: List[Tuple[str, Dict[str, Any]]] = []
+        port_host_run:   List[Tuple[str, Dict[str, Any]]] = []
         port_count_total = 0
         host_count_total = 0
 
@@ -4098,13 +4903,11 @@ def generate_mrtg_index(all_config_files: List[str], index_path: str, site_name:
                 else:
                     host_count_total += 1
             else:
-                # Flush any buffered port/host run before this snmp row
                 if port_host_run:
                     _emit_port_host_group(port_host_run)
                     port_host_run = []
                 _emit_snmp_row(base_name, monitor)
 
-        # Flush any trailing port/host run
         if port_host_run:
             _emit_port_host_group(port_host_run)
 
@@ -4116,11 +4919,11 @@ def generate_mrtg_index(all_config_files: List[str], index_path: str, site_name:
         ])
 
         for monitor in all_monitors:
-            safe_name = monitor['name']
+            safe_name     = monitor['name']
             monitor_state = state.get(monitor['title'], {}) if state else {}
-            is_down = not monitor_state.get('is_up', True)
-            div_class = "monitor down" if is_down else "monitor"
-            outage_str = f"<span style='color: #cc0000; font-weight: bold;'>Down {format_time_ago(monitor_state.get('last_alarm_started'))}</span>" if is_down else ""
+            is_down       = not monitor_state.get('is_up', True)
+            div_class     = "monitor down" if is_down else "monitor"
+            outage_str    = f"<span style='color: #cc0000; font-weight: bold;'>Down {format_time_ago(monitor_state.get('last_alarm_started'))}</span>" if is_down else ""
 
             html_lines.extend([
                 f"        <div class='{div_class}'>",
@@ -4139,7 +4942,7 @@ def generate_mrtg_index(all_config_files: List[str], index_path: str, site_name:
         hidden_parts = []
         for m in hidden_monitors:
             monitor_state = state.get(m['name'], {}) if state else {}
-            is_down = not monitor_state.get('is_up', True)
+            is_down       = not monitor_state.get('is_up', True)
             if is_down:
                 outage_str = f" (down {format_time_ago(monitor_state.get('last_alarm_started'))})"
                 hidden_parts.append(f"<span style='color: #cc0000;'>{m['name']}{outage_str}</span>")
@@ -4159,23 +4962,20 @@ def generate_mrtg_index(all_config_files: List[str], index_path: str, site_name:
 
     html_content = '\n'.join(html_lines)
 
-    # Write to .new file
-    new_path = Path(index_path + '.new')
-    old_path = Path(index_path + '.old')
+    new_path     = Path(index_path + '.new')
+    old_path     = Path(index_path + '.old')
     current_path = Path(index_path)
 
     try:
         with open(new_path, 'w') as f:
             f.write(html_content)
-
-        # Atomic rotation: current -> .old, .new -> current
         if current_path.exists():
             os.replace(current_path, old_path)
         os.replace(new_path, current_path)
 
         if VERBOSE:
-            snmp_count = sum(1 for m in snmp_monitors.values() if not m['title'].startswith(('port: ', 'host: ')))
-            avail_count = len(all_monitors)
+            snmp_count   = sum(1 for m in snmp_monitors.values() if not m['title'].startswith(('port: ', 'host: ')))
+            avail_count  = len(all_monitors)
             hidden_count = len(hidden_monitors) if hidden_monitors else 0
             print(f"{prefix}Generated MRTG master index: {index_path} ({snmp_count} SNMP hosts, {port_count_total} port monitors, {host_count_total} host monitors, {avail_count} availability monitors, {hidden_count} hidden)")
 
@@ -4290,6 +5090,7 @@ def main() -> None:
 
     # Acquire PID lock (Unix-like systems only)
     lockfile_path = create_pid_file_or_exit_on_unix(args.config)
+    thread_local.prefix = prefix_logline(args.config, "ALL")
 
     try:
         # load & parse YAML/JSON config
@@ -4331,16 +5132,15 @@ def main() -> None:
         # Load previous state
         STATE = load_state(STATEFILE)
 
-        # Hoisted so the finally block can always reference it regardless of code path
+        # Hoisted so the finally block can always reference them regardless of code path
         mrtg_index_elapsed_ms: int = 0
+        detail_elapsed_ms: int     = 0
 
         # Generate MRTG config mode
         if args.generate_mrtg_config is not None:
-            work_dir = args.generate_mrtg_config
+            work_dir         = args.generate_mrtg_config
             mrtg_config_path = str(Path(STATEFILE).with_suffix('.mrtg.cfg'))
-
-            # Extract site name from config
-            site_name = config['site']['name']
+            site_name        = config['site']['name']
 
             mrtg_start_ms = int(datetime.now().timestamp() * 1000)
 
@@ -4382,17 +5182,17 @@ def main() -> None:
 
         if VERBOSE and STATE:
             last_execution_time = STATE.get('execution_time')
-            last_execution_ms = STATE.get('execution_ms')
+            last_execution_ms   = STATE.get('execution_ms')
             if last_execution_ms and last_execution_time:
                 last_execution_time_dt = datetime.fromisoformat(last_execution_time)
-                time_since_last_run = format_time_ago(last_execution_time)
+                time_since_last_run    = format_time_ago(last_execution_time)
                 print(f"Last execution time: {last_execution_ms}ms, ending at {last_execution_time_dt.strftime('%Y-%m-%d %H:%M:%S')} ({time_since_last_run} ago)")
             elif last_execution_ms:
                 print(f"Last execution time: {last_execution_ms}ms")
 
         # Record start time
         start_time = datetime.now()
-        start_ms = int(start_time.timestamp() * 1000)
+        start_ms   = int(start_time.timestamp() * 1000)
 
         if VERBOSE:
             print(f"Starting monitoring run at {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
@@ -4402,7 +5202,7 @@ def main() -> None:
 
         sys.stdout.flush()
 
-        # check availability of each resource in config using thread pool
+        # Check availability of each resource in config using thread pool
         try:
             with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_THREADS) as executor:
                 futures = [executor.submit(check_and_heartbeat, resource, config['site']) for resource in config['monitors']]
@@ -4424,15 +5224,29 @@ def main() -> None:
             sys.stderr.flush()
 
             # Calculate execution time
-            end_time = datetime.now()
-            end_ms = int(end_time.timestamp() * 1000)
+            end_time     = datetime.now()
+            end_ms       = int(end_time.timestamp() * 1000)
             execution_ms = end_ms - start_ms
 
             # Update state
             STATE.update({
                 'execution_time': end_time.isoformat(),
-                'execution_ms': execution_ms,
+                'execution_ms':   execution_ms,
             })
+
+            # --- Detail page generation pass (post-poll, uses freshly updated STATE) ---
+            # Placed before the timing separator so only elapsed time appears after it.
+            # Runs after every monitoring poll when MRTG generation is enabled,
+            # ensuring detail pages always reflect data collected in this run.
+            if args.generate_mrtg_config is not None:
+                work_dir = args.generate_mrtg_config
+                thread_local.prefix = ''  # clear any stale thread prefix for clean log lines
+                detail_start_ms = int(datetime.now().timestamp() * 1000)
+                for resource in config['monitors']:
+                    if resource['type'] in ('ports', 'port', 'host'):
+                        detail = STATE.get(resource['name'], {}).get('detail', {})
+                        generate_monitor_detail_page(resource, detail, work_dir)
+                detail_elapsed_ms = int(datetime.now().timestamp() * 1000) - detail_start_ms
 
             if VERBOSE:
                 print(f"_ ___ _____________  {'.' * len(str(execution_ms))} .. .")
@@ -4441,6 +5255,7 @@ def main() -> None:
             if RRD_ENABLED:
                 print(f"  MRTG indices time: {mrtg_index_elapsed_ms} ms")
                 print(f"RRD generation time: {RRD_ELAPSED_MS} ms")
+                print(f"  L2/L3 Detail time: {detail_elapsed_ms} ms")
 
             # Save state atomically
             save_state(STATE)

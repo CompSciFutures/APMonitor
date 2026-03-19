@@ -9,6 +9,14 @@ Multithreaded high speed availability checking for SNMP, PING, TCP/UDP, QUIC & H
 Integrates w/Site24x7 heartbeat monitoring for failover alerts + MRTG + Slack & Pushover webhooks.
 Thread safe, reentrant, modifiable.
 
+# Release 1.3.4 (19-Mar-26): Added L2/L3 Detail Pages
+- Added two new charts to `type: ports` monitor so they are 8-up
+- Added L2/L3 stats on port, IP & MAC tables when clicking on a monitor name
+- Fixed performance problem with checking SNMP `type: host` when a host is down
+- Fixed problem with duplicate L2/L3 detail pages being generated
+- Changed screenshot of MRTG page to reflect universal 8-up display
+- Added screenshot of L2/L3 port detail display
+
 # Release 1.3.3 (19-Mar-26): Managed Host Support
 - Documentation updates re: 4K
 - Prototyped the `type: host` monitor

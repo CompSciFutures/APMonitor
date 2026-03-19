@@ -129,6 +129,10 @@ Installing MRTG with `make install; make installmrtg` will spin up via `rc.d` a 
 This layout is specifically designed for now commonly available 4K Ultra HD (3840x2160 16:9 2160p) screens. It's not uncommon to see modern NOCs with an array of these on the wall at eye height when someone is sitting down. 
 Instead of just having CCTV, you can now add some proper network telemetry and instrumentation, say with one YAML site file per screen, on the top row of screens.
 
+Clicking on the heading associated with a set of ports will provide more L2/L3 information (depending whats available via SNMP):
+
+<img src="images/L2L3-detail-page.png" width="650" />
+
 Note the NGINX/FastCGI combination means we don't need to keep a machine chewing on itself generating charts anymore - they are now generated on demand in near-realtime and extremely efficiently. The only I/O is the RRD files, which under the hood operate very much like the older MRTG text file format.
 
 I chose RRD because it's a rather good frequency domain format for data warehousing of frequency domain sample data that's still compatible with Tier 1 NOCs. 
@@ -137,7 +141,7 @@ If you want to work with this data directly, consider looking at <a href="https:
 It is designed for working with Frequency Domain/Time Domain data and has a rather nifty spectrogram visualisation which might be relevant to you, amongst other things.
 See the <a href="https://www.youtube.com/watch?v=MhOdbtPhbLU">launch lecture given at SciPy</a> for more information.
 
-You might also want to look at <A href="">nixtla.io</a> or R's seasonal decomposition function called `stl`. Nixtla is more advanced and I've <a href="https://x.com/CompSciFutures/status/2033814554430607794?s=20">posted on 𝕏 about it here</a>.
+You might also want to look at <A href="https://nixtla.io">nixtla.io</a> or R's seasonal decomposition function called `stl`. Nixtla is more advanced and I've <a href="https://x.com/CompSciFutures/status/2033814554430607794?s=20">posted on 𝕏 about it here</a>.
 
 # Recommended configuration for real-time environments
 
@@ -1878,7 +1882,7 @@ under the [GNU General Public License version 3](LICENSE.txt).
 `mrtg-rrd.cgi.pl` is licensed by Jan "Yenya" Kasprzak <kas@fi.muni.cz><br />
 under the [GNU General Public License version 2](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html).
 ```
-Software: APMonitor 1.3.3
+Software: APMonitor 1.3.4
 License: GNU General Public License version 3
 Licensor: Andrew (AP) Prendergast, ap@andrewprendergast.com -- FSF Member
 
