@@ -12,6 +12,7 @@ Thread safe, reentrant, modifiable.
 # Release 1.3.5 (???): ???
 - Adjusted dualaxis settings on L2/L3 Network Monitoring charts
 - Added screenshot of L2/L3 port detail display
+- Changed Buy Me A Coffee to PayPal
 
 # Release 1.3.4 (19-Mar-26): Added L2/L3 Detail Pages
 - Added two new charts to `type: ports` monitor so they are 8-up
