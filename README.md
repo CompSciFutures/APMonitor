@@ -1852,6 +1852,7 @@ sudo pip3 uninstall -y PyYAML requests pyOpenSSL urllib3 aioquic easysnmp
 - Add additional outputs: 
   - ~~MRTG compatible logfiles~~ (completed in v1.2.3)
   - ~~MRTG compatible graph generation w/index.html~~ (completed in v1.2.3)
+  - Carefully adjust UX of all charts
   - Make index.html support multiple site files (index-<SiteName>.html)
   - Use loess regression on MRTG compatible logfiles for outlier & drop/increase detection
 
@@ -1882,7 +1883,7 @@ under the [GNU General Public License version 3](LICENSE.txt).
 `mrtg-rrd.cgi.pl` is licensed by Jan "Yenya" Kasprzak <kas@fi.muni.cz><br />
 under the [GNU General Public License version 2](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html).
 ```
-Software: APMonitor 1.3.4
+Software: APMonitor 1.3.5
 License: GNU General Public License version 3
 Licensor: Andrew (AP) Prendergast, ap@andrewprendergast.com -- FSF Member
 

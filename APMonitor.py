@@ -44,7 +44,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-__version__ = "1.3.4"
+__version__ = "1.3.5"
 __app_name__ = "APMonitor"
 
 import argparse
@@ -4280,21 +4280,22 @@ def generate_mrtg_config(config: Dict[str, Any], work_dir: str, mrtg_config_path
             display_name = f"{monitor_type}: {resource['name']}"
 
             if monitor_type == 'host':
-                # Read disk_space_pct from state for PageTop annotation
                 disk_space_pct = state.get(resource['name'], {}).get('disk_space_pct')
                 disk_space_str = f"{disk_space_pct:.1f}%" if disk_space_pct is not None else "N/A"
 
-                # Chart 1: CPU & Load
+                # Chart 1: CPU % (left) & Context Switches/sec (right)
                 mrtg_lines.extend([
                     f"######################################################################",
                     f"# {display_name} - CPU & Load",
                     f"",
                     f"Target[{safe_name}-system1]: cpu_load&context_switches:{rrd_path}",
-                    f"MaxBytes[{safe_name}-system1]: 100",
+                    f"MaxBytes1[{safe_name}-system1]: 100",
+                    f"MaxBytes2[{safe_name}-system1]: 100000",
                     f"Title[{safe_name}-system1]: {display_name} - CPU & Load",
                     f"PageTop[{safe_name}-system1]: <h1>{display_name} ({resource['address']})</h1><h2>CPU Utilization & Context Switches/sec</h2>",
-                    f"Options[{safe_name}-system1]: gauge,nopercent,growright",
-                    f"YLegend[{safe_name}-system1]: CPU % / ctx/s",
+                    f"Options[{safe_name}-system1]: gauge,nopercent,growright,dualaxis",
+                    f"YLegend[{safe_name}-system1]: CPU %",
+                    f"Y2Legend[{safe_name}-system1]: ctx/s",
                     f"ShortLegend[{safe_name}-system1]: ",
                     f"Legend1[{safe_name}-system1]: CPU Utilization %",
                     f"Legend2[{safe_name}-system1]: Context Switches/sec",
@@ -4304,17 +4305,19 @@ def generate_mrtg_config(config: Dict[str, Any], work_dir: str, mrtg_config_path
                     f"",
                 ])
 
-                # Chart 2: Memory & Paging
+                # Chart 2: Memory % (left) & Swap I/O rate (right)
                 mrtg_lines.extend([
                     f"######################################################################",
                     f"# {display_name} - Memory & Paging",
                     f"",
                     f"Target[{safe_name}-system2]: memory_pct&swap_io:{rrd_path}",
-                    f"MaxBytes[{safe_name}-system2]: 100",
+                    f"MaxBytes1[{safe_name}-system2]: 100",
+                    f"MaxBytes2[{safe_name}-system2]: 100000",
                     f"Title[{safe_name}-system2]: {display_name} - Memory & Paging",
                     f"PageTop[{safe_name}-system2]: <h1>{display_name} ({resource['address']})</h1><h2>Memory Utilization % & Swap I/O Rate</h2>",
-                    f"Options[{safe_name}-system2]: gauge,nopercent,growright",
-                    f"YLegend[{safe_name}-system2]: Mem % / swap/s",
+                    f"Options[{safe_name}-system2]: gauge,nopercent,growright,dualaxis",
+                    f"YLegend[{safe_name}-system2]: Mem %",
+                    f"Y2Legend[{safe_name}-system2]: swap/s",
                     f"ShortLegend[{safe_name}-system2]: ",
                     f"Legend1[{safe_name}-system2]: Memory Utilization %",
                     f"Legend2[{safe_name}-system2]: Swap I/O Rate",
@@ -4324,17 +4327,19 @@ def generate_mrtg_config(config: Dict[str, Any], work_dir: str, mrtg_config_path
                     f"",
                 ])
 
-                # Chart 3: Disk I/O — disk_space_pct embedded in PageTop from state
+                # Chart 3: Disk read bytes/sec (left) & Disk write bytes/sec (right)
                 mrtg_lines.extend([
                     f"######################################################################",
                     f"# {display_name} - Disk I/O",
                     f"",
                     f"Target[{safe_name}-system3]: disk_read&disk_write:{rrd_path}",
-                    f"MaxBytes[{safe_name}-system3]: 1000000000",
+                    f"MaxBytes1[{safe_name}-system3]: 1000000000",
+                    f"MaxBytes2[{safe_name}-system3]: 1000000000",
                     f"Title[{safe_name}-system3]: {display_name} - Disk I/O",
                     f"PageTop[{safe_name}-system3]: <h1>{display_name} ({resource['address']})</h1><h2>Disk Read/Write Throughput &mdash; Disk Use: {disk_space_str}</h2>",
-                    f"Options[{safe_name}-system3]: gauge,nopercent,growright",
-                    f"YLegend[{safe_name}-system3]: Bytes/sec",
+                    f"Options[{safe_name}-system3]: gauge,nopercent,growright,dualaxis",
+                    f"YLegend[{safe_name}-system3]: Read B/s",
+                    f"Y2Legend[{safe_name}-system3]: Write B/s",
                     f"ShortLegend[{safe_name}-system3]: B/s",
                     f"Legend1[{safe_name}-system3]: Disk Read Bytes/sec",
                     f"Legend2[{safe_name}-system3]: Disk Write Bytes/sec",
@@ -4344,17 +4349,19 @@ def generate_mrtg_config(config: Dict[str, Any], work_dir: str, mrtg_config_path
                     f"",
                 ])
 
-                # Chart 4: System Thrashing
+                # Chart 4: Swap used bytes (left) & Hardware interrupts/sec (right)
                 mrtg_lines.extend([
                     f"######################################################################",
                     f"# {display_name} - System Thrashing",
                     f"",
                     f"Target[{safe_name}-system4]: swap_used&interrupts:{rrd_path}",
-                    f"MaxBytes[{safe_name}-system4]: 1000000000",
+                    f"MaxBytes1[{safe_name}-system4]: 1000000000",
+                    f"MaxBytes2[{safe_name}-system4]: 100000",
                     f"Title[{safe_name}-system4]: {display_name} - System Thrashing",
                     f"PageTop[{safe_name}-system4]: <h1>{display_name} ({resource['address']})</h1><h2>Swap Used (bytes) & Hardware Interrupts/sec</h2>",
-                    f"Options[{safe_name}-system4]: gauge,nopercent,growright",
-                    f"YLegend[{safe_name}-system4]: Bytes / interrupts/s",
+                    f"Options[{safe_name}-system4]: gauge,nopercent,growright,dualaxis",
+                    f"YLegend[{safe_name}-system4]: Swap bytes",
+                    f"Y2Legend[{safe_name}-system4]: IRQ/s",
                     f"ShortLegend[{safe_name}-system4]: ",
                     f"Legend1[{safe_name}-system4]: Swap Used (bytes)",
                     f"Legend2[{safe_name}-system4]: Hardware Interrupts/sec",
@@ -4366,16 +4373,20 @@ def generate_mrtg_config(config: Dict[str, Any], work_dir: str, mrtg_config_path
 
             else:
                 # ports and port: full bandwidth/packets/errors target set
+
+                # Bandwidth: bits in (left) & bits out (right)
                 mrtg_lines.extend([
                     f"######################################################################",
                     f"# {display_name} - Total Bandwidth",
                     f"",
                     f"Target[{safe_name}-bandwidth]: total_bits_in&total_bits_out:{rrd_path}",
-                    f"MaxBytes[{safe_name}-bandwidth]: 10000000000",
+                    f"MaxBytes1[{safe_name}-bandwidth]: 10000000000",
+                    f"MaxBytes2[{safe_name}-bandwidth]: 10000000000",
                     f"Title[{safe_name}-bandwidth]: {display_name} - Total Bandwidth",
                     f"PageTop[{safe_name}-bandwidth]: <h1>{display_name} ({resource['address']})</h1><h2>Total Bandwidth In/Out</h2>",
-                    f"Options[{safe_name}-bandwidth]: gauge,nopercent,growright,bits",
-                    f"YLegend[{safe_name}-bandwidth]: Bits per second",
+                    f"Options[{safe_name}-bandwidth]: gauge,nopercent,growright,bits,dualaxis",
+                    f"YLegend[{safe_name}-bandwidth]: Bits/s in",
+                    f"Y2Legend[{safe_name}-bandwidth]: Bits/s out",
                     f"ShortLegend[{safe_name}-bandwidth]: b/s",
                     f"Legend1[{safe_name}-bandwidth]: Total Inbound Traffic",
                     f"Legend2[{safe_name}-bandwidth]: Total Outbound Traffic",
@@ -4386,16 +4397,19 @@ def generate_mrtg_config(config: Dict[str, Any], work_dir: str, mrtg_config_path
                     f"",
                 ])
 
+                # Packets: pkts in (left) & pkts out (right)
                 mrtg_lines.extend([
                     f"######################################################################",
                     f"# {display_name} - Total Packets",
                     f"",
                     f"Target[{safe_name}-packets]: total_pkts_in&total_pkts_out:{rrd_path}",
-                    f"MaxBytes[{safe_name}-packets]: 10000000",
+                    f"MaxBytes1[{safe_name}-packets]: 10000000",
+                    f"MaxBytes2[{safe_name}-packets]: 10000000",
                     f"Title[{safe_name}-packets]: {display_name} - Total Packets",
                     f"PageTop[{safe_name}-packets]: <h1>{display_name} ({resource['address']})</h1><h2>Total Packets In/Out</h2>",
-                    f"Options[{safe_name}-packets]: gauge,nopercent,growright",
-                    f"YLegend[{safe_name}-packets]: Packets per second",
+                    f"Options[{safe_name}-packets]: gauge,nopercent,growright,dualaxis",
+                    f"YLegend[{safe_name}-packets]: pps in",
+                    f"Y2Legend[{safe_name}-packets]: pps out",
                     f"ShortLegend[{safe_name}-packets]: pps",
                     f"Legend1[{safe_name}-packets]: Total Inbound Packets",
                     f"Legend2[{safe_name}-packets]: Total Outbound Packets",
@@ -4406,16 +4420,19 @@ def generate_mrtg_config(config: Dict[str, Any], work_dir: str, mrtg_config_path
                     f"",
                 ])
 
+                # Packet type: unicast (left) & broadcast+multicast (right)
                 mrtg_lines.extend([
                     f"######################################################################",
                     f"# {display_name} - Packet Type Split (Unicast vs Broadcast+Multicast)",
                     f"",
                     f"Target[{safe_name}-packets-type]: total_pkts_ucast&total_pkts_bmcast:{rrd_path}",
-                    f"MaxBytes[{safe_name}-packets-type]: 10000000",
+                    f"MaxBytes1[{safe_name}-packets-type]: 10000000",
+                    f"MaxBytes2[{safe_name}-packets-type]: 10000000",
                     f"Title[{safe_name}-packets-type]: {display_name} - Packet Type Split",
                     f"PageTop[{safe_name}-packets-type]: <h1>{display_name} ({resource['address']})</h1><h2>Unicast vs Broadcast+Multicast Packets</h2>",
-                    f"Options[{safe_name}-packets-type]: gauge,nopercent,growright",
-                    f"YLegend[{safe_name}-packets-type]: Packets per second",
+                    f"Options[{safe_name}-packets-type]: gauge,nopercent,growright,dualaxis",
+                    f"YLegend[{safe_name}-packets-type]: Ucast pps",
+                    f"Y2Legend[{safe_name}-packets-type]: B+Mcast pps",
                     f"ShortLegend[{safe_name}-packets-type]: pps",
                     f"Legend1[{safe_name}-packets-type]: Unicast Packets (in+out)",
                     f"Legend2[{safe_name}-packets-type]: Broadcast+Multicast Packets (in+out)",
@@ -4426,16 +4443,19 @@ def generate_mrtg_config(config: Dict[str, Any], work_dir: str, mrtg_config_path
                     f"",
                 ])
 
+                # Errors: errors in (left) & errors out (right)
                 mrtg_lines.extend([
                     f"######################################################################",
                     f"# {display_name} - Interface Errors",
                     f"",
                     f"Target[{safe_name}-errors]: total_errors_in&total_errors_out:{rrd_path}",
-                    f"MaxBytes[{safe_name}-errors]: 1000000",
+                    f"MaxBytes1[{safe_name}-errors]: 1000000",
+                    f"MaxBytes2[{safe_name}-errors]: 1000000",
                     f"Title[{safe_name}-errors]: {display_name} - Interface Errors",
                     f"PageTop[{safe_name}-errors]: <h1>{display_name} ({resource['address']})</h1><h2>Interface Errors In/Out</h2>",
-                    f"Options[{safe_name}-errors]: gauge,nopercent,growright",
-                    f"YLegend[{safe_name}-errors]: Errors per second",
+                    f"Options[{safe_name}-errors]: gauge,nopercent,growright,dualaxis",
+                    f"YLegend[{safe_name}-errors]: Err/s in",
+                    f"Y2Legend[{safe_name}-errors]: Err/s out",
                     f"ShortLegend[{safe_name}-errors]: err/s",
                     f"Legend1[{safe_name}-errors]: Inbound Interface Errors",
                     f"Legend2[{safe_name}-errors]: Outbound Interface Errors",
@@ -4447,16 +4467,19 @@ def generate_mrtg_config(config: Dict[str, Any], work_dir: str, mrtg_config_path
                 ])
 
                 if monitor_type == 'ports':
+                    # TCP retransmits: same DS both sides (single metric, symmetric display)
                     mrtg_lines.extend([
                         f"######################################################################",
                         f"# {display_name} - TCP Retransmits",
                         f"",
                         f"Target[{safe_name}-retransmits]: tcp_retrans&tcp_retrans:{rrd_path}",
-                        f"MaxBytes[{safe_name}-retransmits]: 100000",
+                        f"MaxBytes1[{safe_name}-retransmits]: 100000",
+                        f"MaxBytes2[{safe_name}-retransmits]: 100000",
                         f"Title[{safe_name}-retransmits]: {display_name} - TCP Retransmits",
                         f"PageTop[{safe_name}-retransmits]: <h1>{display_name} ({resource['address']})</h1><h2>TCP Retransmits</h2>",
-                        f"Options[{safe_name}-retransmits]: gauge,nopercent,growright",
-                        f"YLegend[{safe_name}-retransmits]: Retransmits per second",
+                        f"Options[{safe_name}-retransmits]: gauge,nopercent,growright,dualaxis",
+                        f"YLegend[{safe_name}-retransmits]: retrans/s",
+                        f"Y2Legend[{safe_name}-retransmits]: retrans/s",
                         f"ShortLegend[{safe_name}-retransmits]: retrans/s",
                         f"Legend1[{safe_name}-retransmits]: TCP Retransmit Segments",
                         f"Legend2[{safe_name}-retransmits]: TCP Retransmit Segments",
@@ -4467,16 +4490,19 @@ def generate_mrtg_config(config: Dict[str, Any], work_dir: str, mrtg_config_path
                         f"",
                     ])
 
+                    # System: CPU % (left) & memory % (right)
                     mrtg_lines.extend([
                         f"######################################################################",
                         f"# {display_name} - CPU & Memory Utilization",
                         f"",
                         f"Target[{safe_name}-system]: cpu_load&memory_pct:{rrd_path}",
-                        f"MaxBytes[{safe_name}-system]: 100",
+                        f"MaxBytes1[{safe_name}-system]: 100",
+                        f"MaxBytes2[{safe_name}-system]: 100",
                         f"Title[{safe_name}-system]: {display_name} - System Resources",
                         f"PageTop[{safe_name}-system]: <h1>{display_name} ({resource['address']})</h1><h2>CPU & Memory Utilization</h2>",
-                        f"Options[{safe_name}-system]: gauge,nopercent,growright",
-                        f"YLegend[{safe_name}-system]: Utilization %",
+                        f"Options[{safe_name}-system]: gauge,nopercent,growright,dualaxis",
+                        f"YLegend[{safe_name}-system]: CPU %",
+                        f"Y2Legend[{safe_name}-system]: Mem %",
                         f"ShortLegend[{safe_name}-system]: %",
                         f"Legend1[{safe_name}-system]: CPU Load Average",
                         f"Legend2[{safe_name}-system]: Memory Utilization",
@@ -4487,16 +4513,19 @@ def generate_mrtg_config(config: Dict[str, Any], work_dir: str, mrtg_config_path
                         f"",
                     ])
 
+                    # Tamper: active port count (left) & NVRAM/flash bytes (right)
                     mrtg_lines.extend([
                         f"######################################################################",
                         f"# {display_name} - Tamper Detection",
                         f"",
                         f"Target[{safe_name}-tamper]: ports_up_count&nvram_flash_bytes:{rrd_path}",
-                        f"MaxBytes[{safe_name}-tamper]: 1000000000",
+                        f"MaxBytes1[{safe_name}-tamper]: 1000",
+                        f"MaxBytes2[{safe_name}-tamper]: 1000000000",
                         f"Title[{safe_name}-tamper]: {display_name} - Tamper Detection",
                         f"PageTop[{safe_name}-tamper]: <h1>{display_name} ({resource['address']})</h1><h2>Active Ports & NVRAM/Flash Used Bytes</h2>",
-                        f"Options[{safe_name}-tamper]: gauge,nopercent,growright",
-                        f"YLegend[{safe_name}-tamper]: Ports / Bytes",
+                        f"Options[{safe_name}-tamper]: gauge,nopercent,growright,dualaxis",
+                        f"YLegend[{safe_name}-tamper]: Ports up",
+                        f"Y2Legend[{safe_name}-tamper]: NVRAM/Flash B",
                         f"ShortLegend[{safe_name}-tamper]: ",
                         f"Legend1[{safe_name}-tamper]: Active (oper=up) Port Count",
                         f"Legend2[{safe_name}-tamper]: NVRAM + Flash Used Bytes",
@@ -4507,16 +4536,19 @@ def generate_mrtg_config(config: Dict[str, Any], work_dir: str, mrtg_config_path
                         f"",
                     ])
 
+                    # Network: MAC count (left) & ARP count (right)
                     mrtg_lines.extend([
                         f"######################################################################",
                         f"# {display_name} - Network Provisioning",
                         f"",
                         f"Target[{safe_name}-network]: mac_count&arp_count:{rrd_path}",
-                        f"MaxBytes[{safe_name}-network]: 100000",
+                        f"MaxBytes1[{safe_name}-network]: 100000",
+                        f"MaxBytes2[{safe_name}-network]: 100000",
                         f"Title[{safe_name}-network]: {display_name} - Network Provisioning",
                         f"PageTop[{safe_name}-network]: <h1>{display_name} ({resource['address']})</h1><h2>Learned MAC Count &amp; ARP Table Entries</h2>",
-                        f"Options[{safe_name}-network]: gauge,nopercent,growright",
-                        f"YLegend[{safe_name}-network]: Entry Count",
+                        f"Options[{safe_name}-network]: gauge,nopercent,growright,dualaxis",
+                        f"YLegend[{safe_name}-network]: MACs",
+                        f"Y2Legend[{safe_name}-network]: ARP entries",
                         f"ShortLegend[{safe_name}-network]: entries",
                         f"Legend1[{safe_name}-network]: Learned MAC Table Entries",
                         f"Legend2[{safe_name}-network]: ARP Table Entries",
@@ -4536,13 +4568,13 @@ def generate_mrtg_config(config: Dict[str, Any], work_dir: str, mrtg_config_path
                 f"# {resource['name']} ({resource['type']})",
                 f"",
                 f"Target[{safe_name}]: response_time&is_up:{rrd_path}",
-                f"MaxBytes[{safe_name}]: 100000",
                 f"MaxBytes1[{safe_name}]: 100000",
                 f"MaxBytes2[{safe_name}]: 100",
                 f"Title[{safe_name}]: {resource['name']} - Availability",
                 f"PageTop[{safe_name}]: <h1>{resource['name']} ({resource['address']})</h1>",
                 f"Options[{safe_name}]: gauge,nopercent,growright,dualaxis",
                 f"YLegend[{safe_name}]: Response Time (ms)",
+                f"Y2Legend[{safe_name}]: Availability (%)",
                 f"ShortLegend[{safe_name}]:",
                 f"Legend1[{safe_name}]: Response Time (ms)",
                 f"Legend2[{safe_name}]: Availability (%)",

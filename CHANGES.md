@@ -9,6 +9,10 @@ Multithreaded high speed availability checking for SNMP, PING, TCP/UDP, QUIC & H
 Integrates w/Site24x7 heartbeat monitoring for failover alerts + MRTG + Slack & Pushover webhooks.
 Thread safe, reentrant, modifiable.
 
+# Release 1.3.5 (???): ???
+- Adjusted dualaxis settings on L2/L3 Network Monitoring charts
+- Added screenshot of L2/L3 port detail display
+
 # Release 1.3.4 (19-Mar-26): Added L2/L3 Detail Pages
 - Added two new charts to `type: ports` monitor so they are 8-up
 - Added L2/L3 stats on port, IP & MAC tables when clicking on a monitor name
