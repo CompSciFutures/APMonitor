@@ -10,7 +10,7 @@ Integrates w/Site24x7 heartbeat monitoring for failover alerts + MRTG + Slack & 
 Thread safe, reentrant, modifiable.
 
 # Release 1.3.6 (???): ???
-- Added note about NVRs and MAC pinning
+- Added note about NVRs, MAC pinning & reverse shells
 
 # Release 1.3.5 (21-Mar-26): MRTG UX Tweaks
 - Adjusted dualaxis settings on L2/L3 Network Monitoring charts
