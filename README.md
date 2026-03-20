@@ -113,7 +113,7 @@ Or is it, if you have this? YMMV.
 
 See DOI [10.13140/RG.2.2.12609.84321](https://doi.org/10.13140/RG.2.2.12609.84321) and associated [LinkedIn post](https://www.linkedin.com/feed/update/urn:li:activity:7331490410197905409/) for more information on the Pillars of Information Security. It borrows from a piece of work I did back when #PARC needed me to work on #BookMasters in the digital era.
 
-NNB. IOT is not supposed to be a thing - to compensate if you have an NVR, you need L2 monitoring of MAC address changes like this for each camera & NVR on your IOT network.
+NNB. IOT is not supposed to be a thing - to compensate if you have an NVR, you need L2 monitoring of MAC address changes like this for each camera & NVR on your IOT network. Use MAC address pinning.
 
 ## Alternatives
 
@@ -1254,7 +1254,7 @@ With `always_up: yes`, this fires an alarm if ifIndex 0 is not oper=up, if `18:E
   after_every_n_notifications: 1
 ```
 
-**Single-Port MAC-Pinning Monitor:**
+### **Single Port MAC Pinning Monitor:**
 ```yaml
 - type: port
   name: "switch-port0"
@@ -1893,7 +1893,7 @@ under the [GNU General Public License version 3](LICENSE.txt).
 `mrtg-rrd.cgi.pl` is licensed by Jan "Yenya" Kasprzak <kas@fi.muni.cz><br />
 under the [GNU General Public License version 2](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html).
 ```
-Software: APMonitor 1.3.5
+Software: APMonitor 1.3.6
 License: GNU General Public License version 3
 Licensor: Andrew (AP) Prendergast, ap@andrewprendergast.com -- FSF Member
 
