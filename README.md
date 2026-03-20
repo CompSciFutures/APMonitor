@@ -38,7 +38,10 @@ Ex Chief Scientist @ Clemenger BBDO / Omnicom</i>
 
 [![buy-me-a-coffee.png](images/buy-me-a-coffee.png)](https://www.paypal.com/donate/?hosted_button_id=WN472NX5XC5CJ)
 
-<i>If you find APMonitor.py useful in your NOC, or would like email / telephone support, please consider <a href="https://buymeacoffee.com/compscifutures">a regular donation via Buy me a coffee</a>, so I can keep improving it.<br />
+<i>If you find APMonitor.py useful in your NOC, for monitoring your IOT/ICS devices, 
+or would like email / telephone support, please consider 
+<a href="https://www.paypal.com/donate/?hosted_button_id=WN472NX5XC5CJ">a regular donation via Buy me a coffee</a>, 
+so I can keep improving it.<br />
 
 Telephone Support: +61497222775<br />
 Support email: hello@enertium.org<br />
@@ -57,7 +60,9 @@ To run APMonitor with a configuration file `test-apmonitor-config.yaml ` & auto-
 > To do a full upgrade change your YAML to replace `type: snmp` with `type: ports` then execute something similar to this command:
 > 
 > ```
-> cp tellusion-apmonitor-config.yaml /usr/local/etc/apmonitor-config.yaml; make install; make installmrtg; rm /var/tmp/apmonitor-statefile.rrd/*
+> cp tellusion-apmonitor-config.yaml /usr/local/etc/apmonitor-config.yaml; \
+> make install; make installmrtg; \
+> rm /var/tmp/apmonitor-statefile.rrd/*
 > ```
 
 
