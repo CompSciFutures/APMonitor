@@ -473,10 +473,9 @@ sub do_image($$)
 		my $left_max  = $target->{maxbytes1} || 100000;
 		my $right_max = $target->{maxbytes2} || 100;
 		my $scale = $right_max / $left_max;
-
 		push @local_args, '--right-axis', "$scale:0";
-		push @local_args, '--right-axis-label', 'Availability %';
-		push @local_args, '--right-axis-format', '%.0lf%%';
+		push @local_args, '--right-axis-label', $target->{y2legend}
+			if defined $target->{y2legend} && $target->{y2legend} ne '';
 	}
 
 	# Percentile: add VDEF/PRINT args so RRDs::graph returns the Nth percentile
