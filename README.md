@@ -113,9 +113,6 @@ Or is it, if you have this? YMMV.
 
 See DOI [10.13140/RG.2.2.12609.84321](https://doi.org/10.13140/RG.2.2.12609.84321) and associated [LinkedIn post](https://www.linkedin.com/feed/update/urn:li:activity:7331490410197905409/) for more information on the Pillars of Information Security. It borrows from a piece of work I did back when #PARC needed me to work on #BookMasters in the digital era.
 
-NNB. ***IOT is not supposed to be a thing*** - to compensate **if you have an NVR**, you need L2 monitoring of MAC address changes like this for each camera & NVR on your IOT network. Use <a href="https://github.com/CompSciFutures/APMonitor#single-port-mac-pinning-monitor">Layer 2 MAC address pinning</a>.
-And to avoid vendor backdoors, stop your IOT devices from communicating directly with The Internet excepting whitelisted addresses for purposes you specify (don't whitelist any cloud admin reverse shells).  
-
 ## Alternatives
 
 If lightweight or realtime guarantees aren't important to you, and you want something more feature packed, 
@@ -163,6 +160,17 @@ To put APMonitor into near-realtime mode so that it checks resources multiple ti
 - dial down `max_try_secs` to `10` or `15` seconds
 
 for real-time environments.
+
+# Recommended configuration for IOT networks
+
+***IOT is not supposed to be a thing*** - to compensate **if you have an NVR**, you need L2 monitoring of MAC address changes for each device such as cameras & NVRs on your IOT network.
+
+
+Use <a href="Added note about NVRs, SSL pinning, MAC port monitoring/pinning & reverse shells">Layer 2 Port MAC Change Monitoring</a>,
+<a href="https://github.com/CompSciFutures/APMonitor?tab=readme-ov-file#https-monitor-with-certificate-pinning">Layer 4 HTTPS Self-Signed Certificate Pinning</a> and
+<a href="https://github.com/CompSciFutures/APMonitor#single-port-mac-pinning-monitor">Layer 2 MAC address pinning</a>.
+And to avoid vendor backdoors, stop your IOT devices from communicating directly with The Internet excepting whitelisted addresses for purposes you specify (don't whitelist any cloud admin reverse shells).  
+
 
 # Recommended configuration of Site24x7 Heartbeat Monitor Thresholds for HA Availability Monitoring
 
