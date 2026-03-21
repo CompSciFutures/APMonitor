@@ -161,9 +161,9 @@ To put APMonitor into near-realtime mode so that it checks resources multiple ti
 
 for real-time environments.
 
-# Recommended configuration for IOT networks
+# Recommended configuration for IOT/OT/ICS networks
 
-***IOT is not supposed to be a thing*** - to compensate **if you have an NVR**, you need L2 monitoring of MAC address changes for each device such as cameras & NVRs on your IOT network.
+***IOT is not supposed to be a thing*** - to compensate **if you have an NVR**, you need L2 monitoring of MAC address changes for each OT/ICS devic such as cameras & NVRs on your IOT network.
 
 
 Use <a href="Added note about NVRs, SSL pinning, MAC port monitoring/pinning & reverse shells">Layer 2 Port MAC Change Monitoring</a>,
