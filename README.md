@@ -1132,7 +1132,7 @@ With `always_up: yes`, this fires an alarm if ifIndex 0 is not oper=up, if `18:E
 
 ### Example Configurations
 
-**Ping Monitor:**
+#### **Ping Monitor:**
 ```yaml
 - type: ping
   name: home-gateway
@@ -1141,7 +1141,7 @@ With `always_up: yes`, this fires an alarm if ifIndex 0 is not oper=up, if `18:E
   heartbeat_url: "https://hc-ping.com/uuid-here"
 ```
 
-**HTTP Monitor with Content Check:**
+#### **HTTP Monitor with Content Check:**
 ```yaml
 - type: http
   name: web-server
@@ -1151,7 +1151,7 @@ With `always_up: yes`, this fires an alarm if ifIndex 0 is not oper=up, if `18:E
   notify_every_n_secs: 3600
 ```
 
-**HTTPS Monitor with Certificate Pinning:**
+#### **HTTPS Monitor with Certificate Pinning:**
 ```yaml
 - type: http
   name: nvr0
@@ -1163,7 +1163,7 @@ With `always_up: yes`, this fires an alarm if ifIndex 0 is not oper=up, if `18:E
   heartbeat_every_n_secs: 60
 ```
 
-**QUIC Monitor (HTTP/3):**
+#### **QUIC Monitor (HTTP/3):**
 ```yaml
 - type: quic
   name: fast-api
@@ -1175,7 +1175,7 @@ With `always_up: yes`, this fires an alarm if ifIndex 0 is not oper=up, if `18:E
 
 **Note**: QUIC monitoring uses HTTP/3 over UDP (port 443 by default) and is particularly effective for high-latency networks or when monitoring resources over unreliable connections. QUIC provides built-in connection migration and improved performance compared to TCP-based HTTP/2.
 
-**TCP Banner Check (SSH):**
+#### **TCP Banner Check (SSH):**
 ```yaml
 - type: tcp
   name: ssh-server
@@ -1184,7 +1184,7 @@ With `always_up: yes`, this fires an alarm if ifIndex 0 is not oper=up, if `18:E
   check_every_n_secs: 60
 ```
 
-**TCP Send/Receive (SMTP):**
+#### **TCP Send/Receive (SMTP):**
 ```yaml
 - type: tcp
   name: smtp-server
@@ -1195,7 +1195,7 @@ With `always_up: yes`, this fires an alarm if ifIndex 0 is not oper=up, if `18:E
   check_every_n_secs: 60
 ```
 
-**TCP Connection-Only Check:**
+#### **TCP Connection-Only Check:**
 ```yaml
 - type: tcp
   name: mysql-db
@@ -1203,7 +1203,7 @@ With `always_up: yes`, this fires an alarm if ifIndex 0 is not oper=up, if `18:E
   check_every_n_secs: 30
 ```
 
-**UDP with Response Validation (DNS):**
+#### **UDP with Response Validation (DNS):**
 ```yaml
 - type: udp
   name: dns-server
@@ -1214,7 +1214,7 @@ With `always_up: yes`, this fires an alarm if ifIndex 0 is not oper=up, if `18:E
   check_every_n_secs: 60
 ```
 
-**UDP Fire-and-Forget (Syslog):**
+#### **UDP Fire-and-Forget (Syslog):**
 ```yaml
 - type: udp
   name: syslog-collector
@@ -1223,7 +1223,7 @@ With `always_up: yes`, this fires an alarm if ifIndex 0 is not oper=up, if `18:E
   check_every_n_secs: 300
 ```
 
-**Network Switch with 95th Percentile (formerly `type: snmp`):**
+#### **Network Switch with 95th Percentile (formerly `type: snmp`):**
 ```yaml
 - type: ports
   name: office-switch
@@ -1235,7 +1235,7 @@ With `always_up: yes`, this fires an alarm if ifIndex 0 is not oper=up, if `18:E
   heartbeat_every_n_secs: 600
 ```
 
-**Host Performance Monitor:**
+#### **Host Performance Monitor:**
 ```yaml
 - type: host
   name: debmon-host
@@ -1244,7 +1244,7 @@ With `always_up: yes`, this fires an alarm if ifIndex 0 is not oper=up, if `18:E
   check_every_n_secs: 300
 ```
 
-**Switch Port Status + Metrics Monitor:**
+#### **Switch Port Status + Metrics + MAC Change Monitor:**
 ```yaml
 - type: ports
   name: office-switch
@@ -1255,7 +1255,7 @@ With `always_up: yes`, this fires an alarm if ifIndex 0 is not oper=up, if `18:E
   after_every_n_notifications: 1
 ```
 
-### **Single Port MAC Pinning Monitor:**
+#### **Single Port MAC Pinning Monitor:**
 ```yaml
 - type: port
   name: "switch-port0"
