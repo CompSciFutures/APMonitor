@@ -57,7 +57,7 @@ To run APMonitor with a configuration file `test-apmonitor-config.yaml ` & auto-
 To properly setup `APMonitor.py`
 
 1. Spin up Debian Linux on a VM or PC on a Card/PC on a Chip (e.g., rPI) - optional but recommended
-2. Modify `example-apmonitor-config.yaml` with a basic config then copy it to `/usr/local/etc/apmonitor-config.yaml` (see <a href="#apmonitorpy-yamljson-site-configuration-options"></a>)
+2. Modify `example-apmonitor-config.yaml` with a basic config then copy it to `/usr/local/etc/apmonitor-config.yaml` (see <a href="#apmonitorpy-yamljson-site-configuration-options">Configuration Options</a>)
 3. use `make install; make installmrtg` to spin up `APMonitor.py` and a NGINX webserver for MRTG charts in `systemctl`
 4. Modify config file to suit your purposes.
 
@@ -1909,7 +1909,7 @@ under the [GNU General Public License version 3](LICENSE.txt).
 `mrtg-rrd.cgi.pl` is licensed by Jan "Yenya" Kasprzak <kas@fi.muni.cz><br />
 under the [GNU General Public License version 2](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html).
 ```
-Software: APMonitor 1.3.7
+Software: APMonitor 1.3.8
 License: GNU General Public License version 3
 Licensor: Andrew (AP) Prendergast, ap@andrewprendergast.com -- FSF Member
 
