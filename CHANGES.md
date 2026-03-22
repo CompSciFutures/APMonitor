@@ -9,6 +9,9 @@ Multithreaded high speed availability checking for SNMP, PING, TCP/UDP, QUIC & H
 Integrates w/Site24x7 heartbeat monitoring for failover alerts + MRTG + Slack & Pushover webhooks.
 Thread safe, reentrant, modifiable.
 
+# Release 1.3.7 (???): ???
+- Added PayPal donation link to MRTG site
+
 # Release 1.3.6 (22-Mar-26): More MRTG UX Tweaks
 - Added note about NVRs, SSL pinning, MAC port monitoring/pinning & reverse shells
 - Added Honolulu to world clocks to provide proper cover of whole planet
