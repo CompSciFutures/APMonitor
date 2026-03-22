@@ -57,13 +57,15 @@ To run APMonitor with a configuration file `test-apmonitor-config.yaml ` & auto-
 To properly setup `APMonitor.py`
 
 1. Spin up Debian Linux on a VM or PC on a Card/PC on a Chip (e.g., rPI) - optional but recommended
-2. Modify `example-apmonitor-config.yaml` with a basic config then copy it to `/usr/local/etc/apmonitor-config.yaml`
+2. Modify `example-apmonitor-config.yaml` with a basic config then copy it to `/usr/local/etc/apmonitor-config.yaml` (see <a href="#apmonitorpy-yamljson-site-configuration-options"></a>)
 3. use `make install; make installmrtg` to spin up `APMonitor.py` and a NGINX webserver for MRTG charts in `systemctl`
+4. Modify config file to suit your purposes.
 
 That's it!
 
 > [!WARNING]
-> If you are upgrading to the 1.3.x stream: This is an schema change release stream that contains RRD & config YAML schema changes that require existing RRD files to be deleted and recreated before upgrading. APMonitor will auto-heal existing RRDs on first run when `--generate-rrds` or `--generate-mrtg-config` is specified.
+> If you are upgrading to the 1.3.x stream: This is a schema change release stream that contains RRD & config YAML schema changes that require existing RRD files to be deleted and recreated before upgrading.
+> APMonitor will auto-heal existing RRDs on first run when `--generate-rrds` or `--generate-mrtg-config` is specified.
 > 
 > To do a full upgrade change your YAML to replace `type: snmp` with `type: ports` then execute something similar to this command:
 > 
@@ -72,9 +74,6 @@ That's it!
 > make install; make installmrtg; \
 > rm /var/tmp/apmonitor-statefile.rrd/*
 > ```
-
-
-
 
 # Design Philosophy &amp; Provenance
 
@@ -169,15 +168,15 @@ To put APMonitor into near-realtime mode so that it checks resources multiple ti
 
 for real-time environments.
 
-# Recommended configuration for IOT/OT/ICS networks
+# Recommended configuration for securing IOT/OT/ICS networks
 
-***IOT is not supposed to be a thing*** - to compensate **if you have an NVR**, you need L2 monitoring of MAC address changes for each OT/ICS devic such as cameras & NVRs on your IOT network.
-
+***IOT is not supposed to be a thing*** - to compensate **if you have an NVR**, you need L2 monitoring of MAC address changes for each OT/ICS device such as cameras, NVRs & Security Computer on your IOT network.
 
 Use <a href="Added note about NVRs, SSL pinning, MAC port monitoring/pinning & reverse shells">Layer 2 Port MAC Change Monitoring</a>,
 <a href="https://github.com/CompSciFutures/APMonitor?tab=readme-ov-file#https-monitor-with-certificate-pinning">Layer 4 HTTPS Self-Signed Certificate Pinning</a> and
-<a href="https://github.com/CompSciFutures/APMonitor#single-port-mac-pinning-monitor">Layer 2 MAC Address Pinning</a>.
-And to avoid vendor backdoors, disable IPV6 and stop your IOT devices from communicating directly with The Internets excepting whitelisted addresses for purposes you specify (don't whitelist any cloud admin reverse shells).  
+<a href="https://github.com/CompSciFutures/APMonitor#single-port-mac-pinning-monitor">Layer 2 MAC Address Pinning</a> so your network can't be tampered with.
+
+To avoid <a href="https://x.com/search?q=%23VendorBackdoors&src=typed_query">vendor backdoors</a>, disable IPV6 and stop your IOT devices from communicating directly with The Internets excepting whitelisted addresses for purposes you specify (don't whitelist any cloud admin reverse shells).  
 
 
 # Recommended configuration of Site24x7 Heartbeat Monitor Thresholds for HA Availability Monitoring
