@@ -54,8 +54,16 @@ To run APMonitor with a configuration file `test-apmonitor-config.yaml ` & auto-
  ./APMonitor.py -vv -s /tmp/statefile.json test-apmonitor-config.yaml --generate-rrds 
 ```
 
+To properly setup `APMonitor.py`
+
+1. Spin up Debian Linux on a VM or PC on a Card/PC on a Chip (e.g., rPI) - optional but recommended
+2. Modify `example-apmonitor-config.yaml` with a basic config then copy it to `/usr/local/etc/apmonitor-config.yaml`
+3. use `make install; make installmrtg` to spin up `APMonitor.py` and a NGINX webserver for MRTG charts in `systemctl`
+
+That's it!
+
 > [!WARNING]
-> Do not upgrade to the 1.3.x stream. This is an experimental release stream that contains RRD & config YAML schema changes that require existing RRD files to be deleted and recreated before upgrading. APMonitor will auto-heal existing RRDs on first run when `--generate-rrds` or `--generate-mrtg-config` is specified.
+> If you are upgrading to the 1.3.x stream: This is an schema change release stream that contains RRD & config YAML schema changes that require existing RRD files to be deleted and recreated before upgrading. APMonitor will auto-heal existing RRDs on first run when `--generate-rrds` or `--generate-mrtg-config` is specified.
 > 
 > To do a full upgrade change your YAML to replace `type: snmp` with `type: ports` then execute something similar to this command:
 > 
@@ -461,7 +469,7 @@ DS names use the raw ifIndex integer (e.g., `if1_in`, `if2_out`), not the interf
 | Historical | 1-day | 732 (~2 years) | 22692 (~62 years) |
 
 > [!WARNING]
-> Do not upgrade to the 1.3.x stream. This release contains RRD schema changes that require existing RRD files to be deleted and recreated before upgrading. APMonitor will auto-heal existing RRDs on first run when `--generate-rrds` or `--generate-mrtg-config` is specified.
+> Be careful if upgrading to the 1.3.x stream. This release contains RRD schema changes that require existing RRD files to be deleted and recreated before upgrading. APMonitor will auto-heal existing RRDs on first run when `--generate-rrds` or `--generate-mrtg-config` is specified.
 
 To use custom retention, modify the row constants in `create_rrd_rras()`:
 ```python

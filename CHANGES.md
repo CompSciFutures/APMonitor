@@ -12,6 +12,9 @@ Thread safe, reentrant, modifiable.
 # Release 1.3.6 (???): ???
 - Added note about NVRs, SSL pinning, MAC port monitoring/pinning & reverse shells
 - Added Honolulu to world clocks to provide proper cover of whole planet
+- Made L2/L3 Network Monitoring & L4 Availability Monitoring output optional (can have just 1 heading)
+- Added back-button semantics to MRTG detail pages for when in fullscreen mode
+- Updated eg screenshot of NOC display for new world clock 
 
 # Release 1.3.5 (21-Mar-26): MRTG UX Tweaks
 - Adjusted dualaxis settings on L2/L3 Network Monitoring charts

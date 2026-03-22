@@ -139,6 +139,9 @@ EOF
 	
 	print $tgt->{pagetop} if defined $tgt->{pagetop};
 
+	print "<p style='font-size:14px;'><a href='../index.html' "
+		. "style='color:#5a7ab8;text-decoration:none;'>&larr; Back to monitoring index</a></p>\n";
+
 	unless (defined $tgt->{options}{noinfo}) {
 		my @st = stat $tgt->{rrd};
 

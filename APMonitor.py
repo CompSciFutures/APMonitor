@@ -4672,10 +4672,6 @@ def generate_mrtg_index(all_config_files: List[str], index_path: str, site_name:
             print(f"{prefix}Warning: Failed to parse config file '{config_file}': {e}", file=sys.stderr)
             continue
 
-    if not all_monitors and not snmp_monitors:
-        print(f"{prefix}Warning: No monitors found in any config files", file=sys.stderr)
-        return
-
     world_clocks = [
         ('Honolulu',    'Pacific/Honolulu'),    # UTC-10    (no DST)
         ('Anchorage',   'America/Anchorage'),   # UTC-9 / UTC-8 (DST)
@@ -4736,6 +4732,7 @@ def generate_mrtg_index(all_config_files: List[str], index_path: str, site_name:
         "        .header-clock { position: absolute; top: 0; right: 0; text-align: right; padding: 6px 12px; }",
         "        .header-clock-main { font-size: 36px; font-weight: bold; color: #333; }",
         "        .header-clock-world { font-size: 20px; color: #999; margin-top: 4px; }",
+        "        .nothing-configured { color: #aaa; font-style: italic; margin: 10px 0 30px 0; }",
         "        @media (max-width: 1400px) { ",
         "            .grid { grid-template-columns: repeat(4, 1fr); }",
         "            .network-row { grid-template-columns: repeat(var(--cols-narrow, 2), 1fr); }",
@@ -4757,11 +4754,7 @@ def generate_mrtg_index(all_config_files: List[str], index_path: str, site_name:
     ]
 
     def _detail_href(monitor_title: str, base_name: str) -> str:
-        """Derive detail page href from monitor title and base_name.
-
-        Title format is 'type: name' — extract type prefix for filename.
-        Detail pages live alongside index.html, so href is relative with no path prefix.
-        """
+        """Derive detail page href from monitor title and base_name."""
         type_prefix = monitor_title.split(':')[0].strip() if ':' in monitor_title else 'ports'
         return f"{type_prefix}-{base_name}-detail.html"
 
@@ -4848,16 +4841,7 @@ def generate_mrtg_index(all_config_files: List[str], index_path: str, site_name:
         ])
 
     def _emit_port_host_group(run: List[Tuple[str, Dict[str, Any]]]) -> None:
-        """Emit a contiguous run of port/host monitors as a single grid (8-up or 4-up).
-
-        Both port and host monitors have a 4-cell footprint:
-          - port: bandwidth / packets / packets-type / errors
-          - host: system1 / system2 / system3 / system4 (host performance charts)
-
-        Layout: label row + chart row share the same column grid so labels sit
-        directly above their respective 4-cell blocks on the grey background.
-        Labels link to per-monitor detail pages alongside index.html.
-        """
+        """Emit a contiguous run of port/host monitors as a single grid (8-up or 4-up)."""
         col_count  = 8 if len(run) >= 2 else 4
         col_narrow = min(col_count, 4)
         col_style  = f"repeat({col_count}, 1fr); --cols-narrow: {col_narrow}"
@@ -4921,58 +4905,69 @@ def generate_mrtg_index(all_config_files: List[str], index_path: str, site_name:
                 ])
         html_lines.append("    </div>")
 
-    # Add Network Monitoring section — iterate snmp_monitors in insertion order,
-    # flushing contiguous runs of port/host monitors as grouped grids.
-    if snmp_monitors:
+    has_snmp    = bool(snmp_monitors)
+    has_avail   = bool(all_monitors)
+    show_both   = not has_snmp and not has_avail  # nothing at all — show both headings with placeholder
+
+    port_count_total = 0
+    host_count_total = 0
+
+    # --- L2/L3 Network Monitoring section ---
+    if has_snmp or show_both:
         html_lines.append("    <h2>L2/L3 Network Monitoring</h2>")
 
-        port_host_run:   List[Tuple[str, Dict[str, Any]]] = []
-        port_count_total = 0
-        host_count_total = 0
+        if not has_snmp:
+            html_lines.append("    <p class='nothing-configured'>No L2/L3 network monitors configured.</p>")
+        else:
+            port_host_run: List[Tuple[str, Dict[str, Any]]] = []
 
-        for base_name, monitor in snmp_monitors.items():
-            is_port = monitor['title'].startswith('port: ')
-            is_host = monitor['title'].startswith('host: ')
-            if is_port or is_host:
-                port_host_run.append((base_name, monitor))
-                if is_port:
-                    port_count_total += 1
+            for base_name, monitor in snmp_monitors.items():
+                is_port = monitor['title'].startswith('port: ')
+                is_host = monitor['title'].startswith('host: ')
+                if is_port or is_host:
+                    port_host_run.append((base_name, monitor))
+                    if is_port:
+                        port_count_total += 1
+                    else:
+                        host_count_total += 1
                 else:
-                    host_count_total += 1
-            else:
-                if port_host_run:
-                    _emit_port_host_group(port_host_run)
-                    port_host_run = []
-                _emit_snmp_row(base_name, monitor)
+                    if port_host_run:
+                        _emit_port_host_group(port_host_run)
+                        port_host_run = []
+                    _emit_snmp_row(base_name, monitor)
 
-        if port_host_run:
-            _emit_port_host_group(port_host_run)
+            if port_host_run:
+                _emit_port_host_group(port_host_run)
 
-    # Add Availability Monitoring section (non-SNMP monitors)
-    if all_monitors:
+    # --- L4 Availability Monitoring section ---
+    if has_avail or show_both:
         html_lines.extend([
             "    <h2>L4 Availability Monitoring</h2>",
-            "    <div class='grid'>",
         ])
 
-        for monitor in all_monitors:
-            safe_name     = monitor['name']
-            monitor_state = state.get(monitor['title'], {}) if state else {}
-            is_down       = not monitor_state.get('is_up', True)
-            div_class     = "monitor down" if is_down else "monitor"
-            outage_str    = f"<span style='color: #cc0000; font-weight: bold;'>Down {format_time_ago(monitor_state.get('last_alarm_started'))}</span>" if is_down else ""
+        if not has_avail:
+            html_lines.append("    <p class='nothing-configured'>No L4 availability monitors configured.</p>")
+        else:
+            html_lines.append("    <div class='grid'>")
 
-            html_lines.extend([
-                f"        <div class='{div_class}'>",
-                f"            <h3><a href='/mrtg-rrd/{safe_name}.html'>{monitor['title']}</a></h3>",
-                f"            <a href='/mrtg-rrd/{safe_name}.html'>",
-                f"                <img src='/mrtg-rrd/{safe_name}-day.png' alt='{monitor['title']} Daily Graph'>",
-                "            </a>",
-                f"            <p style='font-size: 12px; color: #666;'>{monitor['address']}{(' &nbsp;' + outage_str) if is_down else ''}</p>",
-                "        </div>",
-            ])
+            for monitor in all_monitors:
+                safe_name     = monitor['name']
+                monitor_state = state.get(monitor['title'], {}) if state else {}
+                is_down       = not monitor_state.get('is_up', True)
+                div_class     = "monitor down" if is_down else "monitor"
+                outage_str    = f"<span style='color: #cc0000; font-weight: bold;'>Down {format_time_ago(monitor_state.get('last_alarm_started'))}</span>" if is_down else ""
 
-        html_lines.append("    </div>")
+                html_lines.extend([
+                    f"        <div class='{div_class}'>",
+                    f"            <h3><a href='/mrtg-rrd/{safe_name}.html'>{monitor['title']}</a></h3>",
+                    f"            <a href='/mrtg-rrd/{safe_name}.html'>",
+                    f"                <img src='/mrtg-rrd/{safe_name}-day.png' alt='{monitor['title']} Daily Graph'>",
+                    "            </a>",
+                    f"            <p style='font-size: 12px; color: #666;'>{monitor['address']}{(' &nbsp;' + outage_str) if is_down else ''}</p>",
+                    "        </div>",
+                ])
+
+            html_lines.append("    </div>")
 
     # Build hidden monitors audit footer — omitted entirely if no monitors are hidden
     if hidden_monitors:
