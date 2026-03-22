@@ -4677,13 +4677,15 @@ def generate_mrtg_index(all_config_files: List[str], index_path: str, site_name:
         return
 
     world_clocks = [
-        ('California',  'America/Los_Angeles'),
-        ('New York',    'America/New_York'),
-        ('London',      'Europe/London'),
-        ('Amsterdam',   'Europe/Amsterdam'),
-        ('Mumbai',      'Asia/Kolkata'),
-        ('Tokyo',       'Asia/Tokyo'),
-        ('Melbourne',   'Australia/Melbourne'),
+        ('Honolulu',    'Pacific/Honolulu'),    # UTC-10    (no DST)
+        ('Anchorage',   'America/Anchorage'),   # UTC-9 / UTC-8 (DST)
+        ('California',  'America/Los_Angeles'), # UTC-8 / UTC-7 (DST)
+        ('New York',    'America/New_York'),     # UTC-5 / UTC-4 (DST)
+        ('London',      'Europe/London'),        # UTC+0 / UTC+1 (BST)
+        ('Amsterdam',   'Europe/Amsterdam'),     # UTC+1 / UTC+2 (CEST)
+        ('Mumbai',      'Asia/Kolkata'),         # UTC+5:30      (no DST)
+        ('Tokyo',       'Asia/Tokyo'),           # UTC+9         (no DST)
+        ('Melbourne',   'Australia/Melbourne'),  # UTC+10 / UTC+11 (AEDT)
     ]
 
     try:

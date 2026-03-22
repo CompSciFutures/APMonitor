@@ -11,6 +11,7 @@ Thread safe, reentrant, modifiable.
 
 # Release 1.3.6 (???): ???
 - Added note about NVRs, SSL pinning, MAC port monitoring/pinning & reverse shells
+- Added Honolulu to world clocks to provide proper cover of whole planet
 
 # Release 1.3.5 (21-Mar-26): MRTG UX Tweaks
 - Adjusted dualaxis settings on L2/L3 Network Monitoring charts
