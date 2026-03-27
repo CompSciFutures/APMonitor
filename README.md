@@ -1937,7 +1937,7 @@ sudo pip3 uninstall -y PyYAML requests pyOpenSSL urllib3 aioquic easysnmp
   - Use loess regression on MRTG compatible logfiles for outlier & drop/increase detection
   - Specify the "#MindOfANetwork" using the usual AP <a href="ProbabilisticLogic.AI">ProbabilisticLogic.AI</a> shenanigans
 
-<br/><br/>
+<br/>
 
 [![Humanizing-Data.png](images/Humanizing-Data.png)](https://x.com/CompSciFutures/status/1930974323424321985)
 
