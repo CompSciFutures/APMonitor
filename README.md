@@ -1908,7 +1908,7 @@ sudo pip3 uninstall -y PyYAML requests pyOpenSSL urllib3 aioquic easysnmp
 - Add additional outputs: 
   - ~~MRTG compatible logfiles~~ (completed in v1.2.3)
   - ~~MRTG compatible graph generation w/index.html~~ (completed in v1.2.3)
-  - Carefully adjust UX of all charts
+  - ~~Carefully adjust UX of all charts~~ (completed in v1.3.7)
   - Make index.html support multiple site files (index-<SiteName>.html)
   - Use loess regression on MRTG compatible logfiles for outlier & drop/increase detection
 
@@ -1928,8 +1928,11 @@ sudo pip3 uninstall -y PyYAML requests pyOpenSSL urllib3 aioquic easysnmp
 - Add a Mercator + `APTree.c` `#InfoRec` inspired/styled priority queue for handling large numbers of monitored resources with proper realtime programming guarantees
 
 - Do <i>Humanizing Data</i> [https://x.com/CompSciFutures/status/1930974323424321985](https://x.com/CompSciFutures/status/1930974323424321985) on MRTG+AP charts to show regime shifts and correlated sub-graphs over response times & SNMP stats<br /><br/>
+  - Traffic spikes: which host/network is it? E.g., a big system update or install will make a spike and the hostname should be shown.
+  - Packet fragmentation/jubno size distribution changes: which disk is it & is it a new disk hotspot or a larger chunk indicating a data loss event?
+  - What SNMP metrics show a packet storm of scan/flood/brute force type activity?
 
-  [![Humanizing-Data.png](images/Humanizing-Data.png)](https://x.com/CompSciFutures/status/1930974323424321985)
+[![Humanizing-Data.png](images/Humanizing-Data.png)](https://x.com/CompSciFutures/status/1930974323424321985)
 
 # Licensing & Versioning
 
