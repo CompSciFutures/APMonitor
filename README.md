@@ -1919,6 +1919,7 @@ sudo pip3 uninstall -y PyYAML requests pyOpenSSL urllib3 aioquic easysnmp
   - When a monitored resource has multiple parent dependencies, specify if it's down when all are down (AND relation) or down when one is down (OR relation)
   - Consider correct use of pre/in/post-order traversal when deciding which alerts to drop
   - The DAG must also be OSI layer compliant
+  - In #LogicLand, the DAG also specifies a semantic concepts graph by way of causal relations.
 
 - Convert finished version to pure C `APMonitor.c` 
   - Strictly only with `libc`/SVR4 C Systems Programming dependencies for really tiny cross-platform embedded systems application environments 
