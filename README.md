@@ -77,11 +77,19 @@ To properly setup `APMonitor.py`
     
     See <a href="#apmonitorpy-yamljson-site-configuration-options">Configuration Options</a> for site file configuration details.
 
-4. Start monitoring:
+4. Test the config:
+
+   ```
+   sudo make test-config
+   ```
+
+5. Start monitoring:
 
     ```bash
     sudo make enable
     ```
+   
+    **Note:** If `-s` is not specified, statefiles are stored in `/var/tmp` by default. 
 
 That's it!
 

@@ -14,7 +14,7 @@ GROUP := monitoring
 # Detect if sudo is available, use it if not root, or fail
 SUDO := $(shell if [ "$$(id -u)" -eq 0 ]; then echo ""; elif command -v sudo >/dev/null 2>&1; then echo "sudo"; else echo "NOSUDO"; fi)
 
-.PHONY: help install uninstall enable start stop restart status logs test-config test-webhooks installmrtg check-root check-sudo
+.PHONY: help install uninstall enable start stop restart status logs test-config test-webhooks installmrtg check-root check-sudo migrate
 
 help:
 	@echo "APMonitor Installation Makefile"
@@ -23,6 +23,7 @@ help:
 	@echo "  install         - Install APMonitor (requires root)"
 	@echo "  installmrtg     - Install MRTG web interface on port 888 (requires root)"
 	@echo "  uninstall       - Remove APMonitor completely (requires root)"
+	@echo "  migrate         - Migrate statefiles to new config-derived naming convention"
 	@echo "  enable          - Enable and start systemd service (requires root)"
 	@echo "  start           - Start APMonitor service (requires root)"
 	@echo "  stop            - Stop APMonitor service (requires root)"
@@ -51,7 +52,29 @@ check-sudo:
 		exit 1; \
 	fi
 
-install: check-root
+migrate: check-root
+	@echo "==> Migrating APMonitor statefiles to new naming convention..."
+	@OLD_BASE=$(STATE_DIR)/apmonitor-statefile; \
+	NEW_BASE=$(STATE_DIR)/apmonitor-config.statefile; \
+	migrated=0; \
+	for suffix in .json .json.new .json.old .mrtg.cfg .mrtg.cfg.new .mrtg.cfg.old; do \
+		if [ -f "$$OLD_BASE$$suffix" ] && [ ! -f "$$NEW_BASE$$suffix" ]; then \
+			mv "$$OLD_BASE$$suffix" "$$NEW_BASE$$suffix"; \
+			echo "  Migrated: $$OLD_BASE$$suffix -> $$NEW_BASE$$suffix"; \
+			migrated=1; \
+		fi; \
+	done; \
+	if [ -d "$$OLD_BASE.rrd" ] && [ ! -d "$$NEW_BASE.rrd" ]; then \
+		mv "$$OLD_BASE.rrd" "$$NEW_BASE.rrd"; \
+		echo "  Migrated: $$OLD_BASE.rrd -> $$NEW_BASE.rrd"; \
+		migrated=1; \
+	fi; \
+	if [ "$$migrated" -eq 0 ]; then \
+		echo "  Nothing to migrate."; \
+	fi
+	@echo "==> Migration complete."
+
+install: check-root migrate
 	@echo "==> Installing system dependencies..."
 	apt update
 	apt install -y python3 python3-pip python3-rrdtool librrd-dev python3-dev mrtg rrdtool librrds-perl libcgi-pm-perl libsnmp-dev python3-easysnmp
@@ -92,7 +115,7 @@ install: check-root
 	@echo "" >> $(SERVICE_DIR)/apmonitor.service
 	@echo "[Service]" >> $(SERVICE_DIR)/apmonitor.service
 	@echo "Type=simple" >> $(SERVICE_DIR)/apmonitor.service
-	@echo "ExecStart=/bin/bash -c 'while true; do $(INSTALL_DIR)/APMonitor.py -vv -s $(STATE_DIR)/apmonitor-statefile.json $(CONFIG_DIR)/apmonitor-config.yaml --generate-mrtg-config; sleep 10; done'" >> $(SERVICE_DIR)/apmonitor.service
+	@echo "ExecStart=/bin/bash -c 'while true; do $(INSTALL_DIR)/APMonitor.py -vv $(CONFIG_DIR)/apmonitor-config.yaml --generate-mrtg-config; sleep 10; done'" >> $(SERVICE_DIR)/apmonitor.service
 	@echo "Restart=always" >> $(SERVICE_DIR)/apmonitor.service
 	@echo "RestartSec=10" >> $(SERVICE_DIR)/apmonitor.service
 	@echo "User=$(USER)" >> $(SERVICE_DIR)/apmonitor.service
@@ -210,6 +233,9 @@ uninstall: check-root
 	rm -f $(STATE_DIR)/apmonitor-statefile.json*
 	rm -f $(STATE_DIR)/apmonitor-statefile.mrtg.cfg*
 	rm -rf $(STATE_DIR)/apmonitor-statefile.rrd
+	rm -f $(STATE_DIR)/apmonitor-config.statefile.json*
+	rm -f $(STATE_DIR)/apmonitor-config.statefile.mrtg.cfg*
+	rm -rf $(STATE_DIR)/apmonitor-config.statefile.rrd
 	rm -f $(NGINX_CONF_DIR)/mrtg-nginx.conf
 	rm -f $(MRTG_WORK_DIR)/mrtg-rrd.cgi.pl
 
@@ -254,8 +280,8 @@ logs:
 
 test-config: check-sudo
 	@echo "==> Testing configuration as monitoring user..."
-	@if [ -f "$(STATE_DIR)/apmonitor-statefile.json" ]; then \
-		echo "Warning: Production state file exists at $(STATE_DIR)/apmonitor-statefile.json"; \
+	@if [ -f "$(STATE_DIR)/apmonitor-config.statefile.json" ]; then \
+		echo "Warning: Production state file exists at $(STATE_DIR)/apmonitor-config.statefile.json"; \
 		echo "Using temporary state file for testing to avoid conflicts..."; \
 		if [ "$$(id -u)" -eq 0 ]; then \
 			su -s /bin/bash -c "$(INSTALL_DIR)/APMonitor.py -vv -s /tmp/apmonitor-test-statefile.json $(CONFIG_DIR)/apmonitor-config.yaml" $(USER); \
@@ -265,13 +291,13 @@ test-config: check-sudo
 		rm -f /tmp/apmonitor-test-statefile.json*; \
 	else \
 		if [ "$$(id -u)" -eq 0 ]; then \
-			su -s /bin/bash -c "$(INSTALL_DIR)/APMonitor.py -vv -s $(STATE_DIR)/apmonitor-statefile.json $(CONFIG_DIR)/apmonitor-config.yaml" $(USER); \
+			su -s /bin/bash -c "$(INSTALL_DIR)/APMonitor.py -vv $(CONFIG_DIR)/apmonitor-config.yaml" $(USER); \
 		else \
-			$(SUDO) -u $(USER) $(INSTALL_DIR)/APMonitor.py -vv -s $(STATE_DIR)/apmonitor-statefile.json $(CONFIG_DIR)/apmonitor-config.yaml; \
+			$(SUDO) -u $(USER) $(INSTALL_DIR)/APMonitor.py -vv $(CONFIG_DIR)/apmonitor-config.yaml; \
 		fi; \
 		echo ""; \
 		echo "Test complete. Cleaning up test state file..."; \
-		rm -f $(STATE_DIR)/apmonitor-statefile.json*; \
+		rm -f $(STATE_DIR)/apmonitor-config.statefile.json*; \
 	fi
 
 test-webhooks: check-sudo

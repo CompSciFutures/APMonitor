@@ -3979,20 +3979,24 @@ def check_and_heartbeat_r(resource: Dict[str, Any], site_config: Dict[str, Any])
     update_state({resource['name']: new_state})
 
 
-def get_default_statefile() -> str:
-    """Get platform-appropriate default statefile location."""
-    system = platform.system().lower()
+def get_default_statefile(config_path: str) -> str:
+    """Get platform-appropriate default statefile location derived from config filename.
+
+    On Unix-like systems: /var/tmp/<config-stem>.statefile.json
+    On Windows:          %TEMP%\\<config-stem>.statefile.json
+    Fallback:            ./<config-stem>.statefile.json
+    """
+    config_stem = Path(config_path).stem  # e.g. "test-apmonitor-config"
+    filename    = f"{config_stem}.statefile.json"
+    system      = platform.system().lower()
 
     if system in ['linux', 'darwin', 'freebsd', 'openbsd', 'netbsd']:
-        # Unix-like: /var/tmp persists across reboots
-        return '/var/tmp/apmonitor-statefile.json'
+        return f'/var/tmp/{filename}'
     elif system == 'windows':
-        # Windows: Use TEMP directory
         temp_dir = os.environ.get('TEMP', os.environ.get('TMP', 'C:\\Temp'))
-        return os.path.join(temp_dir, 'apmonitor-statefile.json')
+        return os.path.join(temp_dir, filename)
     else:
-        # Unknown platform: Use current directory as safe fallback
-        return './apmonitor-statefile.json'
+        return f'./{filename}'
 
 
 def check_and_heartbeat(resource: Dict[str, Any], site_config: Dict[str, Any]) -> None:
@@ -5102,12 +5106,15 @@ def main() -> None:
     parser.add_argument('config', help='Path to configuration file (JSON or YAML)')
     parser.add_argument('-v', '--verbose', action='count', default=0, help='Increase verbosity (can be repeated: -v, -vv, -vvv)')
     parser.add_argument('-t', '--threads', type=int, default=1, help='Number of concurrent threads (default: 1)')
-    parser.add_argument('-s', '--statefile', default=get_default_statefile(), help=f'Path to state file (default: platform-dependent, see docs)')
+    parser.add_argument('-s', '--statefile', default=None, help='Path to state file (default: /var/tmp/<config-stem>.statefile.json)')
     parser.add_argument('--test-webhooks', action='store_true', help='Test webhook notifications and exit')
     parser.add_argument('--test-emails', action='store_true', help='Test email notifications and exit')
     parser.add_argument('--generate-rrds', action='store_true', help='Enable RRD database creation and updates')
     parser.add_argument('--generate-mrtg-config', metavar='WORKDIR', nargs='?', const='/var/www/html/mrtg', help='Generate MRTG config file and exit (default workdir: /var/www/html/mrtg)')
     args = parser.parse_args()
+
+    if args.statefile is None:
+        args.statefile = get_default_statefile(args.config)
 
     VERBOSE = args.verbose
     MAX_THREADS = args.threads

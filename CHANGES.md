@@ -12,6 +12,9 @@ Thread safe, reentrant, modifiable.
 # Release 1.3.8 (???): ???
 - Fixed Configuration Options link
 - Updated Quickstart instructions
+- Properly multi-tennanted separated statefiles for multi-site setups
+  - APMonitor.py now default's it's statefile naming based on the config file stem (incl. sibling statefiles)
+  - Added statefile naming migration for default install
 
 # Release 1.3.7 (23-Mar-26): More MRTG UX Tweaks
 - Added PayPal donation link to MRTG site
