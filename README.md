@@ -89,7 +89,7 @@ To properly setup `APMonitor.py`
     sudo make enable
     ```
    
-    **Note:** If `-s` is not specified, statefiles are stored in `/var/tmp` by default. 
+    **Note:** If `-s` is not specified, statefiles are stored in `/var/tmp` by default, e.g. `/var/tmp/apmonitor-config.*` for a default install.
 
 That's it!
 
