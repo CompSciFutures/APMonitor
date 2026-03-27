@@ -4609,83 +4609,32 @@ def generate_mrtg_config(config: Dict[str, Any], work_dir: str, mrtg_config_path
         print(f"{prefix}Failed to generate MRTG config '{mrtg_config_path}': {e}", file=sys.stderr)
 
 
-def generate_mrtg_index(all_config_files: List[str], index_path: str, site_name: str = "Availability Monitoring", state: Dict[str, Any] = None, hidden_monitors: Optional[List[Dict[str, Any]]] = None) -> None:
-    """Generate index.html with Network Monitoring (SNMP) and Availability Monitoring sections using atomic file rotation.
+def generate_mrtg_index(config: Dict[str, Any], index_path: str, state: Dict[str, Any] = None) -> None:
+    """Generate index.html driven directly from APMonitor config and STATE.
+
+    L2/L3 Network Monitoring section: ports, port, host monitors.
+    L4 Availability Monitoring section: ping, http, quic, tcp, udp monitors.
+    Hidden monitors (display=false) appear in audit footer only.
 
     Args:
-        all_config_files: List of paths to MRTG config files
-        index_path: Full path to index.html file to create (will use .new/.old rotation)
-        site_name: Site name for page heading (from APMonitor config)
-        state: APMonitor state dict for outage highlighting (optional)
-        hidden_monitors: List of monitor dicts with display=false — shown in audit footer only (optional)
+        config:     APMonitor configuration dict
+        index_path: Full path to index.html (atomic .new/.old rotation)
+        state:      APMonitor state dict for outage highlighting
     """
-    prefix = getattr(thread_local, 'prefix', '')
-
-    all_monitors  = []
-    snmp_monitors = {}
-
-    for config_file in all_config_files:
-        if not os.path.exists(config_file):
-            if VERBOSE:
-                print(f"{prefix}Warning: Config file not found: {config_file}, skipping")
-            continue
-
-        try:
-            with open(config_file, 'r') as f:
-                content = f.read()
-
-            target_pattern = r'Target\[([^\]]+)\]:'
-            targets = re.findall(target_pattern, content)
-
-            for target_name in targets:
-                title_match   = re.search(rf'Title\[{re.escape(target_name)}\]:\s*(.+)', content)
-                pagetop_match = re.search(rf'PageTop\[{re.escape(target_name)}\]:\s*<h1>([^<]+)\s*\(([^)]+)\)</h1>', content)
-
-                monitor_info = {
-                    'name':    target_name,
-                    'title':   title_match.group(1).strip() if title_match else target_name,
-                    'type':    'monitor',
-                    'address': ''
-                }
-
-                if pagetop_match:
-                    monitor_info['title']   = pagetop_match.group(1).strip()
-                    monitor_info['address'] = pagetop_match.group(2).strip()
-
-                snmp_suffixes = (
-                    '-bandwidth', '-packets', '-packets-type',
-                    '-retransmits', '-system', '-errors',
-                    '-system1', '-system2', '-system3', '-system4',
-                    '-tamper', '-network',
-                )
-                if any(target_name.endswith(s) for s in snmp_suffixes):
-                    base_name = target_name
-                    for s in snmp_suffixes:
-                        if target_name.endswith(s):
-                            base_name = target_name[:-len(s)]
-                            break
-
-                    if base_name not in snmp_monitors:
-                        monitor_info['targets'] = set()
-                        snmp_monitors[base_name] = monitor_info
-                    snmp_monitors[base_name]['targets'].add(target_name)
-                else:
-                    all_monitors.append(monitor_info)
-
-        except Exception as e:
-            print(f"{prefix}Warning: Failed to parse config file '{config_file}': {e}", file=sys.stderr)
-            continue
+    prefix    = getattr(thread_local, 'prefix', '')
+    site_name = config['site']['name']
+    monitors  = config['monitors']
 
     world_clocks = [
-        ('Honolulu',    'Pacific/Honolulu'),    # UTC-10    (no DST)
-        ('Anchorage',   'America/Anchorage'),   # UTC-9 / UTC-8 (DST)
-        ('California',  'America/Los_Angeles'), # UTC-8 / UTC-7 (DST)
-        ('New York',    'America/New_York'),     # UTC-5 / UTC-4 (DST)
-        ('London',      'Europe/London'),        # UTC+0 / UTC+1 (BST)
-        ('Amsterdam',   'Europe/Amsterdam'),     # UTC+1 / UTC+2 (CEST)
-        ('Mumbai',      'Asia/Kolkata'),         # UTC+5:30      (no DST)
-        ('Tokyo',       'Asia/Tokyo'),           # UTC+9         (no DST)
-        ('Melbourne',   'Australia/Melbourne'),  # UTC+10 / UTC+11 (AEDT)
+        ('Honolulu',    'Pacific/Honolulu'),
+        ('Anchorage',   'America/Anchorage'),
+        ('California',  'America/Los_Angeles'),
+        ('New York',    'America/New_York'),
+        ('London',      'Europe/London'),
+        ('Amsterdam',   'Europe/Amsterdam'),
+        ('Mumbai',      'Asia/Kolkata'),
+        ('Tokyo',       'Asia/Tokyo'),
+        ('Melbourne',   'Australia/Melbourne'),
     ]
 
     try:
@@ -4757,95 +4706,81 @@ def generate_mrtg_index(all_config_files: List[str], index_path: str, site_name:
         f"    <h1>{site_name}</h1>",
     ]
 
-    def _detail_href(monitor_title: str, base_name: str) -> str:
-        """Derive detail page href from monitor title and base_name."""
-        type_prefix = monitor_title.split(':')[0].strip() if ':' in monitor_title else 'ports'
-        return f"{type_prefix}-{base_name}-detail.html"
+    def _detail_href(monitor_type: str, safe_name: str) -> str:
+        return f"{monitor_type}-{safe_name}-detail.html"
 
-    def _emit_snmp_row(base_name: str, monitor: Dict[str, Any]) -> None:
-        """Emit one snmp monitor row (label + network-row grid). Label links to detail page."""
-        targets         = monitor.get('targets', set())
-        has_retransmits = f"{base_name}-retransmits" in targets
-        has_system      = f"{base_name}-system"      in targets
-        has_tamper      = f"{base_name}-tamper"       in targets
-        has_network     = f"{base_name}-network"      in targets
+    def _emit_snmp_row(resource: Dict[str, Any]) -> None:
+        """Emit one ports monitor row (label + full-width network-row grid)."""
+        safe_name    = re.sub(r'[^\w\-.]', '_', resource['name'])
+        display_name = f"ports: {resource['name']}"
+        monitor_state = state.get(resource['name'], {}) if state else {}
+        is_down      = not monitor_state.get('is_up', True)
+        label_class  = "network-host-label down" if is_down else "network-host-label"
+        cell_class   = "network-cell down" if is_down else "network-cell"
+        outage_str   = f" &nbsp;<span style='font-weight: normal; font-size: 13px;'>Down {format_time_ago(monitor_state.get('last_alarm_started'))}</span>" if is_down else ""
+        detail_href  = _detail_href('ports', safe_name)
 
-        col_count  = 4 + int(has_retransmits) + int(has_system) + int(has_tamper) + int(has_network)
-        col_narrow = min(col_count, 3)
-        col_style  = f"repeat({col_count}, 1fr); --cols-narrow: {col_narrow}"
-
-        plain_name    = re.sub(r'^[^:]+:\s*', '', monitor['title'])
-        monitor_state = state.get(plain_name, {}) if state else {}
-        is_down       = not monitor_state.get('is_up', True)
-        label_class   = "network-host-label down" if is_down else "network-host-label"
-        cell_class    = "network-cell down" if is_down else "network-cell"
-        outage_str    = f" &nbsp;<span style='font-weight: normal; font-size: 13px;'>Down {format_time_ago(monitor_state.get('last_alarm_started'))}</span>" if is_down else ""
-        detail_href   = _detail_href(monitor['title'], base_name)
+        col_style = "repeat(8, 1fr); --cols-narrow: 3"
 
         html_lines.extend([
-            f"    <div class='{label_class}'><a href='{detail_href}'>{monitor['title']}</a>{outage_str}</div>",
+            f"    <div class='{label_class}'><a href='{detail_href}'>{display_name}</a>{outage_str}</div>",
             f"    <div class='network-row' style='grid-template-columns: {col_style};'>",
             f"        <div class='{cell_class}'>",
             "            <h4>Total Bandwidth In/Out</h4>",
-            f"            <a href='/mrtg-rrd/{base_name}-bandwidth.html'>",
-            f"                <img src='/mrtg-rrd/{base_name}-bandwidth-day.png' alt='{monitor['title']} Bandwidth'>",
+            f"            <a href='/mrtg-rrd/{safe_name}-bandwidth.html'>",
+            f"                <img src='/mrtg-rrd/{safe_name}-bandwidth-day.png' alt='{display_name} Bandwidth'>",
             "            </a>",
             "        </div>",
             f"        <div class='{cell_class}'>",
             "            <h4>Total Packets In/Out</h4>",
-            f"            <a href='/mrtg-rrd/{base_name}-packets.html'>",
-            f"                <img src='/mrtg-rrd/{base_name}-packets-day.png' alt='{monitor['title']} Packets'>",
+            f"            <a href='/mrtg-rrd/{safe_name}-packets.html'>",
+            f"                <img src='/mrtg-rrd/{safe_name}-packets-day.png' alt='{display_name} Packets'>",
             "            </a>",
             "        </div>",
             f"        <div class='{cell_class}'>",
             "            <h4>Unicast vs B+Mcast Packets</h4>",
-            f"            <a href='/mrtg-rrd/{base_name}-packets-type.html'>",
-            f"                <img src='/mrtg-rrd/{base_name}-packets-type-day.png' alt='{monitor['title']} Packet Types'>",
+            f"            <a href='/mrtg-rrd/{safe_name}-packets-type.html'>",
+            f"                <img src='/mrtg-rrd/{safe_name}-packets-type-day.png' alt='{display_name} Packet Types'>",
             "            </a>",
             "        </div>",
             f"        <div class='{cell_class}'>",
             "            <h4>Interface Errors In/Out</h4>",
-            f"            <a href='/mrtg-rrd/{base_name}-errors.html'>",
-            f"                <img src='/mrtg-rrd/{base_name}-errors-day.png' alt='{monitor['title']} Errors'>",
+            f"            <a href='/mrtg-rrd/{safe_name}-errors.html'>",
+            f"                <img src='/mrtg-rrd/{safe_name}-errors-day.png' alt='{display_name} Errors'>",
             "            </a>",
             "        </div>",
-            *([
-                f"        <div class='{cell_class}'>",
-                "            <h4>TCP Retransmits</h4>",
-                f"            <a href='/mrtg-rrd/{base_name}-retransmits.html'>",
-                f"                <img src='/mrtg-rrd/{base_name}-retransmits-day.png' alt='{monitor['title']} TCP Retransmits'>",
-                "            </a>",
-                "        </div>",
-            ] if has_retransmits else []),
-            *([
-                f"        <div class='{cell_class}'>",
-                "            <h4>CPU & Memory</h4>",
-                f"            <a href='/mrtg-rrd/{base_name}-system.html'>",
-                f"                <img src='/mrtg-rrd/{base_name}-system-day.png' alt='{monitor['title']} System'>",
-                "            </a>",
-                "        </div>",
-            ] if has_system else []),
-            *([
-                f"        <div class='{cell_class}'>",
-                "            <h4>Active Ports & NVRAM/Flash</h4>",
-                f"            <a href='/mrtg-rrd/{base_name}-tamper.html'>",
-                f"                <img src='/mrtg-rrd/{base_name}-tamper-day.png' alt='{monitor['title']} Tamper'>",
-                "            </a>",
-                "        </div>",
-            ] if has_tamper else []),
-            *([
-                f"        <div class='{cell_class}'>",
-                "            <h4>MACs & ARP Entries</h4>",
-                f"            <a href='/mrtg-rrd/{base_name}-network.html'>",
-                f"                <img src='/mrtg-rrd/{base_name}-network-day.png' alt='{monitor['title']} Network'>",
-                "            </a>",
-                "        </div>",
-            ] if has_network else []),
+            f"        <div class='{cell_class}'>",
+            "            <h4>TCP Retransmits</h4>",
+            f"            <a href='/mrtg-rrd/{safe_name}-retransmits.html'>",
+            f"                <img src='/mrtg-rrd/{safe_name}-retransmits-day.png' alt='{display_name} TCP Retransmits'>",
+            "            </a>",
+            "        </div>",
+            f"        <div class='{cell_class}'>",
+            "            <h4>CPU & Memory</h4>",
+            f"            <a href='/mrtg-rrd/{safe_name}-system.html'>",
+            f"                <img src='/mrtg-rrd/{safe_name}-system-day.png' alt='{display_name} System'>",
+            "            </a>",
+            "        </div>",
+            f"        <div class='{cell_class}'>",
+            "            <h4>Active Ports & NVRAM/Flash</h4>",
+            f"            <a href='/mrtg-rrd/{safe_name}-tamper.html'>",
+            f"                <img src='/mrtg-rrd/{safe_name}-tamper-day.png' alt='{display_name} Tamper'>",
+            "            </a>",
+            "        </div>",
+            f"        <div class='{cell_class}'>",
+            "            <h4>MACs & ARP Entries</h4>",
+            f"            <a href='/mrtg-rrd/{safe_name}-network.html'>",
+            f"                <img src='/mrtg-rrd/{safe_name}-network-day.png' alt='{display_name} Network'>",
+            "            </a>",
+            "        </div>",
             "    </div>",
         ])
 
-    def _emit_port_host_group(run: List[Tuple[str, Dict[str, Any]]]) -> None:
-        """Emit a contiguous run of port/host monitors as a single grid (8-up or 4-up)."""
+    def _emit_port_host_group(run: List[Tuple[str, str, Dict[str, Any]]]) -> None:
+        """Emit a contiguous run of port/host monitors as a single grid (8-up or 4-up).
+
+        run: list of (safe_name, monitor_type, resource) tuples
+        """
         col_count  = 8 if len(run) >= 2 else 4
         col_narrow = min(col_count, 4)
         col_style  = f"repeat({col_count}, 1fr); --cols-narrow: {col_narrow}"
@@ -4859,17 +4794,17 @@ def generate_mrtg_index(all_config_files: List[str], index_path: str, site_name:
 
         # --- label row ---
         html_lines.append(f"    <div class='port-label-row' style='grid-template-columns: {col_style};'>")
-        for base_name, monitor in run:
-            plain_name    = re.sub(r'^[^:]+:\s*', '', monitor['title'])
-            monitor_state = state.get(plain_name, {}) if state else {}
+        for safe_name, monitor_type, resource in run:
+            display_name  = f"{monitor_type}: {resource['name']}"
+            monitor_state = state.get(resource['name'], {}) if state else {}
             is_down       = not monitor_state.get('is_up', True)
             label_class   = "network-host-label down" if is_down else "network-host-label"
             outage_str    = f" &nbsp;<span style='font-weight: normal; font-size: 13px;'>Down {format_time_ago(monitor_state.get('last_alarm_started'))}</span>" if is_down else ""
-            detail_href   = _detail_href(monitor['title'], base_name)
+            detail_href   = _detail_href(monitor_type, safe_name)
             html_lines.append(
                 f"        <div class='port-label-cell'>"
                 f"<span class='{label_class}'>"
-                f"<a href='{detail_href}'>{monitor['title']}</a>"
+                f"<a href='{detail_href}'>{display_name}</a>"
                 f"{outage_str}</span></div>"
             )
             for _ in range(3):
@@ -4878,23 +4813,21 @@ def generate_mrtg_index(all_config_files: List[str], index_path: str, site_name:
 
         # --- chart row ---
         html_lines.append(f"    <div class='network-row' style='grid-template-columns: {col_style};'>")
-        for base_name, monitor in run:
-            plain_name    = re.sub(r'^[^:]+:\s*', '', monitor['title'])
-            monitor_state = state.get(plain_name, {}) if state else {}
+        for safe_name, monitor_type, resource in run:
+            display_name  = f"{monitor_type}: {resource['name']}"
+            monitor_state = state.get(resource['name'], {}) if state else {}
             is_down       = not monitor_state.get('is_up', True)
             cell_class    = "network-cell down" if is_down else "network-cell"
-            is_host       = monitor['title'].startswith('host: ')
 
-            if is_host:
+            if monitor_type == 'host':
                 disk_space_pct = monitor_state.get('disk_space_pct')
                 disk_space_str = f"{disk_space_pct:.1f}%" if disk_space_pct is not None else "N/A"
-                host_targets = [
+                targets = [
                     ('-system1', 'CPU & Load'),
                     ('-system2', 'Memory & Paging'),
                     ('-system3', f'Disk I/O &mdash; Disk Use: {disk_space_str}'),
                     ('-system4', 'System Thrashing'),
                 ]
-                targets = host_targets
             else:
                 targets = port_targets
 
@@ -4902,92 +4835,87 @@ def generate_mrtg_index(all_config_files: List[str], index_path: str, site_name:
                 html_lines.extend([
                     f"        <div class='{cell_class}'>",
                     f"            <h4>{heading}</h4>",
-                    f"            <a href='/mrtg-rrd/{base_name}{suffix}.html'>",
-                    f"                <img src='/mrtg-rrd/{base_name}{suffix}-day.png' alt='{monitor['title']} {heading}'>",
+                    f"            <a href='/mrtg-rrd/{safe_name}{suffix}.html'>",
+                    f"                <img src='/mrtg-rrd/{safe_name}{suffix}-day.png' alt='{display_name} {heading}'>",
                     "            </a>",
                     "        </div>",
                 ])
         html_lines.append("    </div>")
 
-    has_snmp    = bool(snmp_monitors)
-    has_avail   = bool(all_monitors)
-    show_both   = not has_snmp and not has_avail  # nothing at all — show both headings with placeholder
+    # Partition monitors into displayed/hidden, preserving config file order
+    displayed  = [r for r in monitors if     to_natural_language_boolean(r.get('display', True))]
+    hidden     = [r for r in monitors if not to_natural_language_boolean(r.get('display', True))]
 
-    port_count_total = 0
-    host_count_total = 0
+    snmp_types  = ('ports', 'port', 'host')
+    avail_types = ('ping', 'http', 'quic', 'tcp', 'udp')
+
+    has_snmp  = any(r['type'] in snmp_types  for r in displayed)
+    has_avail = any(r['type'] in avail_types for r in displayed)
 
     # --- L2/L3 Network Monitoring section ---
-    if has_snmp or show_both:
-        html_lines.append("    <h2>L2/L3 Network Monitoring</h2>")
+    html_lines.append("    <h2>L2/L3 Network Monitoring</h2>")
+    if not has_snmp:
+        html_lines.append("    <p class='nothing-configured'>No L2/L3 network monitors configured.</p>")
+    else:
+        port_host_run: List[Tuple[str, str, Dict[str, Any]]] = []
 
-        if not has_snmp:
-            html_lines.append("    <p class='nothing-configured'>No L2/L3 network monitors configured.</p>")
-        else:
-            port_host_run: List[Tuple[str, Dict[str, Any]]] = []
+        for resource in displayed:
+            if resource['type'] not in snmp_types:
+                continue
+            safe_name    = re.sub(r'[^\w\-.]', '_', resource['name'])
+            monitor_type = resource['type']
 
-            for base_name, monitor in snmp_monitors.items():
-                is_port = monitor['title'].startswith('port: ')
-                is_host = monitor['title'].startswith('host: ')
-                if is_port or is_host:
-                    port_host_run.append((base_name, monitor))
-                    if is_port:
-                        port_count_total += 1
-                    else:
-                        host_count_total += 1
-                else:
-                    if port_host_run:
-                        _emit_port_host_group(port_host_run)
-                        port_host_run = []
-                    _emit_snmp_row(base_name, monitor)
+            if monitor_type == 'ports':
+                if port_host_run:
+                    _emit_port_host_group(port_host_run)
+                    port_host_run = []
+                _emit_snmp_row(resource)
+            else:
+                port_host_run.append((safe_name, monitor_type, resource))
 
-            if port_host_run:
-                _emit_port_host_group(port_host_run)
+        if port_host_run:
+            _emit_port_host_group(port_host_run)
 
     # --- L4 Availability Monitoring section ---
-    if has_avail or show_both:
-        html_lines.extend([
-            "    <h2>L4 Availability Monitoring</h2>",
-        ])
+    html_lines.append("    <h2>L4 Availability Monitoring</h2>")
+    if not has_avail:
+        html_lines.append("    <p class='nothing-configured'>No L4 availability monitors configured.</p>")
+    else:
+        html_lines.append("    <div class='grid'>")
+        for resource in displayed:
+            if resource['type'] not in avail_types:
+                continue
+            safe_name     = re.sub(r'[^\w\-.]', '_', resource['name'])
+            monitor_state = state.get(resource['name'], {}) if state else {}
+            is_down       = not monitor_state.get('is_up', True)
+            div_class     = "monitor down" if is_down else "monitor"
+            outage_str    = f"<span style='color: #cc0000; font-weight: bold;'>Down {format_time_ago(monitor_state.get('last_alarm_started'))}</span>" if is_down else ""
 
-        if not has_avail:
-            html_lines.append("    <p class='nothing-configured'>No L4 availability monitors configured.</p>")
-        else:
-            html_lines.append("    <div class='grid'>")
+            html_lines.extend([
+                f"        <div class='{div_class}'>",
+                f"            <h3><a href='/mrtg-rrd/{safe_name}.html'>{resource['name']}</a></h3>",
+                f"            <a href='/mrtg-rrd/{safe_name}.html'>",
+                f"                <img src='/mrtg-rrd/{safe_name}-day.png' alt='{resource['name']} Daily Graph'>",
+                "            </a>",
+                f"            <p style='font-size: 12px; color: #666;'>{resource['address']}{(' &nbsp;' + outage_str) if is_down else ''}</p>",
+                "        </div>",
+            ])
+        html_lines.append("    </div>")
 
-            for monitor in all_monitors:
-                safe_name     = monitor['name']
-                monitor_state = state.get(monitor['title'], {}) if state else {}
-                is_down       = not monitor_state.get('is_up', True)
-                div_class     = "monitor down" if is_down else "monitor"
-                outage_str    = f"<span style='color: #cc0000; font-weight: bold;'>Down {format_time_ago(monitor_state.get('last_alarm_started'))}</span>" if is_down else ""
-
-                html_lines.extend([
-                    f"        <div class='{div_class}'>",
-                    f"            <h3><a href='/mrtg-rrd/{safe_name}.html'>{monitor['title']}</a></h3>",
-                    f"            <a href='/mrtg-rrd/{safe_name}.html'>",
-                    f"                <img src='/mrtg-rrd/{safe_name}-day.png' alt='{monitor['title']} Daily Graph'>",
-                    "            </a>",
-                    f"            <p style='font-size: 12px; color: #666;'>{monitor['address']}{(' &nbsp;' + outage_str) if is_down else ''}</p>",
-                    "        </div>",
-                ])
-
-            html_lines.append("    </div>")
-
-    # Build hidden monitors audit footer — omitted entirely if no monitors are hidden
-    if hidden_monitors:
+    # --- Hidden monitors audit footer ---
+    if hidden:
         hidden_parts = []
-        for m in hidden_monitors:
-            monitor_state = state.get(m['name'], {}) if state else {}
+        for r in hidden:
+            monitor_state = state.get(r['name'], {}) if state else {}
             is_down       = not monitor_state.get('is_up', True)
             if is_down:
                 outage_str = f" (down {format_time_ago(monitor_state.get('last_alarm_started'))})"
-                hidden_parts.append(f"<span style='color: #cc0000;'>{m['name']}{outage_str}</span>")
+                hidden_parts.append(f"<span style='color: #cc0000;'>{r['name']}{outage_str}</span>")
             else:
-                hidden_parts.append(f"<span style='color: #aaa;'>{m['name']}</span>")
-        hidden_line = ", ".join(hidden_parts)
+                hidden_parts.append(f"<span style='color: #aaa;'>{r['name']}</span>")
         html_lines.append(
             f"    <p style='margin-top: 20px; text-align: center; color: #333; font-size: 14px; font-weight: bold;'>"
-            f"Not displayed: {hidden_line}</p>"
+            f"Not displayed: {', '.join(hidden_parts)}</p>"
         )
 
     html_lines.extend([
@@ -5010,10 +4938,12 @@ def generate_mrtg_index(all_config_files: List[str], index_path: str, site_name:
         os.replace(new_path, current_path)
 
         if VERBOSE:
-            snmp_count   = sum(1 for m in snmp_monitors.values() if not m['title'].startswith(('port: ', 'host: ')))
-            avail_count  = len(all_monitors)
-            hidden_count = len(hidden_monitors) if hidden_monitors else 0
-            print(f"{prefix}Generated MRTG master index: {index_path} ({snmp_count} SNMP hosts, {port_count_total} port monitors, {host_count_total} host monitors, {avail_count} availability monitors, {hidden_count} hidden)")
+            snmp_count   = sum(1 for r in displayed if r['type'] == 'ports')
+            port_count   = sum(1 for r in displayed if r['type'] == 'port')
+            host_count   = sum(1 for r in displayed if r['type'] == 'host')
+            avail_count  = sum(1 for r in displayed if r['type'] in avail_types)
+            hidden_count = len(hidden)
+            print(f"{prefix}Generated MRTG master index: {index_path} ({snmp_count} SNMP hosts, {port_count} port monitors, {host_count} host monitors, {avail_count} availability monitors, {hidden_count} hidden)")
 
     except Exception as e:
         print(f"{prefix}Failed to generate MRTG master index '{index_path}': {e}", file=sys.stderr)
@@ -5186,12 +5116,9 @@ def main() -> None:
             generate_mrtg_config(config, work_dir, mrtg_config_path, STATE)
             all_config_files = update_mrtg_rrd_cgi_config(work_dir, mrtg_config_path)
 
-            # Monitors with display=false are excluded from MRTG config but shown in audit footer
-            hidden_monitors = [r for r in config['monitors'] if not to_natural_language_boolean(r.get('display', True))]
-
             # Generate master index from all config files, passing site name and hidden monitors
             master_index_path = str(Path(work_dir) / 'index.html')
-            generate_mrtg_index(all_config_files, master_index_path, site_name, STATE, hidden_monitors)
+            generate_mrtg_index(config, master_index_path, STATE)
 
             mrtg_index_elapsed_ms = int(datetime.now().timestamp() * 1000) - mrtg_start_ms
 

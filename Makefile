@@ -54,7 +54,13 @@ check-sudo:
 
 migrate: check-root
 	@echo "==> Migrating APMonitor statefiles to new naming convention..."
-	@OLD_BASE=$(STATE_DIR)/apmonitor-statefile; \
+	@service_was_running=0; \
+	if systemctl is-active --quiet apmonitor.service; then \
+		echo "==> Stopping APMonitor service..."; \
+		systemctl stop apmonitor.service; \
+		service_was_running=1; \
+	fi; \
+	OLD_BASE=$(STATE_DIR)/apmonitor-statefile; \
 	NEW_BASE=$(STATE_DIR)/apmonitor-config.statefile; \
 	migrated=0; \
 	for suffix in .json .json.new .json.old .mrtg.cfg .mrtg.cfg.new .mrtg.cfg.old; do \
@@ -68,9 +74,22 @@ migrate: check-root
 		mv "$$OLD_BASE.rrd" "$$NEW_BASE.rrd"; \
 		echo "  Migrated: $$OLD_BASE.rrd -> $$NEW_BASE.rrd"; \
 		migrated=1; \
+	elif [ -d "$$OLD_BASE.rrd" ] && [ -d "$$NEW_BASE.rrd" ]; then \
+		echo "  ERROR: both $$OLD_BASE.rrd and $$NEW_BASE.rrd exist."; \
+		echo "  Historical RRD data is in $$OLD_BASE.rrd -- manual merge required."; \
+		echo "  To recover: rm -rf $$NEW_BASE.rrd && mv $$OLD_BASE.rrd $$NEW_BASE.rrd"; \
+		if [ "$$service_was_running" -eq 1 ]; then \
+			echo "==> Restarting APMonitor service..."; \
+			systemctl start apmonitor.service; \
+		fi; \
+		exit 1; \
 	fi; \
 	if [ "$$migrated" -eq 0 ]; then \
 		echo "  Nothing to migrate."; \
+	fi; \
+	if [ "$$service_was_running" -eq 1 ]; then \
+		echo "==> Restarting APMonitor service..."; \
+		systemctl start apmonitor.service; \
 	fi
 	@echo "==> Migration complete."
 
