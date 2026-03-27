@@ -56,7 +56,34 @@ To run APMonitor with a configuration file `test-apmonitor-config.yaml ` & auto-
 
 To properly setup `APMonitor.py`
 
+
 1. Spin up Debian Linux on a VM or PC on a Card/PC on a Chip (e.g., rPI) - optional but recommended
+
+
+2. Install APMonitor
+
+   ```
+   sudo make install
+   ```
+
+3. Install MRTG web interface
+    
+   ```
+   sudo make installmrtg
+   ```
+   
+3. Edit `/usr/local/etc/apmonitor-config.yaml`
+   
+    
+    See <a href="#apmonitorpy-yamljson-site-configuration-options">Configuration Options</a> for site file configuration details.
+
+4. Start monitoring:
+
+    ```bash
+    sudo make enable
+    ``` 
+
+
 2. Modify `example-apmonitor-config.yaml` with a basic config then copy it to `/usr/local/etc/apmonitor-config.yaml` (see <a href="#apmonitorpy-yamljson-site-configuration-options">Configuration Options</a>)
 3. use `make install; make installmrtg` to spin up `APMonitor.py` and a NGINX webserver for MRTG charts in `systemctl`
 4. Modify config file to suit your purposes.
