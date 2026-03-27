@@ -1918,14 +1918,17 @@ sudo pip3 uninstall -y PyYAML requests pyOpenSSL urllib3 aioquic easysnmp
   - Use the topology to only notify outages for the root cause and list the affected services in the same alert
   - When a monitored resource has multiple parent dependencies, specify if it's down when all are down (AND relation) or down when one is down (OR relation)
   - Consider correct use of pre/in/post-order traversal when deciding which alerts to drop
+  - The DAG must also be OSI layer compliant
 
 - Convert finished version to pure C `APMonitor.c` 
   - Strictly only with `libc`/SVR4 C Systems Programming dependencies for really tiny cross-platform embedded systems application environments 
   - Test if we are `root` when doing a `ping` syscall and fallback to direct `SOCK_RAW` if we are for high performance
 
-- Add network segment monitoring for detecting new hosts with `nmap`.
+- ~~Add network segment monitoring for detecting new hosts with `nmap`.~~ (WONTFIX: see <a href="#recommended-configuration-for-securing-iototics-networks">Recommended configuration for securing IOT/OT/ICS networks</a>)
 
 - Add a Mercator + `APTree.c` `#InfoRec` inspired/styled priority queue for handling large numbers of monitored resources with proper realtime programming guarantees
+  - We need this if we implement long-running monitors based on a scripting language that will Zappier/WebTest/grab logifiles/etc. Say "zappyautomoton" lang.
+  - zappyautomoton lang would be composed of availability monitor primitives, basic if/then/exception control flow plus some other verb like actions we can do (eg: archive & compare)
 
 - Do <i>Humanizing Data</i> [https://x.com/CompSciFutures/status/1930974323424321985](https://x.com/CompSciFutures/status/1930974323424321985) on MRTG+AP charts to show regime shifts and correlated sub-graphs over response times & SNMP stats<br /><br/>
   - Traffic spikes: which host/network is it? E.g., a big system update or install will make a spike and the hostname should be shown.
