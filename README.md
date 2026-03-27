@@ -1910,8 +1910,7 @@ sudo pip3 uninstall -y PyYAML requests pyOpenSSL urllib3 aioquic easysnmp
   - ~~MRTG compatible graph generation w/index.html~~ (completed in v1.2.3)
   - ~~Carefully adjust UX of all charts~~ (completed in v1.3.7)
   - Make index.html support multiple site files (index-<SiteName>.html)
-  - Use loess regression on MRTG compatible logfiles for outlier & drop/increase detection
-
+  
 - Aggregated root cause alerting:
   - Specify parent dependencies using config option `parent_name` so we have a network topology graph
   - Add loop detection to ensure the topology graph is a DAG
@@ -1931,10 +1930,13 @@ sudo pip3 uninstall -y PyYAML requests pyOpenSSL urllib3 aioquic easysnmp
   - We need this if we implement long-running monitors based on a scripting language that will Zappier/WebTest/grab logifiles/etc. Say "zappyautomoton" lang.
   - zappyautomoton lang would be composed of availability monitor primitives, basic if/then/exception control flow plus some other verb like actions we can do (eg: archive & compare)
 
-- Do <i>Humanizing Data</i> [https://x.com/CompSciFutures/status/1930974323424321985](https://x.com/CompSciFutures/status/1930974323424321985) on MRTG+AP charts to show regime shifts and correlated sub-graphs over response times & SNMP stats<br /><br/>
+- Do <i>Humanizing Data</i> [https://x.com/CompSciFutures/status/1930974323424321985](https://x.com/CompSciFutures/status/1930974323424321985) on MRTG+AP charts to show regime shifts and correlated sub-graphs over response times & SNMP stats
   - Traffic spikes: which host/network is it? E.g., a big system update or install will make a spike and the hostname should be shown.
   - Packet fragmentation/jubno size distribution changes: which disk is it & is it a new disk hotspot or a larger chunk indicating a data loss event?
   - What SNMP metrics show a packet storm of scan/flood/brute force type activity?
+  - Use loess regression on MRTG compatible logfiles for outlier & drop/increase detection
+
+<br/><br/>
 
 [![Humanizing-Data.png](images/Humanizing-Data.png)](https://x.com/CompSciFutures/status/1930974323424321985)
 
