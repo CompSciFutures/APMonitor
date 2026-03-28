@@ -26,6 +26,7 @@ Thread safe, reentrant, modifiable.
 - added clearer instructions about slow monitors & real-time environments
 - stopped install from clobbering existing systemd setup
 - put all /var/tmp statefiles (including siblings) into /var/tmp/APMonitor
+- updated docs to cover significant multi-tenancy architectural changes
 
 # Release 1.3.7 (23-Mar-26): More MRTG UX Tweaks
 - Added PayPal donation link to MRTG site

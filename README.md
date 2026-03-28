@@ -2,7 +2,7 @@
 
 # `APMonitor.py` - A Hands-Off Layer 2 & 4 On-Premises Monitoring Tool with Alert Delivery Guarantees
 
-***Built for NOCs and OT/ICS Sensor Networks***: This is an on-prem monitoring tool written completely in very clear Python-only code (so you can modify it) and is designed to work on a LAN for on-prem availability monitoring of resources that aren't necesarilly connected to The Internet, and/or where the on-prem monitoring itself is also required to have availability guarantees.
+***Built for NOCs and OT/ICS Sensor Networks***: This is an on-prem monitoring tool written completely in very clear Python-only code (so you can modify it) and is designed to work on a LAN for on-prem availability monitoring of resources that aren't necessarily connected to The Internet, and/or where the on-prem monitoring itself is also required to have availability guarantees.
 
 It is particularly suited to availability monitoring of embedded devices +/- 10 secs. It's designed primarily for firewalls, switches, routers, hubs, environmental sensors & #OT / #ICS systems, but works with normal servers &amp; services as well.
 
@@ -14,7 +14,7 @@ It also supports pacing of monitoring alarms using a decaying curve that deliver
 
 To achieve **guaranteed always-on monitoring service levels**, simply setup local availability monitors in your config, [sign-up for a Pro Plan at Site24x7](https://www.site24x7.com/site24x7-pricing.html) then use `heartbeat_url` and `heartbeat_every_n_secs` configuration options to `APMonitor.py` to ping a [Heartbeat Monitoring](https://www.site24x7.com/help/heartbeat/) URL endpoint at [Site24x7](https://site24x7.com) when the monitored resource is up. This then ensures that when a heartbeat doesn't arrive from APMonitor, monitoring alerts fall back to Site24x7, and when both are working you have second-opinion availability monitoring reporting.
 
-**The service level guarantee works as follows:** If the resource is down, `APMonitor.py` won't hit the [Heartbeat Monitoring](https://www.site24x7.com/help/heartbeat/) endpoint URL, and Site24x7 will then send an alert about the missed heartbeat without the need for any additional dependencies on-prem/on-site. So the entire machine `APMonitor.py` is running on can fall over, and you still get availability monitoring alerts sent, with all the benefits of having on-prem monitoring on your local network behind your firewall.  
+**The service level guarantee works as follows:** If the resource is down, `APMonitor.py` won't hit the [Heartbeat Monitoring](https://www.site24x7.com/help/heartbeat/) endpoint URL, and Site24x7 will then send an alert about the missed heartbeat without the need for any additional dependencies on-prem/on-site. So the entire machine `APMonitor.py` is running on can fall over, and you still get availability monitoring alerts sent, with all the benefits of having on-prem monitoring on your local network behind your firewall.
 
 You can quickly signup for a [Site24x7.com Lite or Pro Plan](https://www.site24x7.com/site24x7-pricing.html) for \$10-\$50 USD per month, then setup a bunch of [Heartbeat Monitoring](https://www.site24x7.com/help/heartbeat/) URL endpoints that works with `APMonitor.py` rather easily.
 
@@ -38,9 +38,9 @@ Ex Chief Scientist @ Clemenger BBDO / Omnicom</i>
 
 [![buy-me-a-coffee.png](images/buy-me-a-coffee.png)](https://www.paypal.com/donate/?hosted_button_id=WN472NX5XC5CJ)
 
-<i>If you find APMonitor.py useful in your NOC, for monitoring your IOT/ICS devices, 
-or would like email / telephone support, please consider 
-<a href="https://www.paypal.com/donate/?hosted_button_id=WN472NX5XC5CJ">a regular donation via Buy me a coffee</a>, 
+<i>If you find APMonitor.py useful in your NOC, for monitoring your IOT/ICS devices,
+or would like email / telephone support, please consider
+<a href="https://www.paypal.com/donate/?hosted_button_id=WN472NX5XC5CJ">a regular donation via Buy me a coffee</a>,
 so I can keep improving it.<br />
 
 Telephone Support: +61497222775<br />
@@ -49,34 +49,29 @@ Support email: hello@enertium.org<br />
 
 # Quickstart
 
-To run APMonitor with a configuration file `test-apmonitor-config.yaml ` & auto-created statefile `/tmp/statefile.json`:
-```
+To run APMonitor with a configuration file and auto-derived statefile under `/var/tmp/APMonitor/`:
+```bash
 ./APMonitor.py test-apmonitor-config.yaml --generate-rrds
 ./APMonitor.py site1.yaml site2.yaml --generate-mrtg-config
 ```
 
-To properly setup `APMonitor.py`
-
+To properly setup `APMonitor.py`:
 
 1. Spin up Debian Linux on a VM or PC on a Card/PC on a Chip (e.g., rPI) - optional but recommended
 
-
 2. Install APMonitor (to spin up `APMonitor.py` in `systemctl` as `apmonitor.service`)
-
-   ```
+```bash
    sudo make install
-   ```
+```
 
 3. Install MRTG web interface (to spin up an NGINX webserver for MRTG charts in `systemctl` as `apmonitor-nginx.service`)
-    
-   ```
+```bash
    sudo make installmrtg
-   ```
-   
-3. Edit `/usr/local/etc/apmonitor-config.yaml`
-   
-    
-    See <a href="#apmonitorpy-yamljson-site-configuration-options">Configuration Options</a> for site file configuration details.
+```
+
+4. Edit `/usr/local/etc/apmonitor-config.yaml`
+
+   See <a href="#apmonitorpy-yamljson-site-configuration-options">Configuration Options</a> for site file configuration details.
 
 4. Test the config (using `./APMonitor.py --test-config /usr/local/etc/apmonitor-config.yaml`):
 
@@ -84,13 +79,12 @@ To properly setup `APMonitor.py`
    sudo make test-config
    ```
 
-5. Start monitoring:
+6. Start monitoring:
+```bash
+   sudo make enable
+```
 
-    ```bash
-    sudo make enable
-    ```
-   
-    **Note:** If `-s` is not specified, statefiles are stored in `/var/tmp` by default, e.g. `/var/tmp/apmonitor-config.*` for a default install.
+   **Note:** Statefiles are stored under `/var/tmp/APMonitor/` by default, e.g. `/var/tmp/APMonitor/apmonitor-config.statefile.json` for a default install. The `-s` flag overrides this for single-config invocations only.
 
 That's it!
 
@@ -124,6 +118,7 @@ Key Features:
 - Integration with Site24x7/PagerDuty heartbeat monitoring for high-availability second-opinion and failover alerting
 - Integration with Slack and Pushover webhooks for notifications, plus standard email support
 - Smart notification pacing: rapid alerts initially, then gradually decreasing frequency for extended outages
+- Multi-site monitoring: pass multiple config files on the command line; each runs concurrently as an independent subprocess with its own statefile, RRD database, and MRTG index
 - Runs on everything from Raspberry Pi to enterprise systems
 - Super accurate, high-frequency monitoring for real-time / embedded / heartbeat monitored environments
 - Thread-safe, reentrant, and easily modifiable
@@ -132,7 +127,7 @@ Key Features:
 ## Relevance to the 12 Pillars of Information Security
 
 NB: This tool is useful for implementing the second &amp; third pillars (Availability &amp; System Integrity)
-from the 12 Pillars of Information Security, for Necessary, Sufficient & Complete Security: 
+from the 12 Pillars of Information Security, for Necessary, Sufficient & Complete Security:
 
 <img src="images/The-Pillars-of-Information-Security.png" width="500" />
 
@@ -141,7 +136,7 @@ Also be mindful of the Attack Surface Kill-Switch Riddle:
 ![The-attack-surface-kill-switch-riddle.png](images/The-attack-surface-kill-switch-riddle.png)
 
 To address this riddle, you should try to configure your machines & devices so that even if they are shutdown or halted in some way,
-the Ethernet MAC address can still be read at Layer 2 so you can still receive alerts like this:  
+the Ethernet MAC address can still be read at Layer 2 so you can still receive alerts like this:
 
 <img src="images/port-change-notification.png" width="500" />
 
@@ -153,7 +148,7 @@ See DOI [10.13140/RG.2.2.12609.84321](https://doi.org/10.13140/RG.2.2.12609.8432
 
 ## Alternatives
 
-If lightweight or realtime guarantees aren't important to you, and you want something more feature packed, 
+If lightweight or realtime guarantees aren't important to you, and you want something more feature packed,
 consider these on-prem alternatives:
 
 - Uptime Kuma
@@ -161,8 +156,8 @@ consider these on-prem alternatives:
 - UptimeRobot
 - Paessler PRTG
 
-APMonitor is simple, minimalist, elegant and lightweight and comes from a reliable line of heritage so you can spin 
-it up fast as a 2nd opinion monitoring tool with little more than a `make install`. If you want something more 
+APMonitor is simple, minimalist, elegant and lightweight and comes from a reliable line of heritage so you can spin
+it up fast as a 2nd opinion monitoring tool with little more than a `make install`. If you want something more
 sophisticated that's less focused on realtime programming or elegant simplicity, take a look at those very capable
 alternatives.
 
@@ -172,16 +167,16 @@ Installing MRTG with `make install; make installmrtg` will spin up via `rc.d` a 
 
 ![mrtg-availability.png](images/mrtg-availability.png)
 
-This layout is specifically designed for now commonly available 4K Ultra HD (3840x2160 16:9 2160p) screens. It's not uncommon to see modern NOCs with an array of these on the wall at eye height when someone is sitting down. 
+This layout is specifically designed for now commonly available 4K Ultra HD (3840x2160 16:9 2160p) screens. It's not uncommon to see modern NOCs with an array of these on the wall at eye height when someone is sitting down.
 Instead of just having CCTV, you can now add some proper network telemetry and instrumentation, say with one YAML site file per screen, on the top row of screens.
 
-Clicking on the heading associated with a set of ports will provide more L2/L3 information (depending whats available via SNMP):
+Clicking on the heading associated with a set of ports will provide more L2/L3 information (depending on what's available via SNMP):
 
 <img src="images/L2L3-detail-page.png" width="650" />
 
 Note the NGINX/FastCGI combination means we don't need to keep a machine chewing on itself generating charts anymore - they are now generated on demand in near-realtime and extremely efficiently. The only I/O is the RRD files, which under the hood operate very much like the older MRTG text file format.
 
-I chose RRD because it's a rather good frequency domain format for data warehousing of frequency domain sample data that's still compatible with Tier 1 NOCs. 
+I chose RRD because it's a rather good frequency domain format for data warehousing of frequency domain sample data that's still compatible with Tier 1 NOCs.
 
 If you want to work with this data directly, consider looking at <a href="https://librosa.org/doc/latest/index.html">LibROSA</a> from NYU's Fourier Lab team.
 It is designed for working with Frequency Domain/Time Domain data and has a rather nifty spectrogram visualisation which might be relevant to you, amongst other things.
@@ -204,12 +199,12 @@ NB: If you are running `APMonitor.py` out of `systemd` with a default install, n
 > [!WARNING]
 > You need to make sure your configs have enough threads to finish in << 10 seconds to get near-realtime performance.
 > Make sure `max_threads` & `max_try_secs` are configured appropriately. Also note that separate site configs are executed
-> in parallel, so any down monitors do not slow down any monitors in other sites, regardless of settings.
-> 
-> Note that the thing that usually slows down a site configuration are monitors that are down - 
+> in parallel as subprocesses, so any down monitors in one site do not slow down monitors in other sites, regardless of settings.
+>
+> Note that the thing that usually slows down a site configuration are monitors that are down —
 > you need enough threads to cover the maximum number of down monitors at any one time, on average.
-> We say 'on average' because not all monitors are polled simultaenously after a decent period of
-> a site config having been operational. 
+> We say 'on average' because not all monitors are polled simultaneously after a decent period of
+> a site config having been operational.
 
 # Recommended configuration for securing IOT/OT/ICS networks
 
@@ -219,12 +214,12 @@ Use <a href="Added note about NVRs, SSL pinning, MAC port monitoring/pinning & r
 <a href="https://github.com/CompSciFutures/APMonitor?tab=readme-ov-file#https-monitor-with-certificate-pinning">Layer 4 HTTPS Self-Signed Certificate Pinning</a> and
 <a href="https://github.com/CompSciFutures/APMonitor#single-port-mac-pinning-monitor">Layer 2 MAC Address Pinning</a> so your network can't be tampered with.
 
-To avoid <a href="https://x.com/search?q=%23VendorBackdoors&src=typed_query">vendor backdoors</a>, disable IPV6 and stop your IOT devices from communicating directly with The Internets excepting whitelisted addresses for purposes you specify (don't whitelist any cloud admin reverse shells).  
+To avoid <a href="https://x.com/search?q=%23VendorBackdoors&src=typed_query">vendor backdoors</a>, disable IPV6 and stop your IOT devices from communicating directly with The Internets excepting whitelisted addresses for purposes you specify (don't whitelist any cloud admin reverse shells).
 
 
 # Recommended configuration of Site24x7 Heartbeat Monitor Thresholds for HA Availability Monitoring
 
-You do need to configure Site24x7's Hearbeat Monitoring to achieve high-availability second opinion availability monitoring.
+You do need to configure Site24x7's Heartbeat Monitoring to achieve high-availability second opinion availability monitoring.
 
 As an exemplar, for the following monitored resource:
 ```yaml
@@ -242,20 +237,20 @@ Setup Site24x7 as follows:
 
 ![site24x7-heartbeat-settings.png](images%2Fsite24x7-heartbeat-settings.png)
 
-This will send a heartbeat to [Site24x7](https://site24x7.com) every 5 minutes, and Site24x7 will drop an alarm whenever a heartbeat 
+This will send a heartbeat to [Site24x7](https://site24x7.com) every 5 minutes, and Site24x7 will drop an alarm whenever a heartbeat
 doesn't arrive or arrives out of sequence +/- 1 minute (i.e., if the heartbeat doesn't arrive or is > 60 seconds out).
-This ensures availability monitoring will always function, even when one of APMonitor or Site24x7 is down. 
+This ensures availability monitoring will always function, even when one of APMonitor or Site24x7 is down.
 
 This also means you don't need to expose internal LAN network resources to The Internets.
 
 APMonitor's near-realtime capabilities will deliver heartbeats +/- 10 secs, so if you want high-precision alerts
-drop an alarm if a heartbeat does not arrive bang on 5 minutes apart +/- 10 secs. 
+drop an alarm if a heartbeat does not arrive bang on 5 minutes apart +/- 10 secs.
 
 To see the accuracy, configure Site24x7 as follows:
 
 ![site24x7-realtime-heartbeat-settings.png](images/site24x7-realtime-heartbeat-settings.png)
 
-Site24x7 will record the error in their dashboard for anything that is more than +/- 1000 ms out, 
+Site24x7 will record the error in their dashboard for anything that is more than +/- 1000 ms out,
 so you can keep a record of how accurate the near-realtime heartbeat timing is.
 
 See Site24x7 docs for more info:
@@ -300,8 +295,8 @@ APMonitor supports monitoring multiple sites from a single service instance by p
 
 When multiple config files are specified, APMonitor spawns one subprocess per config file and runs them concurrently, joining all subprocesses before exiting. Each subprocess:
 
-- Derives its own statefile from the config filename (e.g. `apmonitor-config.yaml` → `/var/tmp/apmonitor-config.statefile.json`)
-- Writes its MRTG index and detail pages to `/var/www/html/mrtg/<site-name>/`
+- Derives its own statefile automatically from the config filename under `/var/tmp/APMonitor/` (e.g. `apmonitor-config.yaml` → `/var/tmp/APMonitor/apmonitor-config.statefile.json`)
+- Writes its MRTG index and detail pages to `/var/www/html/mrtg/<site-name>/` where `<site-name>` is derived from `site.name` in the config
 - Maintains completely independent monitoring state, notification history, and RRD data
 
 ## Systemd service configuration
@@ -336,17 +331,43 @@ sudo systemctl daemon-reload
 sudo systemctl restart apmonitor.service
 ```
 
+Note that `make install` will preserve a customized `ExecStart` line on subsequent installs — it only writes the default if no service file exists yet.
+
 ## Statefiles and MRTG output
 
-Each config file produces its own set of derived files:
+Each config file produces its own set of derived files. Statefiles are stored under `/var/tmp/APMonitor/` (mode 755, no www-data access) and MRTG output is written into a per-site subdirectory of the MRTG working directory:
 
 | Config file | Statefile | MRTG index |
 |---|---|---|
-| `apmonitor-config.yaml` | `/var/tmp/apmonitor-config.statefile.json` | `http://<host>:888/mrtg/apmonitor-config/` |
-| `site2-config.yaml` | `/var/tmp/site2-config.statefile.json` | `http://<host>:888/mrtg/site2-config/` |
-| `site3-config.yaml` | `/var/tmp/site3-config.statefile.json` | `http://<host>:888/mrtg/site3-config/` |
+| `apmonitor-config.yaml` | `/var/tmp/APMonitor/apmonitor-config.statefile.json` | `http://<host>:888/mrtg/HomeLab/` |
+| `site2-config.yaml` | `/var/tmp/APMonitor/site2-config.statefile.json` | `http://<host>:888/mrtg/TellusionLab/` |
+| `site3-config.yaml` | `/var/tmp/APMonitor/site3-config.statefile.json` | `http://<host>:888/mrtg/OfficeLab/` |
 
-The site name shown in the MRTG index heading comes from `site.name` in each config file, not the filename.
+The MRTG subdirectory name comes from `site.name` in each config file (sanitised to a filesystem-safe string), not from the config filename. The statefile name is always derived from the config filename stem.
+
+## Default state file location
+
+On Unix-like systems, APMonitor stores all statefiles under `/var/tmp/APMonitor/`:
+
+- Directory is created automatically with mode `755` (no group write — www-data is explicitly excluded)
+- Persists across reboots (unlike `/tmp`)
+- All sibling files (`.json`, `.json.new`, `.json.old`, `.mrtg.cfg`, `.rrd/`) live in this directory
+
+The `-s/--statefile` flag overrides this for single-config invocations. It is not valid when multiple config files are specified.
+
+## Migrating statefiles from older versions
+
+If upgrading from a version that stored statefiles in `/var/tmp/` directly, run:
+```bash
+sudo make migrate
+```
+
+This performs a two-phase migration:
+
+1. Renames `apmonitor-statefile.*` → `apmonitor-config.statefile.*` in `/var/tmp/` (legacy name fix)
+2. Moves all `apmonitor-*.statefile.*` files and `.rrd` directories from `/var/tmp/` into `/var/tmp/APMonitor/`
+
+The service is stopped before migration and restarted afterwards. If a destination file already exists it is skipped with a warning rather than overwritten.
 
 ## Threading with multiple sites
 
@@ -354,7 +375,7 @@ The `-t` flag sets the number of monitor-checking threads **per site**, not glob
 
 ## Notes
 
-- `-s/--statefile` is not valid when multiple config files are specified — each site always derives its own statefile automatically.
+- `-s/--statefile` is not valid when multiple config files are specified — each site always derives its own statefile automatically from the config filename.
 - `make install` writes a default single-site `ExecStart`. Edit it manually after installation to add additional config files — subsequent `make install` runs will preserve your customized `ExecStart`.
 - `make test-config` only tests the default config at `$(CONFIG_DIR)/apmonitor-config.yaml`. Test additional configs directly: `APMonitor.py --test-config /usr/local/etc/site2-config.yaml`.
 
@@ -363,7 +384,6 @@ The `-t` flag sets the number of monitor-checking threads **per site**, not glob
 To enable SNMP monitoring on a Debian host so that APMonitor can poll it, install and configure `snmpd` with a read-only community string restricted to your APMonitor machine.
 
 ## Install
-
 ```bash
 sudo apt install snmpd snmp
 ```
@@ -371,7 +391,6 @@ sudo apt install snmpd snmp
 ## Configure `/etc/snmp/snmpd.conf`
 
 Replace the default config with the following minimal read-only configuration:
-
 ```
 # Listen on all interfaces (lock to a specific IP if preferred)
 agentAddress udp:161
@@ -387,7 +406,6 @@ sysName "my-debian-host"
 ```
 
 ## Enable and restart
-
 ```bash
 sudo systemctl restart snmpd
 sudo systemctl enable snmpd
@@ -396,7 +414,6 @@ sudo systemctl enable snmpd
 ## Firewall
 
 If the host runs a firewall, allow UDP port 161 from your APMonitor machine only:
-
 ```bash
 # ufw
 sudo ufw allow from 192.168.1.50 to any port 161 proto udp
@@ -406,7 +423,6 @@ sudo iptables -A INPUT -s 192.168.1.50 -p udp --dport 161 -j ACCEPT
 ```
 
 ## Test from your APMonitor host
-
 ```bash
 snmpwalk -v 2c -c YourCommunityString 192.168.1.x
 ```
@@ -421,7 +437,6 @@ snmpwalk -v 2c -c YourCommunityString 192.168.1.x
 ## APMonitor configuration
 
 Once `snmpd` is running, add a `ports` monitor pointing at the host:
-
 ```yaml
 - type: ports
   name: my-debian-ports
@@ -431,7 +446,6 @@ Once `snmpd` is running, add a `ports` monitor pointing at the host:
 ```
 
 For host performance monitoring (CPU, memory, disk I/O), use `type: host` instead:
-
 ```yaml
 - type: host
   name: my-debian-host
@@ -458,34 +472,38 @@ Enable RRD data collection by running APMonitor with `--generate-mrtg-config`:
 ./APMonitor.py -vv -s /var/tmp/apmonitor-statefile.json config.yaml --generate-mrtg-config
 ```
 
-Access graphs at `http://localhost:888/` or `http://<your-ip>:888/`.
+Access graphs at `http://localhost:888/mrtg/<site-name>/` or `http://<your-ip>:888/mrtg/<site-name>/`.
 
 ## How It Works
 
 When `--generate-mrtg-config` is specified:
 
 1. **RRD Collection Enabled**: APMonitor records response times and availability status to RRDtool databases
-2. **MRTG Config Generated**: Creates `.mrtg.cfg` file with monitor definitions
-3. **Web Interface Updated**: Updates `mrtg-rrd.cgi.pl` and generates `index.html` with graph thumbnails
-4. **Continuous Updates**: Subsequent runs update RRD files with latest metrics
+2. **MRTG Config Generated**: Creates a `.mrtg.cfg` file derived from the statefile path
+3. **Site subdirectory created**: MRTG output (index.html, detail pages) is written to `/var/www/html/mrtg/<site-name>/` where `<site-name>` is sanitised from `site.name` in the config
+4. **Web Interface Updated**: Updates `mrtg-rrd.cgi.pl` with the new config path and generates `index.html`
+5. **Continuous Updates**: Subsequent runs update RRD files and regenerate the index with latest metrics and outage state
 
-**Output:**
-- MRTG config: `{statefile-path}.mrtg.cfg` (e.g., `/var/tmp/apmonitor-statefile.mrtg.cfg`)
-- RRD databases: 
-  - Availability monitors: `{statefile-dir}/{statefile-name}.rrd/{monitor}-availability.rrd`
-  - SNMP monitors: `{statefile-dir}/{statefile-name}.rrd/{monitor}-snmp.rrd`
-- Web interface: `http://localhost:888/` (master index) and `http://localhost:888/mrtg-rrd/` (CGI interface)
+**Output file locations:**
+- Statefile: `/var/tmp/APMonitor/<config-stem>.statefile.json`
+- MRTG config: `/var/tmp/APMonitor/<config-stem>.statefile.mrtg.cfg`
+- RRD databases:
+  - Availability monitors: `/var/tmp/APMonitor/<config-stem>.statefile.rrd/<monitor>-availability.rrd`
+  - SNMP monitors: `/var/tmp/APMonitor/<config-stem>.statefile.rrd/<monitor>-snmp.rrd`
+- MRTG index: `/var/www/html/mrtg/<site-name>/index.html`
+- Detail pages: `/var/www/html/mrtg/<site-name>/<type>-<monitor>-detail.html`
+- Web interface: `http://localhost:888/mrtg/<site-name>/`
 
 ## Command Options
 
-Generate MRTG config with default working directory (`/var/www/html/mrtg`):
+Generate MRTG config with default base working directory (`/var/www/html/mrtg`):
 ```bash
-./APMonitor.py -s /var/tmp/statefile.json config.yaml --generate-mrtg-config
+./APMonitor.py apmonitor-config.yaml --generate-mrtg-config
 ```
 
-Specify custom working directory:
+Specify a custom base working directory (site subdirectory is always appended):
 ```bash
-./APMonitor.py -s /var/tmp/statefile.json config.yaml --generate-mrtg-config /var/www/html/graphs
+./APMonitor.py apmonitor-config.yaml --generate-mrtg-config /var/www/html/graphs
 ```
 
 ## RRD Data Collection
@@ -497,16 +515,16 @@ Each availability monitor's RRD file tracks two metrics:
 - **`response_time`** (GAUGE, milliseconds): Time taken for check to complete
   - Range: 0 to unlimited
   - Value: `U` (unknown) when check fails
-  
+
 - **`is_up`** (GAUGE, boolean): Service availability
-  - `1` = service up
+  - `100` = service up
   - `0` = service down
 
 ### SNMP Monitors (port, ports, host)
 
 All SNMP-family monitors (`port`, `ports`, `host`) use a single unified RRD schema per device. The schema is divided into three sections: per-interface DS pairs (used by `ports`/`port` only), fixed aggregate network DS (used by `ports`/`port`; stored as `U` for `host`), and fixed host performance DS (used by `host`; stored as `U` for `ports`/`port`).
 
-**Filename**: `{statefile-dir}/{statefile-name}.rrd/{monitor-name}-snmp.rrd`
+**Filename**: `/var/tmp/APMonitor/<config-stem>.statefile.rrd/<monitor-name>-snmp.rrd`
 
 **Per-Interface Data Sources** (one pair per discovered interface, COUNTER — `ports`/`port` only):
 
@@ -542,7 +560,14 @@ DS names use the raw ifIndex integer (e.g., `if1_in`, `if2_out`), not the interf
 - **`swap_used`** (GAUGE): Swap space used in bytes (HOST-RESOURCES-MIB::hrStorage virtual memory entry, with UCD-SNMP-MIB::memTotalSwap − memAvailSwap as fallback)
 - **`interrupts`** (COUNTER): Raw hardware interrupt counter (UCD-SNMP-MIB::ssRawInterrupts)
 
-**Total fixed DS count: 18** (11 network/system + 7 host performance). Expected DS count for auto-heal check = `(2 × interface_count) + 18`.
+**Fixed Tamper/Network Capacity Data Sources** (GAUGE — `ports` only, `port`/`host` store `U`):
+
+- **`ports_up_count`**: Count of interfaces with oper=up
+- **`nvram_flash_bytes`**: Sum of used bytes across NVRAM/flash hrStorage entries
+- **`mac_count`**: Count of learned FDB entries via Q-BRIDGE-MIB
+- **`arp_count`**: Count of ARP entries via ipNetToPhysicalTable / ipNetToMediaTable
+
+**Total fixed DS count: 22** (11 network/system + 7 host performance + 4 tamper/network). Expected DS count for auto-heal check = `(2 × interface_count) + 22`.
 
 **MRTG Targets generated per monitor type:**
 
@@ -554,6 +579,8 @@ DS names use the raw ifIndex integer (e.g., `if1_in`, `if2_out`), not the interf
 | `-errors` | `total_errors_in` / `total_errors_out` | `ports`, `port` | Interface errors in/out |
 | `-retransmits` | `tcp_retrans` / `tcp_retrans` | `ports` only | TCP retransmits (single line) |
 | `-system` | `cpu_load` / `memory_pct` | `ports` only | CPU & memory utilization |
+| `-tamper` | `ports_up_count` / `nvram_flash_bytes` | `ports` only | Active ports & NVRAM/flash bytes |
+| `-network` | `mac_count` / `arp_count` | `ports` only | Learned MACs & ARP entries |
 | `-system1` | `cpu_load` / `context_switches` | `host` | CPU & Load |
 | `-system2` | `memory_pct` / `swap_io` | `host` | Memory & Paging |
 | `-system3` | `disk_read` / `disk_write` | `host` | Disk I/O (Disk Use % in PageTop) |
@@ -591,31 +618,28 @@ rows_2years_daily = 22692                     # ~62 years at 1-day
 ## Working with RRD Files Directly
 ```bash
 # Query availability RRD database info
-rrdtool info /var/tmp/apmonitor-statefile.rrd/monitor-name-availability.rrd
+rrdtool info /var/tmp/APMonitor/apmonitor-config.statefile.rrd/monitor-name-availability.rrd
 
 # Query SNMP RRD database info
-rrdtool info /var/tmp/apmonitor-statefile.rrd/switch-snmp.rrd
+rrdtool info /var/tmp/APMonitor/apmonitor-config.statefile.rrd/switch-snmp.rrd
 
 # Run APMonitor with MRTG & RRD enabled
-./APMonitor.py -vv -s /var/tmp/apmonitor.json test2-apmonitor-config.yaml --generate-mrtg-config
+./APMonitor.py -vv apmonitor-config.yaml --generate-mrtg-config
 
 # Check when the RRD was created
-ls -la /var/tmp/apmonitor.rrd/tellusion-gw-availability.rrd
+ls -la /var/tmp/APMonitor/apmonitor-config.statefile.rrd/tellusion-gw-availability.rrd
 
 # Dump RRD info to see its structure
-rrdtool info /var/tmp/apmonitor.rrd/tellusion-gw-availability.rrd | head -50
+rrdtool info /var/tmp/APMonitor/apmonitor-config.statefile.rrd/tellusion-gw-availability.rrd | head -50
 
 # Check the last update timestamp
-rrdtool lastupdate /var/tmp/apmonitor.rrd/tellusion-gw-availability.rrd
+rrdtool lastupdate /var/tmp/APMonitor/apmonitor-config.statefile.rrd/tellusion-gw-availability.rrd
 
 # Fetch the last 300 seconds
-rrdtool fetch /var/tmp/apmonitor.rrd/tellusion-gw-availability.rrd AVERAGE -s end-300 -e now
+rrdtool fetch /var/tmp/APMonitor/apmonitor-config.statefile.rrd/tellusion-gw-availability.rrd AVERAGE -s end-300 -e now
 
 # Fetch SNMP interface data
-rrdtool fetch /var/tmp/apmonitor.rrd/switch-snmp.rrd AVERAGE -s end-3600 -e now
-
-# Test the fetch command for one monitor
-rrdtool fetch /var/tmp/apmonitor.rrd/tellusion-gw-availability.rrd AVERAGE -s end-300 -e now 2>/dev/null | grep -v nan | tail -1 | awk '{if (NF>=3) print int($2+0) ":" int($3+0); else print "0:0"}' | grep -E '^[0-9]+:[0-9]+$' || echo '0:0'
+rrdtool fetch /var/tmp/APMonitor/apmonitor-config.statefile.rrd/switch-snmp.rrd AVERAGE -s end-3600 -e now
 ```
 
 **References:**
@@ -635,7 +659,7 @@ Here's a complete example showing all available configuration options:
 ```yaml
 site:
   name: "HomeLab"
-  
+
   email_server:
     smtp_host: "smtp.gmail.com"
     smtp_port: 587
@@ -643,7 +667,7 @@ site:
     smtp_password: "app_password_here"
     from_address: "alerts@example.com"
     use_tls: true
-  
+
   outage_emails:
     - email: "admin@example.com"
       email_outages: true
@@ -653,14 +677,14 @@ site:
       email_outages: yes
       email_recoveries: yes
       email_reminders: no
-  
+
   outage_webhooks:
     - endpoint_url: "https://api.pushover.net/1/messages.json"
       request_method: POST
       request_encoding: JSON
       request_prefix: "token=your_app_token&user=your_user_key&message="
       request_suffix: ""
-  
+
   max_threads: 1
   max_retries: 3
   max_try_secs: 20
@@ -722,14 +746,14 @@ monitors:
     content_type: hex
     expect: "OK"
     check_every_n_secs: 60
-    
+
   # UDP send with text data
   - type: udp
     name: syslog-collector
     address: "udp://192.168.1.50:514"
     send: "<134>APMonitor: test message"
-    check_every_n_secs: 300    
-    
+    check_every_n_secs: 300
+
   - type: ping
     name: home-fw
     address: "192.168.1.1"
@@ -777,7 +801,7 @@ The `site` section defines global settings for the monitoring site.
 
 ### Required Fields
 
-- **`name`** (string): The name of the site being monitored. Used in notification messages to identify which site is reporting issues.
+- **`name`** (string): The name of the site being monitored. Used in notification messages and as the MRTG output subdirectory name (sanitised to a filesystem-safe string).
 ```yaml
 site:
   name: "HomeLab"
@@ -797,14 +821,14 @@ email_server:
 ```
   - **`smtp_host`** (string, required): SMTP server hostname or IP address
   - **`smtp_port`** (integer, required): SMTP server port (typically 587 for TLS, 465 for SSL, 25 for unencrypted). Must be between 1 and 65535
-  - **`smtp_username`** (string, optional): SMTP authentication username. Not required for servers without authentication
-  - **`smtp_password`** (string, optional): SMTP authentication password. Not required for servers without authentication. Use app-specific passwords for Gmail/Google Workspace
+  - **`smtp_username`** (string, optional): SMTP authentication username
+  - **`smtp_password`** (string, optional): SMTP authentication password. Use app-specific passwords for Gmail/Google Workspace
   - **`from_address`** (string, required): Email address to use in the "From" field. Must be a valid email address
   - **`use_tls`** (boolean, optional): Whether to use TLS/STARTTLS encryption. Default: true
 
-**Note**: For Gmail/Google Workspace, you must use an [app-specific password](https://support.google.com/accounts/answer/185833) rather than your account password. Port 587 with `use_tls: true` is the recommended configuration for most SMTP servers. For servers without authentication (like local SMTP relays), omit `smtp_username` and `smtp_password`.
+**Note**: For Gmail/Google Workspace, you must use an [app-specific password](https://support.google.com/accounts/answer/185833) rather than your account password. Port 587 with `use_tls: true` is the recommended configuration for most SMTP servers.
 
-- **`outage_emails`** (list of objects, optional): Email addresses to notify when resources go down or recover. Requires `email_server` to be configured. Each entry is an object with an `email` field and optional notification control flags.
+- **`outage_emails`** (list of objects, optional): Email addresses to notify when resources go down or recover. Requires `email_server` to be configured.
 ```yaml
 outage_emails:
   - email: "admin@example.com"
@@ -815,14 +839,12 @@ outage_emails:
     email_outages: yes
     email_recoveries: no
 ```
-  - **`email`** (string, required): Valid email address matching standard email format
-  - **`email_outages`** (boolean/integer/string, optional): Send email when resource goes down. Accepts: `true`/`yes`/`on`/`1` (case-insensitive) for enabled, `false`/`no`/`off`/`0` for disabled. Default: true
-  - **`email_recoveries`** (boolean/integer/string, optional): Send email when resource recovers. Accepts same values as `email_outages`. Default: true
-  - **`email_reminders`** (boolean/integer/string, optional): Send email for ongoing outage reminders (respecting `notify_every_n_secs` throttling). Accepts same values as `email_outages`. Default: true
+  - **`email`** (string, required): Valid email address
+  - **`email_outages`** (boolean/integer/string, optional): Send email when resource goes down. Default: true
+  - **`email_recoveries`** (boolean/integer/string, optional): Send email when resource recovers. Default: true
+  - **`email_reminders`** (boolean/integer/string, optional): Send email for ongoing outage reminders. Default: true
 
-**Note**: These email control flags allow fine-grained control over which notifications each recipient receives. For example, operations staff might want all notifications (`email_outages: true`, `email_recoveries: true`, `email_reminders: true`), while management might only want initial outage alerts (`email_outages: true`, `email_recoveries: false`, `email_reminders: false`).
-
-- **`outage_webhooks`** (list of objects, optional): Webhook endpoints to call when resources go down or recover. Each webhook requires several configuration fields.
+- **`outage_webhooks`** (list of objects, optional): Webhook endpoints to call when resources go down or recover.
 ```yaml
 outage_webhooks:
   - endpoint_url: "https://api.example.com/alerts"
@@ -831,7 +853,7 @@ outage_webhooks:
     request_prefix: ""
     request_suffix: ""
 ```
-  - **`endpoint_url`** (string, required): Valid URL with scheme and host for the webhook
+  - **`endpoint_url`** (string, required): Valid URL with scheme and host
   - **`request_method`** (string, required): HTTP method, must be `GET` or `POST`
   - **`request_encoding`** (string, required): Message encoding format:
     - `URL`: URL-encode the message (for query parameters or form data)
@@ -898,9 +920,9 @@ The `monitors` section is a list of resources to monitor. Each monitor defines w
   - `host`: SNMP host performance monitor — collects CPU, memory, disk I/O, swap activity, and hardware interrupt metrics per *System Performance Tuning* (Musumeci & Loukides, O'Reilly)
 
 > [!NOTE]
-> `type: snmp` has been removed. It was a protocol name, not a monitor type. Use `type: ports` for network device bandwidth/packet/error monitoring (it now includes all former `snmp` functionality), or `type: host` for server/host performance monitoring. If you have an existing config with `type: snmp`, APMonitor will print: *"type 'snmp' is not valid. Did you mean type: ports?"*
+> `type: snmp` has been removed. Use `type: ports` for network device monitoring or `type: host` for server performance monitoring.
 
-- **`name`** (string): Unique identifier for this monitor. Must be unique across all monitors in the configuration. Used in notifications and state tracking.
+- **`name`** (string): Unique identifier for this monitor.
 
 - **`address`** (string): Resource to check. Format depends on monitor type:
   - For `ping`: Valid hostname, IPv4, or IPv6 address
@@ -1393,6 +1415,18 @@ With `always_up: yes`, this fires an alarm if ifIndex 0 is not oper=up, if `18:E
   always_up: yes
 ```
 
+#### Hidden Monitor (monitoring continues, excluded from MRTG display):
+```yaml
+- type: port
+  name: "switch-port0"
+  address: snmp://192.168.1.6
+  community: TellusionLab
+  port: 0
+  mac: 18:E8:29:45:F8:F7
+  always_up: yes
+  display: false
+```
+
 ### Validation Rules
 
 The configuration validator enforces these rules:
@@ -1436,13 +1470,7 @@ The configuration validator enforces these rules:
 # Dependencies
 
 Install system-wide for production use:
-```
-sudo apt install python3-rrdtool librrd-dev python3-dev mrtg rrdtool librrds-perl libsnmp-dev
-sudo pip3 install PyYAML requests pyOpenSSL urllib3 aioquic rrdtool easysnmp
-```
-
-Or on Debian 12+ systems:
-```
+```bash
 sudo apt install python3-rrdtool librrd-dev python3-dev mrtg rrdtool librrds-perl libsnmp-dev
 sudo pip3 install --break-system-packages PyYAML requests pyOpenSSL urllib3 aioquic rrdtool easysnmp
 ```
@@ -1451,15 +1479,25 @@ sudo pip3 install --break-system-packages PyYAML requests pyOpenSSL urllib3 aioq
 - The `aioquic` package is required for QUIC/HTTP3 monitoring support. If you don't plan to use `type: quic` monitors, you can omit this dependency.
 - The `easysnmp` package and `libsnmp-dev` system library are required for SNMP monitoring support. If you don't plan to use `type: ports`, `type: port`, or `type: host` monitors, you can omit these dependencies.
 
-# Example invocation:
-```
-./APMonitor.py -s /tmp/statefile.json homelab-monitorhosts.yaml 
-```
-```
-./APMonitor.py --test-webhooks -v homelab-monitorhosts.yaml 
-```
-```
-./APMonitor.py --test-emails -v homelab-monitorhosts.yaml 
+# Example invocations
+```bash
+# Single site, auto-derived statefile
+./APMonitor.py homelab-monitorhosts.yaml
+
+# Single site, explicit statefile
+./APMonitor.py -s /tmp/statefile.json homelab-monitorhosts.yaml
+
+# Multiple sites (concurrent subprocesses, no -s allowed)
+./APMonitor.py site1.yaml site2.yaml site3.yaml --generate-mrtg-config
+
+# Test configuration
+./APMonitor.py --test-config homelab-monitorhosts.yaml
+
+# Test webhooks
+./APMonitor.py --test-webhooks -v homelab-monitorhosts.yaml
+
+# Test emails
+./APMonitor.py --test-emails -v homelab-monitorhosts.yaml
 ```
 
 # Command Line Usage
@@ -1468,22 +1506,28 @@ APMonitor is invoked from the command line with various options to control verbo
 
 ## Synopsis
 ```
-./APMonitor.py [OPTIONS] <config_file>
+./APMonitor.py [OPTIONS] <config_file> [<config_file> ...]
 ```
 
 ## Command Line Options
 
-- **`config_file`** (required): Path to YAML or JSON configuration file
+- **`config_file`** (required, repeatable): Path to one or more YAML or JSON configuration files. When multiple files are specified, each runs as an independent subprocess concurrently. `-s` is not valid with multiple config files.
 
-- **`-v, --verbose`**: Increase verbosity level (can be repeated: `-v`, `-vv`, `-vvv`). Shows check progress, skip reasons, and diagnostic information. Useful for troubleshooting configuration or understanding monitoring behavior.
+- **`-v, --verbose`**: Increase verbosity level (can be repeated: `-v`, `-vv`, `-vvv`).
 
-- **`-t, --threads <N>`**: Number of concurrent threads for checking resources (default: 1). Higher values enable parallel checking of multiple resources but increase lock contention. Use values > 1 for systems with many independent monitors. Will override the configuration file settings if `max_threads` is specified in the site config.
+- **`-t, --threads <N>`**: Number of concurrent threads per site for checking resources (default: 1). Overrides `max_threads` in site config.
 
-- **`-s, --statefile <path>`**: Path to state file for persistence (default: platform-dependent). **Recommended: use `/tmp/statefile.json`** to store state in tmpfs for better performance and reduced disk wear.
+- **`-s, --statefile <path>`**: Path to state file. Only valid with a single config file. Default: `/var/tmp/APMonitor/<config-stem>.statefile.json`.
 
-- **`--test-webhooks`**: Test webhook notifications by sending a dummy alert to all configured webhooks, then exit. Does not check resources or modify state file. Useful for verifying webhook configuration and credentials.
+- **`--test-config`**: Validate configuration and print a summary of monitors, then exit. Does not check resources or touch the statefile.
 
-- **`--test-emails`**: Test email notifications by sending a dummy alert to all configured email addresses, then exit. Does not check resources or modify state file.
+- **`--test-webhooks`**: Send a test alert to all configured webhooks, then exit.
+
+- **`--test-emails`**: Send a test alert to all configured email addresses, then exit.
+
+- **`--generate-rrds`**: Enable RRD database creation and updates (implied by `--generate-mrtg-config`).
+
+- **`--generate-mrtg-config [WORKDIR]`**: Generate MRTG config, update `mrtg-rrd.cgi.pl`, write `index.html` and detail pages into `WORKDIR/<site-name>/`. Default WORKDIR: `/var/www/html/mrtg`. Implies `--generate-rrds`.
 
 ## Common Usage Examples
 
@@ -1534,13 +1578,11 @@ Verify email settings work correctly:
 
 ## Running `APMonitor.py` Continuously
 
-APMonitor is designed to be run repeatedly rather than as a long-running daemon. There are two common approaches:
+APMonitor is designed to be run repeatedly rather than as a long-running daemon.
 
 ### Option 1: Cron (Recommended for Most Cases)
-
-Run every minute via cron for standard monitoring:
 ```
-* * * * * /path/to/APMonitor.py -s /tmp/statefile.json /path/to/monitoring-config.yaml 2>&1 | logger -t apmonitor
+* * * * * /path/to/APMonitor.py /path/to/monitoring-config.yaml 2>&1 | logger -t apmonitor
 ```
 
 NB: PID file locking should keep this under control, in case you get a long-running process.
@@ -1559,7 +1601,7 @@ Run continuously with short sleep intervals for near-realtime monitoring:
 ```
 #!/bin/bash
 while true; do
-    ./APMonitor.py -t 5 -s /tmp/statefile.json monitoring-config.yaml
+    ./APMonitor.py -t 5 monitoring-config.yaml
     sleep 10
 done
 ```
@@ -1588,7 +1630,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/bin/bash -c 'while true; do /usr/local/bin/APMonitor.py -vv -s /var/tmp/apmonitor-statefile.json /usr/local/etc/apmonitor-config.yaml --generate-mrtg-config; sleep 10; done'
+ExecStart=/bin/bash -c 'while true; do /usr/local/bin/APMonitor.py -vv /usr/local/etc/apmonitor-config.yaml --generate-mrtg-config; sleep 10; done'
 Restart=always
 RestartSec=10
 User=monitoring
@@ -1604,76 +1646,30 @@ WantedBy=multi-user.target
 APMonitor automatically selects a platform-appropriate default location for the state file if the `-s/--statefile` option is not specified:
 
 ### Linux, macOS, FreeBSD, OpenBSD, NetBSD
-**Default**: `/var/tmp/apmonitor-statefile.json`
+**Default**: `/var/tmp/APMonitor/<config-stem>.statefile.json`
 
-- Located in `/var/tmp` which persists across system reboots
-- Preserves monitoring history and outage timestamps through restarts
-- Enables accurate outage duration reporting even after system reboot
-- No special permissions required (unlike `/var/run`)
+- Directory `/var/tmp/APMonitor/` is created automatically with mode `755` (no www-data write access)
+- Persists across system reboots (unlike `/tmp`)
+- All sibling files (`.new`, `.old`, `.mrtg.cfg`, `.rrd/`) live in the same directory
 
 ### Windows
-**Default**: `%TEMP%\apmonitor-statefile.json`
-
-- Uses the system temporary directory defined by `TEMP` or `TMP` environment variables
-- Typically resolves to `C:\Users\<username>\AppData\Local\Temp\apmonitor-statefile.json`
-- Falls back to `C:\Temp\apmonitor-statefile.json` if environment variables are not set
+**Default**: `%TEMP%\APMonitor\<config-stem>.statefile.json`
 
 ### Unknown/Other Platforms
-**Default**: `./apmonitor-statefile.json`
+**Default**: `./<config-stem>.statefile.json`
 
-- Creates state file in current working directory
-- Safe fallback for uncommon or embedded systems
-- Avoids permission issues on unfamiliar filesystem layouts
+## Concurrency and Multiple Instances
 
-### Concurrency and Multiple Instances
+When multiple config files are passed on the command line, APMonitor spawns one subprocess per config and joins all before exiting. Each subprocess runs completely independently with its own statefile, RRD database, lock file, and MRTG output directory. A PID lockfile (hashed from the config path) in `/tmp/` prevents duplicate instances per config.
 
-APMonitor's state file locking & PID locking is designed for **single-process concurrency only**—multiple threads within one process safely share state through internal locks. However, **no file-level locking** is implemented to coordinate between multiple APMonitor processes.
-
-Having said that, APMonitor is very much re-entrant and thread safe for the most part, thus, if you specify different config files, it will happily allow a single process per config file to co-exist in parallel. 
-The config filename is used as the hash when forming a PID lockfile in tempfs (`/tmp/apmonitor-##########.lock`), so that multiple lockfiles can coexist.
-
-**Thus, running multiple concurrent instances requires separate state files**:
-```
+For manual multi-instance operation with separate invocations, use separate config files — the config filename determines the statefile path and PID lock, so correct cardinality is enforced automatically:
+```bash
 # Instance 1: Production monitoring
-./APMonitor.py -s /var/tmp/apmonitor-prod.json prod-apmonitor-config.yaml
+./APMonitor.py prod-apmonitor-config.yaml --generate-mrtg-config
 
 # Instance 2: Development monitoring
-./APMonitor.py -s /var/tmp/apmonitor-dev.json dev-apmonitor-config.yaml
-
-# Instance 3: Critical services (high-frequency)
-./APMonitor.py -t 5 -s /tmp/apmonitor-critical.json critical-apmonitor-config.yaml
+./APMonitor.py dev-apmonitor-config.yaml --generate-mrtg-config
 ```
-
-Which should mean sensible cardinality rules are enforced: one config per site, one process per config, one and IFF only one; good for running out of crontab. 
-
-**Why separate state files are required**:
-- No inter-process file locking mechanism exists
-- Concurrent writes from multiple processes will corrupt state files
-- Each process maintains independent monitoring schedules and notification state
-- Atomic file rotation (`.new` → `.old`) only protects single-process integrity
-
-**Use cases for multiple instances**:
-- Different monitoring priorities (high-frequency critical vs. low-frequency non-critical)
-- Separate environments (production, staging, development)
-- Independent notification channels (ops team vs. dev team)
-- Isolated failure domains (prevent one misconfigured monitor from blocking others)
-
-### Override Behavior
-
-Always specify `-s/--statefile` when:
-- Running from cron (working directory may vary)
-- Requiring tmpfs storage for performance (`-s /tmp/apmonitor-statefile.json`)
-- Managing multiple independent monitoring instances
-- Deploying in containers or restricted environments
-
-**Example**: Force tmpfs storage (cleared on reboot, faster I/O):
-```
-./APMonitor.py -s /tmp/apmonitor-statefile.json apmonitor-config.yaml
-```
-
-**Note**: The `apmonitor-` prefix prevents naming collisions with other applications using generic `statefile.json` names.
-
-
 
 # Developer Notes for modifying `APMonitor.py`
 
@@ -1681,12 +1677,12 @@ Always specify `-s/--statefile` when:
 
 APMonitor uses a JSON state file to persist monitoring data across runs:
 
-- **Location**: Recommended path is `/tmp/statefile.json` for tmpfs storage (faster, no disk wear)
+- **Location**: `/var/tmp/APMonitor/<config-stem>.statefile.json` by default
 - **Format**: JSON with per-resource nested objects containing timestamps, status, and counters
 - **Atomic Updates**: Uses `.new` and `.old` rotation to prevent corruption on crashes
 - **Thread Safety**: Protected by internal lock during concurrent access
 
-The state file tracks:
+The state file tracks per-resource:
 - `is_up`: Current resource status
 - `last_checked`: When resource was last checked (ISO 8601 timestamp)
 - `last_response_time_ms`: Response time in milliseconds for successful checks
@@ -1702,10 +1698,13 @@ The state file tracks:
 - `port_state`: (`port` monitors only) last polled state — dict of `{oper, mac}` where `oper` is the IF-MIB operational status string and `mac` is the learned MAC address (or `None` if absent/unavailable)
 
 
+And at the top level:
+- `execution_time`: ISO 8601 timestamp of last run completion
+- `execution_ms`: Duration of last run in milliseconds
+
 **Note**: If using `/tmp/statefile.json`, the state file is cleared on system reboot. This resets all monitoring history but doesn't affect functionality—monitoring resumes normally on first run.
 
 **Configuration Change Detection**: The `last_config_checksum` field stores a SHA-256 hash of the entire monitor configuration (all fields including `type`, `name`, `address`, `expect`, etc.). When APMonitor detects a configuration change (checksum mismatch), it immediately checks that monitor regardless of `check_every_n_secs` timing. This ensures configuration changes take effect on the next run without waiting for the scheduled check interval.
-
 
 ## Execution Flow
 
@@ -1713,10 +1712,10 @@ Here are some basic devnotes on how APMonitor is built, in case you want to modi
 
 Each invocation of APMonitor:
 
-1. Acquires a PID lockfile via tempfs, using the config path as the hash to support multiple site configs in parallel. 
+1. Acquires a PID lockfile in `/tmp/` hashed from the config path
 2. Loads and validates configuration file
-3. Loads previous state from state file (if exists)
-4. For each monitor:
+3. Loads previous state from statefile (if exists)
+4. For each monitor (in thread pool):
    - Calculates SHA-256 checksum of monitor configuration
    - Checks if configuration changed (checksum mismatch) or `check_every_n_secs` elapsed since `last_checked`
    - If config changed: checks immediately (bypasses timing)
@@ -1724,19 +1723,19 @@ Each invocation of APMonitor:
    - If down and `notify_every_n_secs` elapsed: sends notifications
    - If up and heartbeat configured: pings heartbeat URL if due
    - Updates state atomically with new checksum
-5. Saves state file with execution timing
-6. Cleans up the PID file if possible.
-7. Exits
+5. If `--generate-mrtg-config`: generates MRTG config, index.html, and detail pages
+6. Saves statefile atomically
+7. Releases PID lockfile
 
-This stateless design allows APMonitor to be killed/restarted safely at any time without losing monitoring history or creating duplicate notifications.
+This design allows APMonitor to be killed/restarted safely at any time without losing monitoring history or creating duplicate notifications.
 
 ## Modifying with AI
 
-APMonitor was designed with an engineering based approach to Vibe Coding in mind, should you wish to change it. 
+APMonitor was designed with an engineering-based approach to AI-assisted development in mind, should you wish to change it.
 
 Steps:
 
-1. Paste in `READAI.md` (containing an Entrance Prompt) into your favourite AI coding tool (e.g., Grok 4.1 or Claude Sonnet)
+1. Paste in `READAI.md` (containing an Entrance Prompt) into your favourite AI coding tool
 2. Paste in `APMonitor.py` (tell your AI this is the source code)
 3. Paste in `README.md` (tell your AI this is the documentation)
 4. Vibe your changes as you see fit.
@@ -1751,7 +1750,6 @@ This guide covers installing APMonitor as a systemd service on Debian-based syst
 ## Prerequisites
 
 Fresh Debian/Ubuntu system with sudo access.
-
 
 ## Automated Install - Quickstart
 
@@ -1778,12 +1776,15 @@ make logs
 # Restart after config changes
 sudo make restart
 
+# Migrate statefiles from older versions
+sudo make migrate
+
 # Uninstall completely
 sudo make uninstall
 ```
 
 ## Step 1: Install System Dependencies
-```
+```bash
 sudo apt update
 sudo apt install python3 python3-pip libsnmp-dev -y
 ```
@@ -1813,6 +1814,7 @@ sudo pip3 install PyYAML requests pyOpenSSL urllib3 aioquic easysnmp
 Create a dedicated system user for running APMonitor:
 ```
 sudo useradd -r -s /bin/bash -d /var/lib/apmonitor -m monitoring
+sudo usermod -a -G www-data monitoring
 ```
 
 ## Step 4: Install APMonitor
@@ -1846,7 +1848,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/bin/bash -c 'while true; do /usr/local/bin/APMonitor.py -vv -s /var/tmp/apmonitor-statefile.json /usr/local/etc/apmonitor-config.yaml --generate-mrtg-config; sleep 10; done'
+ExecStart=/bin/bash -c 'while true; do /usr/local/bin/APMonitor.py -vv /usr/local/etc/apmonitor-config.yaml --generate-mrtg-config; sleep 10; done'
 Restart=always
 RestartSec=10
 User=monitoring
@@ -1856,8 +1858,6 @@ StandardError=journal
 [Install]
 WantedBy=multi-user.target
 ```
-
-Save and exit (Ctrl+X, then Y, then Enter in nano).
 
 ## Step 6: Enable and Start Service
 
@@ -1899,6 +1899,7 @@ sudo -u monitoring /usr/local/bin/APMonitor.py -vv -s /var/tmp/apmonitor-statefi
 Test webhook configuration without checking resources:
 ```
 sudo -u monitoring /usr/local/bin/APMonitor.py --test-webhooks -v /usr/local/etc/apmonitor-config.yaml
+sudo -u monitoring /usr/local/bin/APMonitor.py --test-emails -v /usr/local/etc/apmonitor-config.yaml
 ```
 
 ### Test Email Notifications
@@ -1911,11 +1912,13 @@ sudo -u monitoring /usr/local/bin/APMonitor.py --test-emails -v /usr/local/etc/a
 ### Check State File Permissions
 
 Verify the monitoring user can write to the state file location:
+
 ```
-sudo ls -la /var/tmp/apmonitor-statefile.json
+ls -la /var/tmp/APMonitor/
 ```
 
 The `/var/tmp` directory should have permissions `1777` (drwxrwxrwt) allowing any user to create files.
+
 
 ### View Configuration
 
@@ -1951,7 +1954,14 @@ sudo systemctl restart apmonitor.service
 ## Uninstallation
 
 To completely remove APMonitor:
+
+```bash
+sudo make uninstall
 ```
+
+Or manually:
+
+```bash
 # Stop and disable service
 sudo systemctl stop apmonitor.service
 sudo systemctl disable apmonitor.service
@@ -1963,7 +1973,7 @@ sudo systemctl daemon-reload
 # Remove files
 sudo rm /usr/local/bin/APMonitor.py
 sudo rm /usr/local/etc/apmonitor-config.yaml
-sudo rm /var/tmp/apmonitor-statefile.json*
+sudo rm -rf /var/tmp/APMonitor/
 
 # Remove monitoring user
 sudo userdel -r monitoring
@@ -1984,12 +1994,13 @@ sudo pip3 uninstall -y PyYAML requests pyOpenSSL urllib3 aioquic easysnmp
   - ~~Merge `type: snmp` into `type: ports`~~ (completed in v1.3.3)
   - Update docs to provide webhook examples for Pushover, Slack & Discord
 
-- Add additional outputs: 
+- ~~Add additional outputs:~~
   - ~~MRTG compatible logfiles~~ (completed in v1.2.3)
   - ~~MRTG compatible graph generation w/index.html~~ (completed in v1.2.3)
   - ~~Carefully adjust UX of all charts~~ (completed in v1.3.7)
-  - Make index.html support multiple site files (index-<SiteName>.html)
-  
+  - ~~Multi-site MRTG output with per-site subdirectories~~ (completed in v1.3.8)
+  - ~~Top-level landing page at `http://host:888/` linking to all site indexes~~ (completed in v1.3.8)
+
 - Aggregated root cause alerting:
   - Specify parent dependencies using config option `parent_name` so we have a network topology graph
   - Add loop detection to ensure the topology graph is a DAG
@@ -1999,8 +2010,8 @@ sudo pip3 uninstall -y PyYAML requests pyOpenSSL urllib3 aioquic easysnmp
   - The DAG must also be OSI layer compliant
   - In #LogicLand, the DAG also specifies a semantic concepts graph by way of causal relations.
 
-- Convert finished version to pure C `APMonitor.c` 
-  - Strictly only with `libc`/SVR4 C Systems Programming dependencies for really tiny cross-platform embedded systems application environments 
+- Convert finished version to pure C `APMonitor.c`
+  - Strictly only with `libc`/SVR4 C Systems Programming dependencies for really tiny cross-platform embedded systems application environments
   - Test if we are `root` when doing a `ping` syscall and fallback to direct `SOCK_RAW` if we are for high performance
 
 - ~~Add network segment monitoring for detecting new hosts with `nmap`.~~ (WONTFIX: see <a href="#recommended-configuration-for-securing-iototics-networks">Recommended configuration for securing IOT/OT/ICS networks</a>)
