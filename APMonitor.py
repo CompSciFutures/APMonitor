@@ -5056,16 +5056,62 @@ def main() -> None:
     global VERBOSE, MAX_THREADS, STATEFILE, STATE, MAX_RETRIES, MAX_TRY_SECS, DEFAULT_CHECK_EVERY_N_SECS, DEFAULT_NOTIFY_EVERY_N_SECS, DEFAULT_AFTER_EVERY_N_NOTIFICATIONS, RRD_ENABLED
 
     parser = argparse.ArgumentParser(description='Network resource availability monitor')
-    parser.add_argument('config', help='Path to configuration file (JSON or YAML)')
+    parser.add_argument('config', nargs='+', metavar='config',
+                        help='Path to one or more configuration files (JSON or YAML)')
     parser.add_argument('-v', '--verbose', action='count', default=0, help='Increase verbosity (can be repeated: -v, -vv, -vvv)')
     parser.add_argument('-t', '--threads', type=int, default=1, help='Number of concurrent threads (default: 1)')
-    parser.add_argument('-s', '--statefile', default=None, help='Path to state file (default: /var/tmp/<config-stem>.statefile.json)')
+    parser.add_argument('-s', '--statefile', default=None, help='Path to state file (only valid with a single config file)')
     parser.add_argument('--test-webhooks', action='store_true', help='Test webhook notifications and exit')
     parser.add_argument('--test-emails', action='store_true', help='Test email notifications and exit')
     parser.add_argument('--test-config', action='store_true', help='Validate configuration and print summary, then exit')
     parser.add_argument('--generate-rrds', action='store_true', help='Enable RRD database creation and updates')
     parser.add_argument('--generate-mrtg-config', metavar='WORKDIR', nargs='?', const='/var/www/html/mrtg', help='Generate MRTG config file and exit (default workdir: /var/www/html/mrtg)')
     args = parser.parse_args()
+
+    configs = args.config
+
+    # -s is only valid with a single config
+    if args.statefile and len(configs) > 1:
+        parser.error("-s/--statefile is not valid when multiple config files are specified")
+
+    # Multi-config: spawn one subprocess per config, join all, exit with worst exit code
+    if len(configs) > 1:
+        passthrough = []
+        if args.verbose:
+            passthrough.append('-' + 'v' * args.verbose)
+        if args.threads != 1:
+            passthrough.extend(['-t', str(args.threads)])
+        if args.test_webhooks:
+            passthrough.append('--test-webhooks')
+        if args.test_emails:
+            passthrough.append('--test-emails')
+        if args.test_config:
+            passthrough.append('--test-config')
+        if args.generate_rrds:
+            passthrough.append('--generate-rrds')
+        if args.generate_mrtg_config is not None:
+            if args.generate_mrtg_config == '/var/www/html/mrtg':
+                passthrough.append('--generate-mrtg-config')
+            else:
+                passthrough.extend(['--generate-mrtg-config', args.generate_mrtg_config])
+
+        processes = []
+        for config_path in configs:
+            cmd = [sys.executable, os.path.abspath(__file__), config_path] + passthrough
+            if args.verbose:
+                print(f"Spawning: {' '.join(cmd)}")
+            processes.append(subprocess.Popen(cmd))
+
+        exit_code = 0
+        for p in processes:
+            p.wait()
+            if p.returncode != 0:
+                exit_code = p.returncode
+
+        sys.exit(exit_code)
+
+    # Single config — proceed as before
+    args.config = configs[0]
 
     if args.statefile is None:
         args.statefile = get_default_statefile(args.config)
@@ -5138,6 +5184,7 @@ def main() -> None:
         # Hoisted so the finally block can always reference them regardless of code path
         mrtg_index_elapsed_ms: int = 0
         detail_elapsed_ms: int     = 0
+        work_dir: str              = ''
 
         # Generate MRTG config mode
         if args.generate_mrtg_config is not None:
@@ -5251,6 +5298,7 @@ def main() -> None:
 
             if VERBOSE:
                 print(f"_ ___ _____________  {'.' * len(str(execution_ms))} .. .")
+                print(f"               Site: {config['site']['name']}")
                 print(f"     Execution time: {execution_ms} ms")
 
             if RRD_ENABLED:

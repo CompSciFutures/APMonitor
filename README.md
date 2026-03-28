@@ -51,7 +51,8 @@ Support email: hello@enertium.org<br />
 
 To run APMonitor with a configuration file `test-apmonitor-config.yaml ` & auto-created statefile `/tmp/statefile.json`:
 ```
- ./APMonitor.py -vv -s /tmp/statefile.json test-apmonitor-config.yaml --generate-rrds 
+./APMonitor.py -c test-apmonitor-config.yaml --generate-rrds
+./APMonitor.py -c site1.yaml -c site2.yaml --generate-mrtg-config
 ```
 
 To properly setup `APMonitor.py`
