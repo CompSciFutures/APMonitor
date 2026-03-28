@@ -5,7 +5,8 @@ PIP := pip3
 INSTALL_DIR := /usr/local/bin
 CONFIG_DIR := /usr/local/etc
 SERVICE_DIR := /etc/systemd/system
-STATE_DIR := /var/tmp
+STATE_DIR := /var/tmp/APMonitor
+OLD_STATE_DIR := /var/tmp
 MRTG_WORK_DIR := /var/www/html/mrtg
 NGINX_CONF_DIR := /var/www/html
 USER := monitoring
@@ -60,19 +61,21 @@ migrate: check-root
 		systemctl stop apmonitor.service; \
 		service_was_running=1; \
 	fi; \
-	OLD_BASE=$(STATE_DIR)/apmonitor-statefile; \
-	NEW_BASE=$(STATE_DIR)/apmonitor-config.statefile; \
+	\
+	# Phase 1: rename legacy flat name -> config-derived name in OLD_STATE_DIR \
+	OLD_BASE=$(OLD_STATE_DIR)/apmonitor-statefile; \
+	NEW_BASE=$(OLD_STATE_DIR)/apmonitor-config.statefile; \
 	migrated=0; \
 	for suffix in .json .json.new .json.old .mrtg.cfg .mrtg.cfg.new .mrtg.cfg.old; do \
 		if [ -f "$$OLD_BASE$$suffix" ] && [ ! -f "$$NEW_BASE$$suffix" ]; then \
 			mv "$$OLD_BASE$$suffix" "$$NEW_BASE$$suffix"; \
-			echo "  Migrated: $$OLD_BASE$$suffix -> $$NEW_BASE$$suffix"; \
+			echo "  Phase 1 migrated: $$OLD_BASE$$suffix -> $$NEW_BASE$$suffix"; \
 			migrated=1; \
 		fi; \
 	done; \
 	if [ -d "$$OLD_BASE.rrd" ] && [ ! -d "$$NEW_BASE.rrd" ]; then \
 		mv "$$OLD_BASE.rrd" "$$NEW_BASE.rrd"; \
-		echo "  Migrated: $$OLD_BASE.rrd -> $$NEW_BASE.rrd"; \
+		echo "  Phase 1 migrated: $$OLD_BASE.rrd -> $$NEW_BASE.rrd"; \
 		migrated=1; \
 	elif [ -d "$$OLD_BASE.rrd" ] && [ -d "$$NEW_BASE.rrd" ]; then \
 		echo "  ERROR: both $$OLD_BASE.rrd and $$NEW_BASE.rrd exist."; \
@@ -84,6 +87,41 @@ migrate: check-root
 		fi; \
 		exit 1; \
 	fi; \
+	\
+	# Phase 2: move all apmonitor-*.statefile.* from OLD_STATE_DIR into STATE_DIR \
+	mkdir -p $(STATE_DIR); \
+	chmod 755 $(STATE_DIR); \
+	found=0; \
+	for f in $(OLD_STATE_DIR)/apmonitor-*.statefile.json \
+	          $(OLD_STATE_DIR)/apmonitor-*.statefile.json.new \
+	          $(OLD_STATE_DIR)/apmonitor-*.statefile.json.old \
+	          $(OLD_STATE_DIR)/apmonitor-*.statefile.mrtg.cfg \
+	          $(OLD_STATE_DIR)/apmonitor-*.statefile.mrtg.cfg.new \
+	          $(OLD_STATE_DIR)/apmonitor-*.statefile.mrtg.cfg.old; do \
+		[ -f "$$f" ] || continue; \
+		dest=$(STATE_DIR)/$$(basename $$f); \
+		if [ ! -f "$$dest" ]; then \
+			mv "$$f" "$$dest"; \
+			echo "  Phase 2 migrated: $$f -> $$dest"; \
+			migrated=1; \
+			found=1; \
+		else \
+			echo "  WARNING: $$dest already exists, skipping $$f"; \
+		fi; \
+	done; \
+	for d in $(OLD_STATE_DIR)/apmonitor-*.statefile.rrd; do \
+		[ -d "$$d" ] || continue; \
+		dest=$(STATE_DIR)/$$(basename $$d); \
+		if [ ! -d "$$dest" ]; then \
+			mv "$$d" "$$dest"; \
+			echo "  Phase 2 migrated: $$d -> $$dest"; \
+			migrated=1; \
+			found=1; \
+		else \
+			echo "  WARNING: $$dest already exists, skipping $$d"; \
+		fi; \
+	done; \
+	\
 	if [ "$$migrated" -eq 0 ]; then \
 		echo "  Nothing to migrate."; \
 	fi; \
@@ -107,6 +145,11 @@ install: check-root migrate
 
 	@echo "==> Adding monitoring user to www-data group..."
 	/usr/sbin/usermod -a -G www-data $(USER)
+
+	@echo "==> Creating APMonitor state directory $(STATE_DIR)..."
+	mkdir -p $(STATE_DIR)
+	chmod 755 $(STATE_DIR)
+	chown $(USER):$(GROUP) $(STATE_DIR)
 
 	@echo "==> Creating MRTG working directory $(MRTG_WORK_DIR)..."
 	mkdir -p $(MRTG_WORK_DIR)
@@ -267,12 +310,13 @@ uninstall: check-root
 	@echo "==> Removing files..."
 	rm -f $(INSTALL_DIR)/APMonitor.py
 	rm -f $(CONFIG_DIR)/apmonitor-config.yaml
-	rm -f $(STATE_DIR)/apmonitor-statefile.json*
-	rm -f $(STATE_DIR)/apmonitor-statefile.mrtg.cfg*
-	rm -rf $(STATE_DIR)/apmonitor-statefile.rrd
-	rm -f $(STATE_DIR)/apmonitor-config.statefile.json*
-	rm -f $(STATE_DIR)/apmonitor-config.statefile.mrtg.cfg*
-	rm -rf $(STATE_DIR)/apmonitor-config.statefile.rrd
+	rm -rf $(STATE_DIR)
+	rm -f $(OLD_STATE_DIR)/apmonitor-statefile.json*
+	rm -f $(OLD_STATE_DIR)/apmonitor-statefile.mrtg.cfg*
+	rm -rf $(OLD_STATE_DIR)/apmonitor-statefile.rrd
+	rm -f $(OLD_STATE_DIR)/apmonitor-config.statefile.json*
+	rm -f $(OLD_STATE_DIR)/apmonitor-config.statefile.mrtg.cfg*
+	rm -rf $(OLD_STATE_DIR)/apmonitor-config.statefile.rrd
 	rm -f $(NGINX_CONF_DIR)/mrtg-nginx.conf
 	rm -f $(MRTG_WORK_DIR)/mrtg-rrd.cgi.pl
 	rm -rf $(MRTG_WORK_DIR)/*/

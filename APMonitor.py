@@ -3982,19 +3982,25 @@ def check_and_heartbeat_r(resource: Dict[str, Any], site_config: Dict[str, Any])
 def get_default_statefile(config_path: str) -> str:
     """Get platform-appropriate default statefile location derived from config filename.
 
-    On Unix-like systems: /var/tmp/<config-stem>.statefile.json
-    On Windows:          %TEMP%\\<config-stem>.statefile.json
+    On Unix-like systems: /var/tmp/APMonitor/<config-stem>.statefile.json
+    On Windows:          %TEMP%\\APMonitor\\<config-stem>.statefile.json
     Fallback:            ./<config-stem>.statefile.json
+
+    Directory is created with 755 permissions (no group write — www-data excluded).
     """
-    config_stem = Path(config_path).stem  # e.g. "test-apmonitor-config"
+    config_stem = Path(config_path).stem  # e.g. "apmonitor-config"
     filename    = f"{config_stem}.statefile.json"
     system      = platform.system().lower()
 
     if system in ['linux', 'darwin', 'freebsd', 'openbsd', 'netbsd']:
-        return f'/var/tmp/{filename}'
+        state_dir = '/var/tmp/APMonitor'
+        os.makedirs(state_dir, mode=0o755, exist_ok=True)
+        return f'{state_dir}/{filename}'
     elif system == 'windows':
-        temp_dir = os.environ.get('TEMP', os.environ.get('TMP', 'C:\\Temp'))
-        return os.path.join(temp_dir, filename)
+        temp_dir  = os.environ.get('TEMP', os.environ.get('TMP', 'C:\\Temp'))
+        state_dir = os.path.join(temp_dir, 'APMonitor')
+        os.makedirs(state_dir, exist_ok=True)
+        return os.path.join(state_dir, filename)
     else:
         return f'./{filename}'
 
