@@ -21,6 +21,8 @@ Thread safe, reentrant, modifiable.
 - Added migration of statefiles to new naming convention
 - Added explicit configuration testing option
 - enabled handling multiple site config files in one invocation
+- cleaned up output when nothing is configured
+- added clearer instructions about slow monitors & real-time environments
 
 # Release 1.3.7 (23-Mar-26): More MRTG UX Tweaks
 - Added PayPal donation link to MRTG site

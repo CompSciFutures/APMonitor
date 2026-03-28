@@ -4875,16 +4875,14 @@ def generate_mrtg_index(config: Dict[str, Any], index_path: str, state: Dict[str
     has_avail = any(r['type'] in avail_types for r in displayed)
 
     # --- L2/L3 Network Monitoring section ---
-    html_lines.append("    <h2>L2/L3 Network Monitoring</h2>")
-    if not has_snmp:
-        html_lines.append("    <p class='nothing-configured'>No L2/L3 network monitors configured.</p>")
-    else:
+    if has_snmp:
+        html_lines.append("    <h2>L2/L3 Network Monitoring</h2>")
         port_host_run: List[Tuple[str, str, Dict[str, Any]]] = []
 
         for resource in displayed:
             if resource['type'] not in snmp_types:
                 continue
-            safe_name    = re.sub(r'[^\w\-.]', '_', resource['name'])
+            safe_name = re.sub(r'[^\w\-.]', '_', resource['name'])
             monitor_type = resource['type']
 
             if monitor_type == 'ports':
@@ -4898,20 +4896,22 @@ def generate_mrtg_index(config: Dict[str, Any], index_path: str, state: Dict[str
         if port_host_run:
             _emit_port_host_group(port_host_run)
 
+    # --- Nothing configured at all ---
+    if not has_snmp and not has_avail:
+        html_lines.append("    <p class='nothing-configured'>No monitors configured.</p>")
+
     # --- L4 Availability Monitoring section ---
-    html_lines.append("    <h2>L4 Availability Monitoring</h2>")
-    if not has_avail:
-        html_lines.append("    <p class='nothing-configured'>No L4 availability monitors configured.</p>")
-    else:
+    if has_avail:
+        html_lines.append("    <h2>L4 Availability Monitoring</h2>")
         html_lines.append("    <div class='grid'>")
         for resource in displayed:
             if resource['type'] not in avail_types:
                 continue
-            safe_name     = re.sub(r'[^\w\-.]', '_', resource['name'])
+            safe_name = re.sub(r'[^\w\-.]', '_', resource['name'])
             monitor_state = state.get(resource['name'], {}) if state else {}
-            is_down       = not monitor_state.get('is_up', True)
-            div_class     = "monitor down" if is_down else "monitor"
-            outage_str    = f"<span style='color: #cc0000; font-weight: bold;'>Down {format_time_ago(monitor_state.get('last_alarm_started'))}</span>" if is_down else ""
+            is_down = not monitor_state.get('is_up', True)
+            div_class = "monitor down" if is_down else "monitor"
+            outage_str = f"<span style='color: #cc0000; font-weight: bold;'>Down {format_time_ago(monitor_state.get('last_alarm_started'))}</span>" if is_down else ""
 
             html_lines.extend([
                 f"        <div class='{div_class}'>",

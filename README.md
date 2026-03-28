@@ -51,8 +51,8 @@ Support email: hello@enertium.org<br />
 
 To run APMonitor with a configuration file `test-apmonitor-config.yaml ` & auto-created statefile `/tmp/statefile.json`:
 ```
-./APMonitor.py -c test-apmonitor-config.yaml --generate-rrds
-./APMonitor.py -c site1.yaml -c site2.yaml --generate-mrtg-config
+./APMonitor.py test-apmonitor-config.yaml --generate-rrds
+./APMonitor.py site1.yaml site2.yaml --generate-mrtg-config
 ```
 
 To properly setup `APMonitor.py`
@@ -198,6 +198,18 @@ To put APMonitor into near-realtime mode so that it checks resources multiple ti
 - dial down `max_try_secs` to `10` or `15` seconds
 
 for real-time environments.
+
+NB: If you are running `APMonitor.py` out of `systemd` with a default install, not specifying `max_threads` will default to `20`.
+
+> [!WARNING]
+> You need to make sure your configs have enough threads to finish in << 10 seconds to get near-realtime performance.
+> Make sure `max_threads` & `max_try_secs` are configured appropriately. Also note that separate site configs are executed
+> in parallel, so any down monitors do not slow down any monitors in other sites, regardless of settings.
+> 
+> Note that the thing that usually slows down a site configuration are monitors that are down - 
+> you need enough threads to cover the maximum number of down monitors at any one time, on average.
+> We say 'on average' because not all monitors are polled simultaenously after a decent period of
+> a site config having been operational. 
 
 # Recommended configuration for securing IOT/OT/ICS networks
 
