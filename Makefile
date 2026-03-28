@@ -257,6 +257,7 @@ uninstall: check-root
 	rm -rf $(STATE_DIR)/apmonitor-config.statefile.rrd
 	rm -f $(NGINX_CONF_DIR)/mrtg-nginx.conf
 	rm -f $(MRTG_WORK_DIR)/mrtg-rrd.cgi.pl
+	rm -rf $(MRTG_WORK_DIR)/*/
 
 	@echo "==> Removing monitoring user..."
 	-/usr/sbin/userdel -r $(USER)
@@ -299,24 +300,10 @@ logs:
 
 test-config: check-sudo
 	@echo "==> Testing configuration as monitoring user..."
-	@if [ -f "$(STATE_DIR)/apmonitor-config.statefile.json" ]; then \
-		echo "Warning: Production state file exists at $(STATE_DIR)/apmonitor-config.statefile.json"; \
-		echo "Using temporary state file for testing to avoid conflicts..."; \
-		if [ "$$(id -u)" -eq 0 ]; then \
-			su -s /bin/bash -c "$(INSTALL_DIR)/APMonitor.py -vv -s /tmp/apmonitor-test-statefile.json $(CONFIG_DIR)/apmonitor-config.yaml" $(USER); \
-		else \
-			$(SUDO) -u $(USER) $(INSTALL_DIR)/APMonitor.py -vv -s /tmp/apmonitor-test-statefile.json $(CONFIG_DIR)/apmonitor-config.yaml; \
-		fi; \
-		rm -f /tmp/apmonitor-test-statefile.json*; \
+	@if [ "$$(id -u)" -eq 0 ]; then \
+		su -s /bin/bash -c "$(INSTALL_DIR)/APMonitor.py --test-config $(CONFIG_DIR)/apmonitor-config.yaml" $(USER); \
 	else \
-		if [ "$$(id -u)" -eq 0 ]; then \
-			su -s /bin/bash -c "$(INSTALL_DIR)/APMonitor.py -vv $(CONFIG_DIR)/apmonitor-config.yaml" $(USER); \
-		else \
-			$(SUDO) -u $(USER) $(INSTALL_DIR)/APMonitor.py -vv $(CONFIG_DIR)/apmonitor-config.yaml; \
-		fi; \
-		echo ""; \
-		echo "Test complete. Cleaning up test state file..."; \
-		rm -f $(STATE_DIR)/apmonitor-config.statefile.json*; \
+		$(SUDO) -u $(USER) $(INSTALL_DIR)/APMonitor.py --test-config $(CONFIG_DIR)/apmonitor-config.yaml; \
 	fi
 
 test-webhooks: check-sudo

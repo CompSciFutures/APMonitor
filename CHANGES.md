@@ -15,9 +15,11 @@ Thread safe, reentrant, modifiable.
 - Properly multi-tennanted separated statefiles for multi-site setups
   - APMonitor.py now default's it's statefile naming based on the config file stem (incl. sibling statefiles)
   - Added statefile naming migration for default install
-  - BUGFIX: MRTG index generation was interating MRTG over config files defined in mrtg-rrd.cgi.pl - changed coupling to the site config. 
+  - BUGFIX: MRTG index generation was interating MRTG over config files defined in mrtg-rrd.cgi.pl - changed coupling to the site config.
+  - Made MRTG site put output associated with a site file in a separate directory 
 - TODO updates re: Humanizing Data
 - Added migration of statefiles to new naming convention
+- Added explicit configuration testing option
 
 # Release 1.3.7 (23-Mar-26): More MRTG UX Tweaks
 - Added PayPal donation link to MRTG site

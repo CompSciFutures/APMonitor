@@ -77,7 +77,7 @@ To properly setup `APMonitor.py`
     
     See <a href="#apmonitorpy-yamljson-site-configuration-options">Configuration Options</a> for site file configuration details.
 
-4. Test the config:
+4. Test the config (using `./APMonitor.py --test-config /usr/local/etc/apmonitor-config.yaml`):
 
    ```
    sudo make test-config

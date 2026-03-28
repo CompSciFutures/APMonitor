@@ -4242,10 +4242,31 @@ def generate_monitor_detail_page(resource: Dict[str, Any], detail: Dict[str, Any
         if current_path.exists():
             os.replace(current_path, old_path)
         os.replace(new_path, current_path)
+        _set_www_data_group(str(current_path))
         if VERBOSE:
             print(f"{prefix}Generated detail page: {output_path}")
     except Exception as e:
         print(f"{prefix}Failed to generate detail page '{output_path}': {e}", file=sys.stderr)
+
+
+def _set_www_data_group(path: str) -> None:
+    """Set group ownership to www-data and ensure group-writable permissions.
+
+    Non-fatal — logs warning on failure (e.g. running as non-root without www-data membership).
+    Directories get 775, files get 664.
+    """
+    import grp
+    try:
+        gid = grp.getgrnam('www-data').gr_gid
+        os.chown(path, -1, gid)  # -1 = leave user owner unchanged
+        current_mode = os.stat(path).st_mode
+        if os.path.isdir(path):
+            os.chmod(path, current_mode | 0o775)
+        else:
+            os.chmod(path, current_mode | 0o664)
+    except Exception as e:
+        if VERBOSE:
+            print(f"Warning: could not set www-data group on '{path}': {e}")
 
 
 def generate_mrtg_config(config: Dict[str, Any], work_dir: str, mrtg_config_path: str,
@@ -4603,6 +4624,7 @@ def generate_mrtg_config(config: Dict[str, Any], work_dir: str, mrtg_config_path
         if config_path.exists():
             os.replace(config_path, old_path)
         os.replace(new_path, config_path)
+        _set_www_data_group(str(config_path))
         if VERBOSE:
             print(f"{prefix}Generated MRTG config: {mrtg_config_path}")
     except Exception as e:
@@ -4936,6 +4958,7 @@ def generate_mrtg_index(config: Dict[str, Any], index_path: str, state: Dict[str
         if current_path.exists():
             os.replace(current_path, old_path)
         os.replace(new_path, current_path)
+        _set_www_data_group(str(current_path))
 
         if VERBOSE:
             snmp_count   = sum(1 for r in displayed if r['type'] == 'ports')
@@ -5039,6 +5062,7 @@ def main() -> None:
     parser.add_argument('-s', '--statefile', default=None, help='Path to state file (default: /var/tmp/<config-stem>.statefile.json)')
     parser.add_argument('--test-webhooks', action='store_true', help='Test webhook notifications and exit')
     parser.add_argument('--test-emails', action='store_true', help='Test email notifications and exit')
+    parser.add_argument('--test-config', action='store_true', help='Validate configuration and print summary, then exit')
     parser.add_argument('--generate-rrds', action='store_true', help='Enable RRD database creation and updates')
     parser.add_argument('--generate-mrtg-config', metavar='WORKDIR', nargs='?', const='/var/www/html/mrtg', help='Generate MRTG config file and exit (default workdir: /var/www/html/mrtg)')
     args = parser.parse_args()
@@ -5068,6 +5092,16 @@ def main() -> None:
             print(json.dumps(config, indent=2))
 
         print_and_exit_on_bad_config(config)
+
+        # Test mode for config validation
+        if args.test_config:
+            print(f"Configuration OK: {args.config}")
+            print(f"Site: {config['site']['name']}")
+            print(f"Monitors ({len(config['monitors'])}):")
+            for r in config['monitors']:
+                display = '' if to_natural_language_boolean(r.get('display', True)) else ' [hidden]'
+                print(f"  {r['type']:8s}  {r['name']:40s}  {r['address']}{display}")
+            sys.exit(0)
 
         # Test mode for webhooks
         if args.test_webhooks:
@@ -5107,16 +5141,20 @@ def main() -> None:
 
         # Generate MRTG config mode
         if args.generate_mrtg_config is not None:
-            work_dir         = args.generate_mrtg_config
-            mrtg_config_path = str(Path(STATEFILE).with_suffix('.mrtg.cfg'))
+            base_work_dir    = args.generate_mrtg_config
             site_name        = config['site']['name']
+            safe_site_name   = re.sub(r'[^\w\-.]', '_', site_name)
+            work_dir         = str(Path(base_work_dir) / safe_site_name)
+            mrtg_config_path = str(Path(STATEFILE).with_suffix('.mrtg.cfg'))
+            os.makedirs(work_dir, exist_ok=True)
+            _set_www_data_group(work_dir)
 
             mrtg_start_ms = int(datetime.now().timestamp() * 1000)
 
             generate_mrtg_config(config, work_dir, mrtg_config_path, STATE)
-            all_config_files = update_mrtg_rrd_cgi_config(work_dir, mrtg_config_path)
+            update_mrtg_rrd_cgi_config(base_work_dir, mrtg_config_path)
 
-            # Generate master index from all config files, passing site name and hidden monitors
+            # Generate master index into site subdirectory
             master_index_path = str(Path(work_dir) / 'index.html')
             generate_mrtg_index(config, master_index_path, STATE)
 
@@ -5125,8 +5163,6 @@ def main() -> None:
             print(f"MRTG config generated at: {mrtg_config_path}")
             print(f"MRTG master index generated at: {master_index_path}")
             print(f"MRTG working directory: {work_dir}")
-            if all_config_files:
-                print(f"All MRTG config files in mrtg-rrd.cgi.pl: {', '.join(all_config_files)}")
             RRD_ENABLED = True
 
         # Enable RRD if requested
@@ -5205,7 +5241,6 @@ def main() -> None:
             # Runs after every monitoring poll when MRTG generation is enabled,
             # ensuring detail pages always reflect data collected in this run.
             if args.generate_mrtg_config is not None:
-                work_dir = args.generate_mrtg_config
                 thread_local.prefix = ''  # clear any stale thread prefix for clean log lines
                 detail_start_ms = int(datetime.now().timestamp() * 1000)
                 for resource in config['monitors']:
