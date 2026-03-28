@@ -127,22 +127,40 @@ install: check-root migrate
 		echo "Installed example configuration to $(CONFIG_DIR)/apmonitor-config.yaml"; \
 	fi
 
-	@echo "==> Creating systemd service..."
-	@echo "[Unit]" > $(SERVICE_DIR)/apmonitor.service
-	@echo "Description=APMonitor Network Resource Monitor" >> $(SERVICE_DIR)/apmonitor.service
-	@echo "After=network.target" >> $(SERVICE_DIR)/apmonitor.service
-	@echo "" >> $(SERVICE_DIR)/apmonitor.service
-	@echo "[Service]" >> $(SERVICE_DIR)/apmonitor.service
-	@echo "Type=simple" >> $(SERVICE_DIR)/apmonitor.service
-	@echo "ExecStart=/bin/bash -c 'while true; do $(INSTALL_DIR)/APMonitor.py -vv $(CONFIG_DIR)/apmonitor-config.yaml --generate-mrtg-config; sleep 10; done'" >> $(SERVICE_DIR)/apmonitor.service
-	@echo "Restart=always" >> $(SERVICE_DIR)/apmonitor.service
-	@echo "RestartSec=10" >> $(SERVICE_DIR)/apmonitor.service
-	@echo "User=$(USER)" >> $(SERVICE_DIR)/apmonitor.service
-	@echo "StandardOutput=journal" >> $(SERVICE_DIR)/apmonitor.service
-	@echo "StandardError=journal" >> $(SERVICE_DIR)/apmonitor.service
-	@echo "" >> $(SERVICE_DIR)/apmonitor.service
-	@echo "[Install]" >> $(SERVICE_DIR)/apmonitor.service
-	@echo "WantedBy=multi-user.target" >> $(SERVICE_DIR)/apmonitor.service
+	@echo "==> Installing systemd service..."
+	@DEFAULT_EXEC="ExecStart=/bin/bash -c 'while true; do $(INSTALL_DIR)/APMonitor.py -vv $(CONFIG_DIR)/apmonitor-config.yaml --generate-mrtg-config; sleep 10; done'"; \
+	if [ -f "$(SERVICE_DIR)/apmonitor.service" ]; then \
+		echo "Service file exists — merging (preserving customized ExecStart if changed)..."; \
+		CURRENT_EXEC=$$(grep '^ExecStart=' $(SERVICE_DIR)/apmonitor.service | head -1); \
+		if [ "$$CURRENT_EXEC" = "$$DEFAULT_EXEC" ] || [ -z "$$CURRENT_EXEC" ]; then \
+			KEEP_EXEC=0; \
+		else \
+			KEEP_EXEC=1; \
+			echo "  Preserving customized ExecStart: $$CURRENT_EXEC"; \
+		fi; \
+	else \
+		KEEP_EXEC=0; \
+	fi; \
+	echo "[Unit]" > $(SERVICE_DIR)/apmonitor.service; \
+	echo "Description=APMonitor Network Resource Monitor" >> $(SERVICE_DIR)/apmonitor.service; \
+	echo "After=network.target" >> $(SERVICE_DIR)/apmonitor.service; \
+	echo "" >> $(SERVICE_DIR)/apmonitor.service; \
+	echo "[Service]" >> $(SERVICE_DIR)/apmonitor.service; \
+	echo "Type=simple" >> $(SERVICE_DIR)/apmonitor.service; \
+	if [ "$$KEEP_EXEC" -eq 1 ]; then \
+		echo "$$CURRENT_EXEC" >> $(SERVICE_DIR)/apmonitor.service; \
+	else \
+		echo "$$DEFAULT_EXEC" >> $(SERVICE_DIR)/apmonitor.service; \
+	fi; \
+	echo "Restart=always" >> $(SERVICE_DIR)/apmonitor.service; \
+	echo "RestartSec=10" >> $(SERVICE_DIR)/apmonitor.service; \
+	echo "User=$(USER)" >> $(SERVICE_DIR)/apmonitor.service; \
+	echo "StandardOutput=journal" >> $(SERVICE_DIR)/apmonitor.service; \
+	echo "StandardError=journal" >> $(SERVICE_DIR)/apmonitor.service; \
+	echo "" >> $(SERVICE_DIR)/apmonitor.service; \
+	echo "[Install]" >> $(SERVICE_DIR)/apmonitor.service; \
+	echo "WantedBy=multi-user.target" >> $(SERVICE_DIR)/apmonitor.service; \
+	echo "Service file written."
 
 	@echo "==> Reloading systemd..."
 	systemctl daemon-reload

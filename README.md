@@ -292,6 +292,72 @@ To see how the alarm pacing will accelerate then subsequently delay notification
 
 Note that alarm pacing can be set at a global level in the `site:` config, and is overridden when set at a per monitored resource level in the `monitors:` section of the config.
 
+# Recommended configuration for running multiple site configurations
+
+APMonitor supports monitoring multiple sites from a single service instance by passing multiple configuration files on the command line. Each config file is processed as an independent site with its own statefile, RRD database, and MRTG index page under `/var/www/html/mrtg/<site-name>/`.
+
+## How it works
+
+When multiple config files are specified, APMonitor spawns one subprocess per config file and runs them concurrently, joining all subprocesses before exiting. Each subprocess:
+
+- Derives its own statefile from the config filename (e.g. `apmonitor-config.yaml` → `/var/tmp/apmonitor-config.statefile.json`)
+- Writes its MRTG index and detail pages to `/var/www/html/mrtg/<site-name>/`
+- Maintains completely independent monitoring state, notification history, and RRD data
+
+## Systemd service configuration
+
+Edit `/etc/systemd/system/apmonitor.service` to list all config files on the `ExecStart` line:
+```
+[Unit]
+Description=APMonitor Network Resource Monitor
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/bin/bash -c 'while true; do /usr/local/bin/APMonitor.py -t 20 -vv /usr/local/etc/apmonitor-config.yaml /usr/local/etc/site2-config.yaml /usr/local/etc/site3-config.yaml --generate-mrtg-config; sleep 10; done'
+Restart=always
+RestartSec=10
+User=monitoring
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+```
+
+It is useful to keep a commented-out single-site `ExecStart` line for quick debugging:
+```
+#ExecStart=/bin/bash -c 'while true; do /usr/local/bin/APMonitor.py -vv /usr/local/etc/apmonitor-config.yaml --generate-mrtg-config; sleep 10; done'
+```
+
+After editing the service file, reload systemd and restart the service:
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart apmonitor.service
+```
+
+## Statefiles and MRTG output
+
+Each config file produces its own set of derived files:
+
+| Config file | Statefile | MRTG index |
+|---|---|---|
+| `apmonitor-config.yaml` | `/var/tmp/apmonitor-config.statefile.json` | `http://<host>:888/mrtg/apmonitor-config/` |
+| `site2-config.yaml` | `/var/tmp/site2-config.statefile.json` | `http://<host>:888/mrtg/site2-config/` |
+| `site3-config.yaml` | `/var/tmp/site3-config.statefile.json` | `http://<host>:888/mrtg/site3-config/` |
+
+The site name shown in the MRTG index heading comes from `site.name` in each config file, not the filename.
+
+## Threading with multiple sites
+
+The `-t` flag sets the number of monitor-checking threads **per site**, not globally. With three sites and `-t 20`, up to 60 threads may be active concurrently across all subprocesses. Size `-t` based on the largest single site's monitor count rather than the total across all sites.
+
+## Notes
+
+- `-s/--statefile` is not valid when multiple config files are specified — each site always derives its own statefile automatically.
+- `make install` writes a default single-site `ExecStart`. Edit it manually after installation to add additional config files — subsequent `make install` runs will preserve your customized `ExecStart`.
+- `make test-config` only tests the default config at `$(CONFIG_DIR)/apmonitor-config.yaml`. Test additional configs directly: `APMonitor.py --test-config /usr/local/etc/site2-config.yaml`.
+
 # Recommended configuration for SNMP monitoring on Debian Linux
 
 To enable SNMP monitoring on a Debian host so that APMonitor can poll it, install and configure `snmpd` with a read-only community string restricted to your APMonitor machine.

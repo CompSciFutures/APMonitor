@@ -17,12 +17,14 @@ Thread safe, reentrant, modifiable.
   - Added statefile naming migration for default install
   - BUGFIX: MRTG index generation was interating MRTG over config files defined in mrtg-rrd.cgi.pl - changed coupling to the site config.
   - Made MRTG site put output associated with a site file in a separate directory 
+  - Updated docs to illustrate how to run multiple site configs out of systemd in parallel
 - TODO updates re: Humanizing Data
 - Added migration of statefiles to new naming convention
 - Added explicit configuration testing option
 - enabled handling multiple site config files in one invocation
 - cleaned up output when nothing is configured
 - added clearer instructions about slow monitors & real-time environments
+- stopped install from clobbering existing systemd setup
 
 # Release 1.3.7 (23-Mar-26): More MRTG UX Tweaks
 - Added PayPal donation link to MRTG site
