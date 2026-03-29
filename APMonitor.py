@@ -44,7 +44,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-__version__ = "1.3.8"
+__version__ = "1.3.9"
 __app_name__ = "APMonitor"
 
 import argparse
@@ -71,6 +71,7 @@ from email.mime.multipart import MIMEMultipart
 import traceback
 from typing import Any, Dict, List, Optional, Tuple, Union
 import rrdtool
+import tempfile
 
 # NB: check_quic_url() already has aioquic defined as a function local import so you don't have to lug it around if you don't need it
 
@@ -4981,19 +4982,54 @@ def generate_mrtg_index(config: Dict[str, Any], index_path: str, state: Dict[str
 def update_mrtg_rrd_cgi_config(work_dir: str, mrtg_config_path: str, site_name: str) -> None:
     """Update mrtg-rrd.cgi.pl %site_config hash with site_name -> mrtg_config_path mapping.
 
+    Uses a PID lockfile in tempdir to serialise concurrent subprocess access.
+    Spinlocks until the incumbent process releases the lock (PID gone), then proceeds.
+
     Args:
         work_dir:         Base MRTG working directory — mrtg-rrd.cgi.pl is one level up
         mrtg_config_path: Full path to the MRTG config file to add
         site_name:        Sanitised site name to use as hash key
     """
-    prefix = getattr(thread_local, 'prefix', '')
-
+    prefix   = getattr(thread_local, 'prefix', '')
     cgi_path = Path(work_dir).parent / 'mrtg-rrd.cgi.pl'
+    new_path = Path(str(cgi_path) + '.new')
+    old_path = Path(str(cgi_path) + '.old')
+    lck_path = Path(tempfile.gettempdir()) / 'apmonitor-cgi-update.lock'
 
     if not cgi_path.exists():
         if VERBOSE:
             print(f"{prefix}Warning: mrtg-rrd.cgi.pl not found at {cgi_path}, skipping config update")
         return
+
+    # --- PID spinlock ---
+    my_pid = os.getpid()
+    while True:
+        try:
+            with open(lck_path, 'r') as f:
+                incumbent_pid = int(f.read().strip())
+            if incumbent_pid == my_pid:
+                break  # We already hold the lock
+            try:
+                os.kill(incumbent_pid, 0)
+                # Still alive — wait and retry
+                time.sleep(0.1)
+                continue
+            except OSError:
+                pass  # Incumbent gone — stale lock, take it
+        except (FileNotFoundError, ValueError):
+            pass  # No lock file or unreadable — proceed to acquire
+
+        # Acquire the lock
+        try:
+            with open(lck_path, 'w') as f:
+                f.write(str(my_pid))
+            # Verify we won the race
+            with open(lck_path, 'r') as f:
+                if int(f.read().strip()) == my_pid:
+                    break  # Lock acquired
+        except Exception:
+            time.sleep(0.1)
+            continue
 
     try:
         with open(cgi_path, 'r') as f:
@@ -5006,7 +5042,6 @@ def update_mrtg_rrd_cgi_config(work_dir: str, mrtg_config_path: str, site_name: 
             print(f"{prefix}Warning: Could not find %site_config declaration in {cgi_path}", file=sys.stderr)
             return
 
-        # Parse existing entries
         entries: Dict[str, str] = {}
         for line in match.group(2).splitlines():
             line = line.strip().rstrip(',')
@@ -5014,10 +5049,8 @@ def update_mrtg_rrd_cgi_config(work_dir: str, mrtg_config_path: str, site_name: 
             if m:
                 entries[m.group(1)] = m.group(2)
 
-        # Add or update this site
         entries[site_name] = mrtg_config_path
 
-        # Rebuild hash body
         new_body = '\n' + ''.join(
             f"        '{k}' => '{v}',\n"
             for k, v in sorted(entries.items())
@@ -5029,9 +5062,6 @@ def update_mrtg_rrd_cgi_config(work_dir: str, mrtg_config_path: str, site_name: 
             content,
             flags=re.DOTALL
         )
-
-        new_path = Path(str(cgi_path) + '.new')
-        old_path = Path(str(cgi_path) + '.old')
 
         with open(new_path, 'w') as f:
             f.write(new_content)
@@ -5047,6 +5077,15 @@ def update_mrtg_rrd_cgi_config(work_dir: str, mrtg_config_path: str, site_name: 
 
     except Exception as e:
         print(f"{prefix}Failed to update mrtg-rrd.cgi.pl config: {e}", file=sys.stderr)
+
+    finally:
+        # Release lock
+        try:
+            with open(lck_path, 'r') as f:
+                if int(f.read().strip()) == my_pid:
+                    os.remove(lck_path)
+        except Exception:
+            pass
 
 
 def main() -> None:
