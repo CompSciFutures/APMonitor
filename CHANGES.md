@@ -18,6 +18,7 @@ Thread safe, reentrant, modifiable.
   - BUGFIX: MRTG index generation was interating MRTG over config files defined in mrtg-rrd.cgi.pl - changed coupling to the site config.
   - Made MRTG site put output associated with a site file in a separate directory 
   - Updated docs to illustrate how to run multiple site configs out of systemd in parallel
+  - Updated mrtg-rrd.cgi.pl to gracefully handle multiple site config files 
 - TODO updates re: Humanizing Data
 - Added migration of statefiles to new naming convention
 - Added explicit configuration testing option

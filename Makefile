@@ -9,6 +9,7 @@ STATE_DIR := /var/tmp/APMonitor
 OLD_STATE_DIR := /var/tmp
 MRTG_WORK_DIR := /var/www/html/mrtg
 NGINX_CONF_DIR := /var/www/html
+CGI_DIR := /var/www/html
 USER := monitoring
 GROUP := monitoring
 
@@ -24,7 +25,7 @@ help:
 	@echo "  install         - Install APMonitor (requires root)"
 	@echo "  installmrtg     - Install MRTG web interface on port 888 (requires root)"
 	@echo "  uninstall       - Remove APMonitor completely (requires root)"
-	@echo "  migrate         - Migrate statefiles to new config-derived naming convention"
+	@echo "  migrate         - Migrate statefiles and MRTG directories to new layout"
 	@echo "  enable          - Enable and start systemd service (requires root)"
 	@echo "  start           - Start APMonitor service (requires root)"
 	@echo "  stop            - Stop APMonitor service (requires root)"
@@ -54,7 +55,7 @@ check-sudo:
 	fi
 
 migrate: check-root
-	@echo "==> Migrating APMonitor statefiles to new naming convention..."
+	@echo "==> Migrating APMonitor statefiles and MRTG directories..."
 	@service_was_running=0; \
 	if systemctl is-active --quiet apmonitor.service; then \
 		echo "==> Stopping APMonitor service..."; \
@@ -91,7 +92,6 @@ migrate: check-root
 	# Phase 2: move all apmonitor-*.statefile.* from OLD_STATE_DIR into STATE_DIR \
 	mkdir -p $(STATE_DIR); \
 	chmod 755 $(STATE_DIR); \
-	found=0; \
 	for f in $(OLD_STATE_DIR)/apmonitor-*.statefile.json \
 	          $(OLD_STATE_DIR)/apmonitor-*.statefile.json.new \
 	          $(OLD_STATE_DIR)/apmonitor-*.statefile.json.old \
@@ -104,7 +104,6 @@ migrate: check-root
 			mv "$$f" "$$dest"; \
 			echo "  Phase 2 migrated: $$f -> $$dest"; \
 			migrated=1; \
-			found=1; \
 		else \
 			echo "  WARNING: $$dest already exists, skipping $$f"; \
 		fi; \
@@ -116,11 +115,33 @@ migrate: check-root
 			mv "$$d" "$$dest"; \
 			echo "  Phase 2 migrated: $$d -> $$dest"; \
 			migrated=1; \
-			found=1; \
 		else \
 			echo "  WARNING: $$dest already exists, skipping $$d"; \
 		fi; \
 	done; \
+	\
+	# Phase 3: migrate mrtg-rrd.cgi.pl from old location inside mrtg/ to CGI_DIR \
+	OLD_CGI=$(MRTG_WORK_DIR)/mrtg-rrd.cgi.pl; \
+	NEW_CGI=$(CGI_DIR)/mrtg-rrd.cgi.pl; \
+	if [ -f "$$OLD_CGI" ]; then \
+		echo "  Phase 3: found $$OLD_CGI — archiving $(MRTG_WORK_DIR) to $(MRTG_WORK_DIR).old"; \
+		if [ -d "$(MRTG_WORK_DIR).old" ]; then \
+			echo "  WARNING: $(MRTG_WORK_DIR).old already exists, removing..."; \
+			rm -rf "$(MRTG_WORK_DIR).old"; \
+		fi; \
+		mv "$(MRTG_WORK_DIR)" "$(MRTG_WORK_DIR).old"; \
+		echo "  Archived: $(MRTG_WORK_DIR) -> $(MRTG_WORK_DIR).old"; \
+		mkdir -p $(MRTG_WORK_DIR); \
+		chown mrtg:www-data $(MRTG_WORK_DIR); \
+		chmod 775 $(MRTG_WORK_DIR); \
+		echo "  Created fresh: $(MRTG_WORK_DIR)"; \
+		if [ -f "$(MRTG_WORK_DIR).old/mrtg-rrd.cgi.pl" ] && [ ! -f "$$NEW_CGI" ]; then \
+			cp "$(MRTG_WORK_DIR).old/mrtg-rrd.cgi.pl" "$$NEW_CGI"; \
+			chmod 755 "$$NEW_CGI"; \
+			echo "  Copied CGI: $(MRTG_WORK_DIR).old/mrtg-rrd.cgi.pl -> $$NEW_CGI"; \
+		fi; \
+		migrated=1; \
+	fi; \
 	\
 	if [ "$$migrated" -eq 0 ]; then \
 		echo "  Nothing to migrate."; \
@@ -235,9 +256,13 @@ installmrtg: check-root
 		systemctl disable nginx; \
 	fi
 
-	@echo "==> Installing mrtg-rrd.cgi.pl to $(MRTG_WORK_DIR)..."
-	mkdir -p $(MRTG_WORK_DIR)
-	install -m 755 mrtg-rrd.cgi.pl $(MRTG_WORK_DIR)/mrtg-rrd.cgi.pl
+	@echo "==> Installing mrtg-rrd.cgi.pl to $(CGI_DIR)..."
+	mkdir -p $(CGI_DIR)
+	install -m 755 -o $(USER) -g $(GROUP) mrtg-rrd.cgi.pl $(CGI_DIR)/mrtg-rrd.cgi.pl
+
+	@echo "==> Setting permissions on CGI directory $(CGI_DIR)..."
+	chown root:$(GROUP) $(CGI_DIR)
+	chmod 775 $(CGI_DIR)
 
 	@echo "==> Installing nginx configuration..."
 	install -m 644 mrtg-nginx.conf $(NGINX_CONF_DIR)/mrtg-nginx.conf
@@ -318,8 +343,9 @@ uninstall: check-root
 	rm -f $(OLD_STATE_DIR)/apmonitor-config.statefile.mrtg.cfg*
 	rm -rf $(OLD_STATE_DIR)/apmonitor-config.statefile.rrd
 	rm -f $(NGINX_CONF_DIR)/mrtg-nginx.conf
-	rm -f $(MRTG_WORK_DIR)/mrtg-rrd.cgi.pl
+	rm -f $(CGI_DIR)/mrtg-rrd.cgi.pl
 	rm -rf $(MRTG_WORK_DIR)/*/
+	rm -rf $(MRTG_WORK_DIR).old
 
 	@echo "==> Removing monitoring user..."
 	-/usr/sbin/userdel -r $(USER)

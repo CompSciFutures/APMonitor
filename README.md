@@ -59,6 +59,8 @@ To properly setup `APMonitor.py`:
 
 1. Spin up Debian Linux on a VM or PC on a Card/PC on a Chip (e.g., rPI) - optional but recommended
 
+    This is required because control of `/var/www/html` is taken over when installing the HRTG web interface.
+
 2. Install APMonitor (to spin up `APMonitor.py` in `systemctl` as `apmonitor.service`)
 ```bash
    sudo make install

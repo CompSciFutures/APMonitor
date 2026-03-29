@@ -4978,84 +4978,75 @@ def generate_mrtg_index(config: Dict[str, Any], index_path: str, state: Dict[str
         print(f"{prefix}Failed to generate MRTG master index '{index_path}': {e}", file=sys.stderr)
 
 
-def update_mrtg_rrd_cgi_config(work_dir: str, mrtg_config_path: str) -> List[str]:
-    """Update mrtg-rrd.cgi.pl to include the new MRTG config path.
+def update_mrtg_rrd_cgi_config(work_dir: str, mrtg_config_path: str, site_name: str) -> None:
+    """Update mrtg-rrd.cgi.pl %site_config hash with site_name -> mrtg_config_path mapping.
 
     Args:
-        work_dir: MRTG working directory where mrtg-rrd.cgi.pl is located
+        work_dir:         Base MRTG working directory — mrtg-rrd.cgi.pl is one level up
         mrtg_config_path: Full path to the MRTG config file to add
-
-    Returns:
-        List of all MRTG config file paths (empty list if file not found or error)
+        site_name:        Sanitised site name to use as hash key
     """
     prefix = getattr(thread_local, 'prefix', '')
 
-    cgi_path = Path(work_dir) / 'mrtg-rrd.cgi.pl'
+    cgi_path = Path(work_dir).parent / 'mrtg-rrd.cgi.pl'
 
     if not cgi_path.exists():
         if VERBOSE:
             print(f"{prefix}Warning: mrtg-rrd.cgi.pl not found at {cgi_path}, skipping config update")
-        return []
+        return
 
     try:
-        # Read the current CGI file
         with open(cgi_path, 'r') as f:
             content = f.read()
 
-        # Find the BEGIN block with @config_files
-        pattern = r'(BEGIN\s*\{\s*@config_files\s*=\s*qw\()([^)]*)\)'
-        match = re.search(pattern, content)
+        pattern = r'(BEGIN\s*\{\s*%site_config\s*=\s*\()([^)]*)\)'
+        match = re.search(pattern, content, re.DOTALL)
 
         if not match:
-            print(f"{prefix}Warning: Could not find @config_files declaration in {cgi_path}", file=sys.stderr)
-            return []
+            print(f"{prefix}Warning: Could not find %site_config declaration in {cgi_path}", file=sys.stderr)
+            return
 
-        # Extract existing config files
-        existing_configs_str = match.group(2).strip()
-        existing_configs = existing_configs_str.split() if existing_configs_str else []
+        # Parse existing entries
+        entries: Dict[str, str] = {}
+        for line in match.group(2).splitlines():
+            line = line.strip().rstrip(',')
+            m = re.match(r"'([^']+)'\s*=>\s*'([^']+)'", line)
+            if m:
+                entries[m.group(1)] = m.group(2)
 
-        # Add new config if not already present
-        if mrtg_config_path not in existing_configs:
-            existing_configs.append(mrtg_config_path)
+        # Add or update this site
+        entries[site_name] = mrtg_config_path
 
-            # Build new config list
-            new_config_list = ' '.join(existing_configs)
+        # Rebuild hash body
+        new_body = '\n' + ''.join(
+            f"        '{k}' => '{v}',\n"
+            for k, v in sorted(entries.items())
+        ) + '    '
 
-            # Replace the old list with the new one
-            new_content = re.sub(
-                pattern,
-                r'\g<1>' + new_config_list + ')',
-                content
-            )
+        new_content = re.sub(
+            pattern,
+            lambda m: m.group(1) + new_body + ')',
+            content,
+            flags=re.DOTALL
+        )
 
-            # Write back atomically using .new/.old pattern
-            new_path = Path(str(cgi_path) + '.new')
-            old_path = Path(str(cgi_path) + '.old')
+        new_path = Path(str(cgi_path) + '.new')
+        old_path = Path(str(cgi_path) + '.old')
 
-            with open(new_path, 'w') as f:
-                f.write(new_content)
+        with open(new_path, 'w') as f:
+            f.write(new_content)
 
-            # Atomic rotation
-            if cgi_path.exists():
-                os.replace(cgi_path, old_path)
-            os.replace(new_path, cgi_path)
+        if cgi_path.exists():
+            os.replace(cgi_path, old_path)
+        os.replace(new_path, cgi_path)
 
-            if VERBOSE:
-                print(f"{prefix}Updated mrtg-rrd.cgi.pl config list: {existing_configs}")
-        else:
-            if VERBOSE:
-                print(f"{prefix}Config path already present in mrtg-rrd.cgi.pl: {mrtg_config_path}")
-
-        # Set executable permissions (755)
         os.chmod(cgi_path, 0o755)
-        if VERBOSE:
-            print(f"{prefix}Set permissions 755 on {cgi_path}")
 
-        return existing_configs
+        if VERBOSE:
+            print(f"{prefix}Updated mrtg-rrd.cgi.pl site_config: {site_name} -> {mrtg_config_path}")
 
     except Exception as e:
         print(f"{prefix}Failed to update mrtg-rrd.cgi.pl config: {e}", file=sys.stderr)
-        return []
 
 
 def main() -> None:
@@ -5205,7 +5196,8 @@ def main() -> None:
             mrtg_start_ms = int(datetime.now().timestamp() * 1000)
 
             generate_mrtg_config(config, work_dir, mrtg_config_path, STATE)
-            update_mrtg_rrd_cgi_config(base_work_dir, mrtg_config_path)
+            print(f"DEBUG: calling update_mrtg_rrd_cgi_config({base_work_dir!r}, {mrtg_config_path!r}, {safe_site_name!r})", file=sys.stderr)
+            update_mrtg_rrd_cgi_config(base_work_dir, mrtg_config_path, safe_site_name)
 
             # Generate master index into site subdirectory
             master_index_path = str(Path(work_dir) / 'index.html')

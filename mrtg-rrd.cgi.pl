@@ -37,10 +37,16 @@ require 5.005;
 use RRDs;
 
 use vars qw(@config_files @all_config_files %targets $config_time
-	%directories $version $imagetype);
+	%directories %site_config $version $imagetype);
 
-# EDIT THIS to reflect all your MRTG config files
-BEGIN { @config_files = qw(); }
+# EDIT THIS to reflect your site name -> MRTG config file mappings
+BEGIN {
+    %site_config = (
+        # 'SiteName' => '/var/tmp/APMonitor/config-stem.statefile.mrtg.cfg',
+    );
+
+    @config_files = values %site_config;
+}
 
 $version = '0.7';
 
@@ -55,7 +61,20 @@ sub handler ($)
 {
 	my ($q) = @_;
 
-	try_read_config($q->url());
+	# Extract site name from first PATH_INFO component
+	# e.g. /TellusionLab/switch-bandwidth-day.png -> TellusionLab
+	my $path_info = $q->path_info();
+	my ($site_name) = ($path_info =~ m|^/([^/]+)|);
+
+	if (defined $site_name && exists $site_config{$site_name}) {
+		# Load only this site's config
+		@config_files = ($site_config{$site_name});
+		try_read_config($q->url());
+		# Strip site name prefix from path_info before further processing
+		$q->path_info(substr($path_info, length($site_name) + 1) || '/');
+	} else {
+		try_read_config($q->url());
+	}
 
 	my $path = $q->path_info();
 	$path =~ s/^\///;
@@ -75,7 +94,7 @@ sub handler ($)
 
 	$dir =~ s/^\///;
 
-    print_error("Undefined statistics: '$stat' not found in targets. Available targets: " . join(", ", sort keys %targets))
+    print_error("Undefined statistics: '$stat' not found in targets for site '$site_name'. Available targets: " . join(", ", sort keys %targets) . ". Config files: " . join(", ", @config_files))
 	    unless defined $targets{$stat};
 
 	print_error("Incorrect directory")
@@ -87,7 +106,7 @@ sub handler ($)
 
 	# We may be running under mod_perl or something. Do not destroy
 	# the original settings of timezone.
-	my $oldtz; 
+	my $oldtz;
 	if (defined $tgt->{timezone}) {
 		$oldtz = $ENV{TZ};
 		$ENV{TZ} = $tgt->{timezone};
@@ -136,7 +155,7 @@ EOF
 	print $tgt->{addhead} if defined $tgt->{addhead};
 
 	print "</HEAD>\n", $tgt->{bodytag}, "\n";
-	
+
 	print $tgt->{pagetop} if defined $tgt->{pagetop};
 
 	print "<p style='font-size:14px;'><a href='../index.html' "
