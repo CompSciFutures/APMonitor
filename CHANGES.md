@@ -9,8 +9,9 @@ Multithreaded high speed availability checking for SNMP, PING, TCP/UDP, QUIC & H
 Integrates w/Site24x7 heartbeat monitoring for failover alerts + MRTG + Slack & Pushover webhooks.
 Thread safe, reentrant, modifiable.
 
-# Release 1.3.9 (???): ???
+# Release 1.3.9 (30-Mar-26): Multi-tenant Site Configs II
 - Put a PID lock around the updating of mrtg-rrd.cgi.pl
+- BUGFIX mrtg-rrd.cgi.pl goes missing, causing 403 Forbidden in the MRTG UI #24
 
 # Release 1.3.8 (29-Mar-26): Multi-tenant Site Configs 
 - Fixed Configuration Options link
