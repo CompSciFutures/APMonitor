@@ -44,7 +44,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-__version__ = "1.3.9"
+__version__ = "1.3.10"
 __app_name__ = "APMonitor"
 
 import argparse
@@ -434,9 +434,16 @@ def print_and_exit_on_bad_config(config: Dict[str, Any]) -> None:
             if not isinstance(site['after_every_n_notifications'], int) or site['after_every_n_notifications'] < 1:
                 raise ConfigError("Field 'site.after_every_n_notifications' must be a positive integer")
 
+        if 'alarms' in site:
+            try:
+                to_natural_language_boolean(site['alarms'])
+            except ValueError as e:
+                raise ConfigError(f"Field 'site.alarms': {e}")
+
         valid_site_params = {
             'name', 'email_server', 'outage_emails', 'outage_webhooks', 'max_threads', 'max_retries',
-            'max_try_secs', 'check_every_n_secs', 'notify_every_n_secs', 'after_every_n_notifications'
+            'max_try_secs', 'check_every_n_secs', 'notify_every_n_secs', 'after_every_n_notifications',
+            'alarms'
         }
         unrecognized_site = set(site.keys()) - valid_site_params
         if unrecognized_site:
@@ -466,7 +473,7 @@ def print_and_exit_on_bad_config(config: Dict[str, Any]) -> None:
                 'notify_on_down_every_n_secs', 'after_every_n_notifications', 'heartbeat_url',
                 'heartbeat_every_n_secs', 'expect', 'ssl_fingerprint', 'ignore_ssl_expiry', 'email',
                 'send', 'content_type', 'community', 'percentile', 'port', 'mac', 'always_up',
-                'display'
+                'display', 'alarms'
             }
             unrecognized_monitor = set(monitor.keys()) - valid_monitor_params
             if unrecognized_monitor:
@@ -518,6 +525,12 @@ def print_and_exit_on_bad_config(config: Dict[str, Any]) -> None:
                     to_natural_language_boolean(monitor['display'])
                 except ValueError as e:
                     raise ConfigError(f"Monitor {i} (name: {name}): 'display' field: {e}")
+
+            if 'alarms' in monitor:
+                try:
+                    to_natural_language_boolean(monitor['alarms'])
+                except ValueError as e:
+                    raise ConfigError(f"Monitor {i} (name: {name}): 'alarms' field: {e}")
 
             monitor_type = monitor['type']
             address = monitor['address']
@@ -3770,6 +3783,9 @@ def check_and_heartbeat_r(resource: Dict[str, Any], site_config: Dict[str, Any])
     notify_every_n_secs = resource.get('notify_every_n_secs', DEFAULT_NOTIFY_EVERY_N_SECS)
     after_every_n_notifications = resource.get('after_every_n_notifications', DEFAULT_AFTER_EVERY_N_NOTIFICATIONS)
     monitor_email_enabled = to_natural_language_boolean(resource.get('email', True))
+    alarms_enabled = to_natural_language_boolean(
+        resource.get('alarms', site_config.get('alarms', True))
+    )
 
     # Ping heartbeat URL if required
     if is_up and 'heartbeat_url' in resource:
@@ -3796,13 +3812,14 @@ def check_and_heartbeat_r(resource: Dict[str, Any], site_config: Dict[str, Any])
 
                 def _notify(msg: str) -> None:
                     """Fire notification and advance throttle state."""
-                    if monitor_email_enabled and 'outage_emails' in site_config:
-                        for email_entry in site_config['outage_emails']:
-                            notify_resource_outage_with_email(
-                                email_entry, site_config['name'], msg, site_config, 'outage')
-                    if 'outage_webhooks' in site_config:
-                        for webhook in site_config['outage_webhooks']:
-                            notify_resource_outage_with_webhook(webhook, site_config['name'], msg)
+                    if alarms_enabled:
+                        if monitor_email_enabled and 'outage_emails' in site_config:
+                            for email_entry in site_config['outage_emails']:
+                                notify_resource_outage_with_email(
+                                    email_entry, site_config['name'], msg, site_config, 'outage')
+                        if 'outage_webhooks' in site_config:
+                            for webhook in site_config['outage_webhooks']:
+                                notify_resource_outage_with_webhook(webhook, site_config['name'], msg)
 
                 def _status_tuple(iface):
                     if iface is None:
@@ -3856,13 +3873,14 @@ def check_and_heartbeat_r(resource: Dict[str, Any], site_config: Dict[str, Any])
                 recovery_message = f"{resource['name']} in {site_config['name']} is UP ({resource['address']}) at {timestamp_str}, outage lasted {outage_duration}"
                 print(f"{prefix}##### RECOVERY: {recovery_message} #####", file=sys.stderr)
 
-                if monitor_email_enabled and 'outage_emails' in site_config:
-                    for email_entry in site_config['outage_emails']:
-                        notify_resource_outage_with_email(email_entry, site_config['name'], recovery_message, site_config, 'recovery')
+                if alarms_enabled:
+                    if monitor_email_enabled and 'outage_emails' in site_config:
+                        for email_entry in site_config['outage_emails']:
+                            notify_resource_outage_with_email(email_entry, site_config['name'], recovery_message, site_config, 'recovery')
 
-                if 'outage_webhooks' in site_config:
-                    for webhook in site_config['outage_webhooks']:
-                        notify_resource_outage_with_webhook(webhook, site_config['name'], recovery_message)
+                    if 'outage_webhooks' in site_config:
+                        for webhook in site_config['outage_webhooks']:
+                            notify_resource_outage_with_webhook(webhook, site_config['name'], recovery_message)
 
                 last_notified = now.isoformat()
                 notified_count = prev_notified_count
@@ -3913,13 +3931,14 @@ def check_and_heartbeat_r(resource: Dict[str, Any], site_config: Dict[str, Any])
             if should_notify:
                 notification_type = 'outage' if prev_notified_count == 0 else 'reminder'
 
-                if monitor_email_enabled and 'outage_emails' in site_config:
-                    for email_entry in site_config['outage_emails']:
-                        notify_resource_outage_with_email(email_entry, site_config['name'], error_message, site_config, notification_type)
+                if alarms_enabled:
+                    if monitor_email_enabled and 'outage_emails' in site_config:
+                        for email_entry in site_config['outage_emails']:
+                            notify_resource_outage_with_email(email_entry, site_config['name'], error_message, site_config, notification_type)
 
-                if 'outage_webhooks' in site_config:
-                    for webhook in site_config['outage_webhooks']:
-                        notify_resource_outage_with_webhook(webhook, site_config['name'], error_message)
+                    if 'outage_webhooks' in site_config:
+                        for webhook in site_config['outage_webhooks']:
+                            notify_resource_outage_with_webhook(webhook, site_config['name'], error_message)
 
                 last_notified = now.isoformat()
                 notified_count = prev_notified_count + 1

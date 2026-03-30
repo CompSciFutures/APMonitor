@@ -62,29 +62,28 @@ To properly setup `APMonitor.py`:
     This is required because control of `/var/www/html` is taken over when installing the MRTG web interface.
 
 2. Install APMonitor (to spin up `APMonitor.py` in `systemctl` as `apmonitor.service`)
-```bash
-   sudo make install
-```
+    ```bash
+    sudo make install
+    ```
 
 3. Install MRTG web interface (to spin up an NGINX webserver for MRTG charts in `systemctl` as `apmonitor-nginx.service`)
-```bash
-   sudo make installmrtg
-```
+    ```bash
+    sudo make installmrtg
+    ```
 
 4. Edit `/usr/local/etc/apmonitor-config.yaml`
 
    See <a href="#apmonitorpy-yamljson-site-configuration-options">Configuration Options</a> for site file configuration details.
 
 4. Test the config (using `./APMonitor.py --test-config /usr/local/etc/apmonitor-config.yaml`):
-
-   ```
-   sudo make test-config
-   ```
+    ```
+    sudo make test-config
+    ```
 
 6. Start monitoring:
-```bash
-   sudo make enable
-```
+    ```bash
+    sudo make enable
+    ```
 
    **Note:** Statefiles are stored under `/var/tmp/APMonitor/` by default, e.g. `/var/tmp/APMonitor/apmonitor-config.statefile.json` for a default install. The `-s` flag overrides this for single-config invocations only.
 
@@ -93,9 +92,9 @@ That's it!
 > [!WARNING]
 > If you are upgrading to the 1.3.x stream: This is a schema change release stream that contains RRD & config YAML schema changes that require existing RRD files to be deleted and recreated before upgrading.
 > APMonitor will auto-heal existing RRDs on first run when `--generate-rrds` or `--generate-mrtg-config` is specified.
-> 
+>
 > To do a full upgrade change your YAML to replace `type: snmp` with `type: ports` then execute something similar to this command:
-> 
+>
 > ```
 > cp tellusion-apmonitor-config.yaml /usr/local/etc/apmonitor-config.yaml; \
 > make install; make installmrtg; \
@@ -905,6 +904,13 @@ after_every_n_notifications: 1
 
 **Note**: When set to a value > 1, notification intervals start shorter and gradually increase following a quadratic Bezier curve until reaching `notify_every_n_secs` after the specified number of notifications. This provides more frequent alerts at the start of an outage when immediate attention is needed, then reduces notification frequency as the outage continues. A value of 1 maintains constant notification intervals (original behavior).
 
+- **`alarms`** (boolean/integer/string, optional): Master switch to enable/disable all outage/recovery/reminder notifications for every monitor in this site. Accepts: `true`/`yes`/`on`/`1` (case-insensitive) for enabled, `false`/`no`/`off`/`0` for disabled. Default: true
+```yaml
+alarms: false
+```
+
+**Note**: When set to `false`, no email or webhook notifications are sent for any monitor in the site. Monitoring, state tracking, heartbeats, RRD collection, and MRTG display all continue unaffected. Useful for silencing a site during planned maintenance or initial deployment. Can be overridden per-monitor with a monitor-level `alarms` setting.
+
 ## monitors: configuration options
 
 The `monitors` section is a list of resources to monitor. Each monitor defines what to check and how often.
@@ -970,6 +976,13 @@ display: false
 ```
 
 **Note**: When set to `false`, the monitor is completely excluded from the MRTG index HTML output and MRTG config file — no graphs are generated and no graph cells appear. Monitoring, alerting, heartbeats, and RRD data collection continue unaffected. Hidden monitors are listed by name in a small audit footer at the bottom of the MRTG index page; if a hidden monitor is down, its name appears in red in that footer so outages remain visible as a detective control. Useful for suppressing internal infrastructure monitors (e.g., the APMonitor host itself) that would clutter the dashboard without adding operational value.
+
+- **`alarms`** (boolean/integer/string, optional): Enable/disable all outage/recovery/reminder notifications for this specific monitor. Accepts: `true`/`yes`/`on`/`1` (case-insensitive) for enabled, `false`/`no`/`off`/`0` for disabled. Default: true (or site-level `alarms` setting if configured)
+```yaml
+alarms: false
+```
+
+**Note**: Monitor-level `alarms` overrides site-level `alarms`. When set to `false`, no email or webhook notifications are sent for this monitor. Monitoring, state tracking, heartbeats, RRD collection, and MRTG display all continue unaffected. Useful for silencing noisy or non-critical monitors without removing them from the config.
 
 - **`heartbeat_url`** (string, optional): URL to ping (HTTP GET) when resource check succeeds. Useful for external monitoring services like Site24x7 or Healthchecks.io. Must be valid URL with scheme and host.
 ```yaml
@@ -1122,7 +1135,7 @@ The `ports` monitor type polls a managed network switch, router, or Linux host v
 - **Q-BRIDGE-MIB::dot1qTpFdbPort** (1.3.6.1.2.1.17.7.1.2.2.1.2) — MAC-to-port mappings
 - **Q-BRIDGE-MIB::dot1qTpFdbStatus** (1.3.6.1.2.1.17.7.1.2.2.1.3) — FDB entry status (learned=3 filter)
 
-**MRTG Targets generated:** `-bandwidth`, `-packets`, `-packets-type`, `-errors`, `-retransmits`, `-system` (see MRTG targets table above).
+**MRTG Targets generated:** `-bandwidth`, `-packets`, `-packets-type`, `-errors`, `-retransmits`, `-system`, `-tamper`, `-network` (see MRTG targets table above).
 
 **State Tracking:**
 
@@ -1429,6 +1442,15 @@ With `always_up: yes`, this fires an alarm if ifIndex 0 is not oper=up, if `18:E
   display: false
 ```
 
+#### Silenced Monitor (monitoring and display continue, notifications suppressed):
+```yaml
+- type: ports
+  name: office-switch
+  address: "snmp://192.168.1.6"
+  community: "public"
+  alarms: false
+```
+
 ### Validation Rules
 
 The configuration validator enforces these rules:
@@ -1468,6 +1490,7 @@ The configuration validator enforces these rules:
 33. `host` monitors support `heartbeat_url` and `heartbeat_every_n_secs` like other monitor types
 34. `type: snmp` is not valid — the validator emits: *"type 'snmp' is not valid. Did you mean type: ports?"*
 35. `display` is optional for all monitor types and accepts boolean or string values; when `false`, the monitor is excluded from MRTG index output but monitoring, alerting, heartbeats, and RRD collection continue unaffected; hidden monitors appear in the MRTG index audit footer and render in red when down
+36. `alarms` is optional at both site and monitor level; accepts boolean or string values; monitor-level `alarms` overrides site-level `alarms`; when `false`, all outage/recovery/reminder notifications are suppressed while monitoring, state tracking, heartbeats, RRD collection, and MRTG display continue unaffected
 
 # Dependencies
 
@@ -1477,7 +1500,7 @@ sudo apt install python3-rrdtool librrd-dev python3-dev mrtg rrdtool librrds-per
 sudo pip3 install --break-system-packages PyYAML requests pyOpenSSL urllib3 aioquic rrdtool easysnmp
 ```
 
-**Note**: 
+**Note**:
 - The `aioquic` package is required for QUIC/HTTP3 monitoring support. If you don't plan to use `type: quic` monitors, you can omit this dependency.
 - The `easysnmp` package and `libsnmp-dev` system library are required for SNMP monitoring support. If you don't plan to use `type: ports`, `type: port`, or `type: host` monitors, you can omit these dependencies.
 
@@ -1699,7 +1722,6 @@ The state file tracks per-resource:
 - `ports_state`: (`ports` monitors only) committed baseline — dict of `{if_index: {name, oper, admin, macs}}` per interface; `macs` is a sorted list of learned MAC addresses in `AA:BB:CC:DD:EE:FF` format sourced from Q-BRIDGE-MIB; advances to current state on each successful poll
 - `port_state`: (`port` monitors only) last polled state — dict of `{oper, mac}` where `oper` is the IF-MIB operational status string and `mac` is the learned MAC address (or `None` if absent/unavailable)
 
-
 And at the top level:
 - `execution_time`: ISO 8601 timestamp of last run completion
 - `execution_ms`: Duration of last run in milliseconds
@@ -1722,7 +1744,7 @@ Each invocation of APMonitor:
    - Checks if configuration changed (checksum mismatch) or `check_every_n_secs` elapsed since `last_checked`
    - If config changed: checks immediately (bypasses timing)
    - If due: performs resource check
-   - If down and `notify_every_n_secs` elapsed: sends notifications
+   - If down and `notify_every_n_secs` elapsed: sends notifications (unless `alarms: false`)
    - If up and heartbeat configured: pings heartbeat URL if due
    - Updates state atomically with new checksum
 5. If `--generate-mrtg-config`: generates MRTG config, index.html, and detail pages
@@ -1901,7 +1923,6 @@ sudo -u monitoring /usr/local/bin/APMonitor.py -vv -s /var/tmp/apmonitor-statefi
 Test webhook configuration without checking resources:
 ```
 sudo -u monitoring /usr/local/bin/APMonitor.py --test-webhooks -v /usr/local/etc/apmonitor-config.yaml
-sudo -u monitoring /usr/local/bin/APMonitor.py --test-emails -v /usr/local/etc/apmonitor-config.yaml
 ```
 
 ### Test Email Notifications
@@ -1914,13 +1935,11 @@ sudo -u monitoring /usr/local/bin/APMonitor.py --test-emails -v /usr/local/etc/a
 ### Check State File Permissions
 
 Verify the monitoring user can write to the state file location:
-
 ```
 ls -la /var/tmp/APMonitor/
 ```
 
 The `/var/tmp` directory should have permissions `1777` (drwxrwxrwt) allowing any user to create files.
-
 
 ### View Configuration
 
@@ -1956,13 +1975,11 @@ sudo systemctl restart apmonitor.service
 ## Uninstallation
 
 To completely remove APMonitor:
-
 ```bash
 sudo make uninstall
 ```
 
 Or manually:
-
 ```bash
 # Stop and disable service
 sudo systemctl stop apmonitor.service
@@ -2041,7 +2058,7 @@ under the [GNU General Public License version 3](LICENSE.txt).
 `mrtg-rrd.cgi.pl` is licensed by Jan "Yenya" Kasprzak <kas@fi.muni.cz><br />
 under the [GNU General Public License version 2](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html).
 ```
-Software: APMonitor 1.3.9
+Software: APMonitor 1.3.10
 License: GNU General Public License version 3
 Licensor: Andrew (AP) Prendergast, ap@andrewprendergast.com -- FSF Member
 
