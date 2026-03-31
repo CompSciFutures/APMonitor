@@ -201,17 +201,17 @@ or anyone persuasive enough (read: vendor backdoors & $$$ respectively) to get a
 I've seen it happen to server rooms several times over the years.
 
 To get around the problem, we combine normal physical locks with <a href="https://www.ebay.com/sch/159907/i.html?_nkw=electronic+pin+door+lock&_salic=45&LH_LocatedIn=1&mkcid=1&mkrid=711-53200-19255-0&siteid=0&campid=5339147142&customid=&toolid=10001&mkevt=1">Chinese made electronic pin locks from eBay</a>,
-but they all suffer the same issue of being circumventable using a credit card or knife, as this video demonstrates:
+but they all suffer the same issue of being circumventable using a credit card or knife, as this video demonstrates how easy it is:
 
-[IMG_0944.webm](physical-security/IMG_0944.webm)
+<img src="physical-security/IMG_0944.gif" width="500" height="888" /><br /><br />
 
 To address the problem, we get a metal fab to manufacture a protective plate to cover the lock so it can't be so easily circumvented:
 
 <img src="physical-security/striker-plate-cover.jpeg" width="500" />
 
-Here is the same video for a lock with a plate installed:
+Here is the same video for a lock with a plate installed - can't open it now:
 
-[IMG_4424.webm](physical-security/IMG_4424.webm)
+<img src="physical-security/IMG_4424.gif" width="500" height="888" /><br /><br />
 
 And here are the basic plans to get a metal fab to create a Protective Striker Cover Plate for you: 
 
