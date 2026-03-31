@@ -119,13 +119,29 @@ Key Features:
 - Integration with Site24x7/PagerDuty heartbeat monitoring for high-availability second-opinion and failover alerting
 - Integration with Slack and Pushover webhooks for notifications, plus standard email support
 - Smart notification pacing: rapid alerts initially, then gradually decreasing frequency for extended outages
-- Multi-site monitoring: pass multiple config files on the command line; each runs concurrently as an independent subprocess with its own statefile, RRD database, and MRTG index
+- Multi-site monitoring: for multiple single panes of glass, pass multiple config files on the command line; each runs concurrently as an independent subprocess with its own statefile, RRD database, and MRTG index
 - Runs on everything from Raspberry Pi to enterprise systems
 - Super accurate, high-frequency monitoring for real-time / embedded / heartbeat monitored environments
 - Thread-safe, reentrant, and easily modifiable
 - GPL 3.0 free open source always, so you know there are no backdoors
 
-## Relevance to the 12 Pillars of Information Security
+## Alternatives
+
+If lightweight or realtime guarantees aren't important to you, and you want something more feature packed,
+consider these on-prem alternatives:
+
+- Uptime Kuma
+- Statping
+- UptimeRobot
+- Paessler PRTG
+
+APMonitor is simple, minimalist, elegant and lightweight and comes from a reliable line of heritage so you can spin
+it up fast as a 2nd opinion monitoring tool with little more than a `make install`. If you want something more
+sophisticated that's less focused on realtime programming or elegant simplicity, take a look at those very capable
+alternatives.
+
+
+# Relevance to the 12 Pillars of Information Security
 
 NB: This tool is useful for implementing the second &amp; third pillars (Availability &amp; System Integrity)
 from the 12 Pillars of Information Security, for Necessary, Sufficient & Complete Security:
@@ -147,20 +163,17 @@ Or is it, if you have this? YMMV.
 
 See DOI [10.13140/RG.2.2.12609.84321](https://doi.org/10.13140/RG.2.2.12609.84321) and associated [LinkedIn post](https://www.linkedin.com/feed/update/urn:li:activity:7331490410197905409/) for more information on the Pillars of Information Security. It borrows from a piece of work I did back when #PARC needed me to work on #BookMasters in the digital era.
 
-## Alternatives
+## Addressing Physical Security
 
-If lightweight or realtime guarantees aren't important to you, and you want something more feature packed,
-consider these on-prem alternatives:
+Using APMonitor.py to address Availability & System Integrity can help with maintaining Physical Security. Here are some tips from the trenches on keeping server equipment secure.
 
-- Uptime Kuma
-- Statping
-- UptimeRobot
-- Paessler PRTG
+### Removing SIM Cards from T4000 remote monitoring
 
-APMonitor is simple, minimalist, elegant and lightweight and comes from a reliable line of heritage so you can spin
-it up fast as a 2nd opinion monitoring tool with little more than a `make install`. If you want something more
-sophisticated that's less focused on realtime programming or elegant simplicity, take a look at those very capable
-alternatives.
+TODO
+
+### Using Chinese made pin entry locks with protective covers
+
+TODO
 
 # Expected Output with <a href="https://github.com/CompSciFutures/APMonitor?tab=readme-ov-file#mrtgrrd-integration-for-performance-graphing">MRTG/RRD Integration Enabled</a>
 
@@ -2079,4 +2092,4 @@ Licensor: Andrew (AP) Prendergast, ap@andrewprendergast.com -- FSF Member
 
 We use [SemVer](http://semver.org/) for version numbering.
 
-[![Free Software Foundation](https://apwww-static-assets.s3.us-west-1.amazonaws.com/images/FSF-Badge-6055467.png)](https://www.fsf.org/)
+[![Free Software Foundation](images/fsf.png)](https://www.fsf.org/)
