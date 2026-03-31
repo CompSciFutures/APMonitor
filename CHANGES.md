@@ -13,6 +13,7 @@ Thread safe, reentrant, modifiable.
 - Added alarms: false to silence alarm generation at site or monitor level
 - Changed location of FSF logo
 - Added physical security tips/details
+- Added tips on protective striker cover plates & chinese locks
 
 # Release 1.3.9 (30-Mar-26): Multi-tenant Site Configs II
 - Put a PID lock around the updating of mrtg-rrd.cgi.pl

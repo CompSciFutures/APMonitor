@@ -190,13 +190,39 @@ See DOI [10.13140/RG.2.2.12609.84321](https://doi.org/10.13140/RG.2.2.12609.8432
 
 Using `APMonitor.py` to address Availability & System Integrity can help with maintaining Physical Security. Here are some tips from the trenches on keeping server equipment secure.
 
-### Removing SIM Cards from T4000 remote monitored alarm devices
+### Removing SIM Cards from Inner Range T4000 remote monitored alarm devices
 
 TODO
 
 ### Using Chinese made pin entry locks with protective covers
 
-TODO
+All locks can be picked, and all high securityregistered key systems can have additional keys cut by the police
+or anyone persuasive enough (read: $$$) to get a locksmith to make spare key. I've seen it happen to server rooms
+several times over the years.
+
+To get around the problem, we combine normal physical locks with <a href="https://www.ebay.com/sch/159907/i.html?_nkw=electronic+pin+door+lock&_salic=45&LH_LocatedIn=1&mkcid=1&mkrid=711-53200-19255-0&siteid=0&campid=5339147142&customid=&toolid=10001&mkevt=1">Chinese made electronic pin locks from eBay</a>,
+but they all suffer the same issue of being circumventable using a credit card or knife, as this video demonstrates:
+
+<video width="640" controls>
+  <source src="physical-security/IMG_0944.mp4" type="video/mp4">
+</video>
+
+To address the problem, we get a metal fab to manufacture a protective plate to cover the lock so it can't be so easily circumvented:
+
+<img src="physical-security/striker-plate-cover.jpeg" width="500" />
+
+Here is the same video for a lock with a plate installed:
+
+<video width="640" controls>
+  <source src="physical-security/IMG_4424.mp4" type="video/mp4">
+</video>
+
+And here are the basic plans to get a metal fab to create a Protective Striker Cover Plate for you: 
+
+<embed src="physical-security/Striker-Plate-Cover-CAD-design.pdf" type="application/pdf" width="100%" height="600px">
+
+For maximum security, try customise the lip that covers the front of the door to be as wide as possible without 
+bumping into the actual lock (marked as 35.0 and 19.3 in the CAD diagram).
 
 ### Using a span port + tcpdump to analyse IOT traffic for security devices
 
