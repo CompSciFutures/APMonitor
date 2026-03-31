@@ -223,6 +223,7 @@ bumping into the actual lock (marked as 35.0 and 19.3 in the CAD diagram).
 
 ### Using a span port + tcpdump to analyse IOT traffic for security devices
 
+Sometimes we just want to know what a device or an IOT network is communicating with on The Internets. Here is how it's done.
 
 Steps to monitor TCP/IP connectivity by a device:
 
