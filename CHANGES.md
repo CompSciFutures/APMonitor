@@ -17,6 +17,7 @@ Thread safe, reentrant, modifiable.
 - Added tips on using a span port + tcpdump to analyse IOT traffic for security devices
 - Added tips on USB Air Mice and multiple single panes of glass 
 - Added Change Detector to TODO
+- Added tips on securing an Inner Range T4000 from Vendor Backdoors & Reverse Shells
 
 # Release 1.3.9 (30-Mar-26): Multi-tenant Site Configs II
 - Put a PID lock around the updating of mrtg-rrd.cgi.pl

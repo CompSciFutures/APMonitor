@@ -193,7 +193,39 @@ Using `APMonitor.py` to address Availability & System Integrity can help with ma
 
 ### Removing SIM Cards from Inner Range T4000 remote monitored alarm devices
 
-TODO
+Inner Range has become a dominating force in access control and alarm systems in IDCs, offices and high-end homes around the western world in recent times. 
+What installers don't tell you is that they are full of vendor backdoors. The best way to address this is to remove it's access to your monitoring station via 3G/4G via The Internets entirely and put it into your LAN so it goes through normal governance, risk and compliance as per all other devices.
+
+NB: Know this: in addition to vendor backdoors, every remote monitored alarm is a reverse shell. That's just how it is.
+
+Steps to securing your T4000 and Inner Range devices from Vendor Backdoors:
+
+1. Block all communications with Inner Range directly fromm your IOT network:
+
+    You do not want your T4000, Inception or Integriti devices communicating with the <a href="https://www.skytunnel.com.au/info">default IPs associated with Inner Range which are published here</a>.
+
+2. Remove the SIMs from your T4000 so all traffic routes through your availability monitored network:
+
+    A boxed T4000 unit:
+
+    <img src="images/T4000-boxed.jpeg" width="500" />
+
+    A T4000 unit with it's SIMs removed:
+
+    <img src="images/T4000-sim-strated.jpeg" width="500" />
+
+    This will stop it talking to home base with reverse shells and vendor backdoors.
+
+4. Plugin the GigE adapter from your IOT network to the T4000 (grey cable in picture above).
+
+NB: Removing the SIMs breaks the circuit that allows the device to communicate wirelesley.
+
+NNB: This is a valid enterprise grade T4000 configuration.
+
+
+
+
+
 
 ### Using Chinese made pin entry locks with protective covers
 
