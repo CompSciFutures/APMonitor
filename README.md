@@ -464,7 +464,7 @@ To see how the alarm pacing will accelerate then subsequently delay notification
 
 Note that alarm pacing can be set at a global level in the `site:` config, and is overridden when set at a per monitored resource level in the `monitors:` section of the config.
 
-# Recommended configuration for running multiple site configurations
+# Recommended configuration for running multiple site configurations & panes of glass
 
 APMonitor supports monitoring multiple sites from a single service instance by passing multiple configuration files on the command line. Each config file is processed as an independent site with its own statefile, RRD database, and MRTG index page under `/var/www/html/mrtg/<site-name>/`.
 
