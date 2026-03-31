@@ -219,7 +219,7 @@ Here is the same video for a lock with a plate installed:
 
 And here are the basic plans to get a metal fab to create a Protective Striker Cover Plate for you: 
 
-<embed src="physical-security/Striker-Plate-Cover-CAD-design.pdf" type="application/pdf" width="100%" height="600px">
+[![PDF preview](physical-security/Striker-Plate-Cover-CAD-design.png)](physical-security/Striker-Plate-Cover-CAD-design.pdf)
 
 For maximum security, try customise the lip that covers the front of the door to be as wide as possible without 
 bumping into the actual lock (marked as 35.0 and 19.3 in the CAD diagram).
