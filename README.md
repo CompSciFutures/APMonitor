@@ -196,16 +196,14 @@ TODO
 
 ### Using Chinese made pin entry locks with protective covers
 
-All locks can be picked, and all high securityregistered key systems can have additional keys cut by the police
-or anyone persuasive enough (read: $$$) to get a locksmith to make spare key. I've seen it happen to server rooms
-several times over the years.
+All locks can be picked, and all high security registered key systems can have additional keys cut by the police
+or anyone persuasive enough (read: vendor backdoors & $$$ respectively) to get a locksmith to make spare key.
+I've seen it happen to server rooms several times over the years.
 
 To get around the problem, we combine normal physical locks with <a href="https://www.ebay.com/sch/159907/i.html?_nkw=electronic+pin+door+lock&_salic=45&LH_LocatedIn=1&mkcid=1&mkrid=711-53200-19255-0&siteid=0&campid=5339147142&customid=&toolid=10001&mkevt=1">Chinese made electronic pin locks from eBay</a>,
 but they all suffer the same issue of being circumventable using a credit card or knife, as this video demonstrates:
 
-<video width="640" controls>
-  <source src="physical-security/IMG_0944.mp4" type="video/mp4">
-</video>
+[IMG_0944.webm](physical-security/IMG_0944.webm)
 
 To address the problem, we get a metal fab to manufacture a protective plate to cover the lock so it can't be so easily circumvented:
 
@@ -213,15 +211,13 @@ To address the problem, we get a metal fab to manufacture a protective plate to 
 
 Here is the same video for a lock with a plate installed:
 
-<video width="640" controls>
-  <source src="physical-security/IMG_4424.mp4" type="video/mp4">
-</video>
+[IMG_4424.webm](physical-security/IMG_4424.webm)
 
 And here are the basic plans to get a metal fab to create a Protective Striker Cover Plate for you: 
 
 [![PDF preview](physical-security/Striker-Plate-Cover-CAD-design.png)](physical-security/Striker-Plate-Cover-CAD-design.pdf)
 
-For maximum security, try customise the lip that covers the front of the door to be as wide as possible without 
+For maximum security, try to customize the lip that covers the front of the door to be as wide as possible without 
 bumping into the actual lock (marked as 35.0 and 19.3 in the CAD diagram).
 
 ### Using a span port + tcpdump to analyse IOT traffic for security devices
