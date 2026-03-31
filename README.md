@@ -468,6 +468,12 @@ Note that alarm pacing can be set at a global level in the `site:` config, and i
 
 APMonitor supports monitoring multiple sites from a single service instance by passing multiple configuration files on the command line. Each config file is processed as an independent site with its own statefile, RRD database, and MRTG index page under `/var/www/html/mrtg/<site-name>/`.
 
+This is useful for running multiple single panes of glass out of one monitoring box.
+
+If you are running multiple single panes of glass out of one computer, consider buying a <a href="https://www.ebay.com/sch/i.html?_nkw=usb+air+mouse&_sacat=51086&_from=R40&_trksid=p2334524.m570.l1313&_odkw=air+mouse&_osacat=51086&mkcid=1&mkrid=711-53200-19255-0&siteid=0&campid=5339147142&customid=&toolid=10001&mkevt=1">USB Air Mouse or three</a> till you find one that works well for you, like this one:
+
+<img src="images/air-mouse.png" width="500" />
+
 ## How it works
 
 When multiple config files are specified, APMonitor spawns one subprocess per config file and runs them concurrently, joining all subprocesses before exiting. Each subprocess:

@@ -15,6 +15,7 @@ Thread safe, reentrant, modifiable.
 - Added physical security tips/details
 - Added tips on protective striker cover plates & chinese locks
 - Added tips on using a span port + tcpdump to analyse IOT traffic for security devices
+- Added tips on USB Air Mice and multiple single panes of glass 
 
 # Release 1.3.9 (30-Mar-26): Multi-tenant Site Configs II
 - Put a PID lock around the updating of mrtg-rrd.cgi.pl
