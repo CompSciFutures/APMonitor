@@ -167,11 +167,15 @@ See DOI [10.13140/RG.2.2.12609.84321](https://doi.org/10.13140/RG.2.2.12609.8432
 
 Using APMonitor.py to address Availability & System Integrity can help with maintaining Physical Security. Here are some tips from the trenches on keeping server equipment secure.
 
-### Removing SIM Cards from T4000 remote monitoring
+### Removing SIM Cards from T4000 remote monitored alarm devices
 
 TODO
 
 ### Using Chinese made pin entry locks with protective covers
+
+TODO
+
+### Using a span port + tcpdump to analyse IOT traffic for security devices
 
 TODO
 
