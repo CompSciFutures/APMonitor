@@ -11,6 +11,7 @@ Thread safe, reentrant, modifiable.
 
 # Release 1.3.11 (???): ???
 - Adjusted telemetry so we have a bit better an idea whats going on with multi-site setups running in parallel
+- Added backup copy of list of SkyTunnel servers to docs
 
 # Release 1.3.10 (7-Apr-26): Advanced Recommendations Guide
 - Added alarms: false to silence alarm generation at site or monitor level

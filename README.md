@@ -480,7 +480,15 @@ Steps to securing your T4000 and Inner Range devices from Vendor Backdoors:
 
 1. Block all communications with Inner Range directly fromm your IOT network:
 
-    You do not want your T4000, Inception or Integriti devices communicating with the <a href="https://www.skytunnel.com.au/info">default IPs associated with Inner Range which are published here</a>.
+    You do not want your T4000, Inception or Integriti devices communicating with the <a href="https://www.skytunnel.com.au/info">default IPs associated with Inner Range which are published here</a>. 
+    These servers act as a reverse shell and are the primary source of <a hre4f="https://x.com/search?q=VendorBackdoors&src=typed_query">Vendor Backdoor</a> access to your security computer.
+
+    This list is not always available so the last known list of SkyTunnel servers are: 
+    1. 20.188.210.209
+    2. 23.101.229.107
+    3. 52.189.230.114
+    4. 137.116.114.112
+
 
 2. Remove the SIMs from your T4000 so all traffic routes through your availability monitored network:
 
@@ -494,7 +502,8 @@ Steps to securing your T4000 and Inner Range devices from Vendor Backdoors:
 
     This will stop it talking to home base with reverse shells and vendor backdoors.
 
-4. Plugin the GigE adapter from your IOT network to the T4000 (grey cable in picture above).
+
+3. Plugin the GigE adapter from your IOT network to the T4000 (grey cable in picture above).
 
 NB: Removing the SIMs breaks the circuit that allows the device to communicate wirelesley.
 
