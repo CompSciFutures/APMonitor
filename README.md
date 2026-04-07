@@ -187,6 +187,8 @@ Or is it, if you have this? YMMV.
 
 See DOI [10.13140/RG.2.2.12609.84321](https://doi.org/10.13140/RG.2.2.12609.84321) and associated [LinkedIn post](https://www.linkedin.com/feed/update/urn:li:activity:7331490410197905409/) for more information on the Pillars of Information Security. It borrows from a piece of work I did back when #PARC needed me to work on #BookMasters in the digital era.
 
+There is also some guidance on addressing the <a href="#recommended-configurations-for-addressing-the-first-pillar-physical-security">first pillar: Physical Security</a> in the recommended configurations below. 
+
 # Recommended configuration for real-time environments
 
 To put APMonitor into near-realtime mode so that it checks resources multiple times per second, use these global settings:
@@ -463,11 +465,11 @@ For host performance monitoring (CPU, memory, disk I/O), use `type: host` instea
   check_every_n_secs: 300
 ```
 
-## Recommended configurations for addressing the first pillar: Physical Security
+# Recommended configurations for addressing the first pillar: Physical Security
 
 Using `APMonitor.py` to address Availability & System Integrity can help with maintaining Physical Security. Here are some tips from the trenches on keeping server equipment secure.
 
-### Removing SIM Cards from Inner Range T4000 remote monitored alarm devices
+## Removing SIM Cards from Inner Range T4000 remote monitored alarm devices
 
 Inner Range has become a dominating force in access control and alarm systems in IDCs, offices and high-end homes around the western world in recent times. 
 What installers don't tell you is that they are full of vendor backdoors. The best way to address this is to remove it's access to your monitoring station via 3G/4G via The Internets entirely and put it into your LAN so it goes through normal governance, risk and compliance as per all other devices.
@@ -498,12 +500,7 @@ NB: Removing the SIMs breaks the circuit that allows the device to communicate w
 
 NNB: This is a valid enterprise grade T4000 configuration.
 
-
-
-
-
-
-### Using Chinese made pin entry locks with protective covers
+## Using Chinese made pin entry locks with protective covers
 
 All locks can be picked, and all high security registered key systems can have additional keys cut by the police
 or anyone persuasive enough (read: vendor backdoors & $$$ respectively) to get a locksmith to make spare key.
@@ -529,7 +526,7 @@ And here are the basic plans to get a metal fab to create a Protective Striker C
 For maximum security, try to customize the lip that covers the front of the door to be as wide as possible without 
 bumping into the actual lock (marked as 35.0 and 19.3 in the CAD diagram).
 
-### Using a span port + tcpdump to analyse IOT traffic for security devices
+## Using a span port + tcpdump to analyse IOT traffic for security devices
 
 Sometimes we just want to know what a device or an IOT network is communicating with on The Internets. Here is how it's done.
 First you need to slurp up some packets using tcpdump + spans, then analyse it using tshark and sed/awk/grep, as follows.
