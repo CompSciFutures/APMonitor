@@ -44,7 +44,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-__version__ = "1.3.10"
+__version__ = "1.3.11"
 __app_name__ = "APMonitor"
 
 import argparse
@@ -4034,6 +4034,7 @@ def create_pid_file_or_exit_on_unix(config_path: str) -> Optional[str]:
     """Create PID lockfile on Unix-like systems. Returns lockfile path or None."""
     system = platform.system().lower()
 
+    print(f"create_pid_file_or_exit_on_unix({config_path}) called")
     if system not in ['linux', 'darwin', 'freebsd', 'openbsd', 'netbsd']:
         return None
 
@@ -5125,6 +5126,8 @@ def main() -> None:
 
     configs = args.config
 
+    print(f"-    - --=[ {__app_name__} v{__version__} ]=--- -     -")
+
     # -s is only valid with a single config
     if args.statefile and len(configs) > 1:
         parser.error("-s/--statefile is not valid when multiple config files are specified")
@@ -5158,12 +5161,17 @@ def main() -> None:
             processes.append(subprocess.Popen(cmd))
 
         exit_code = 0
-        for p in processes:
+        for i, p in enumerate(processes):
+            remaining = len(processes) - i
+            print(f"Waiting on {remaining} process{'es' if remaining != 1 else ''} (PID {p.pid})")
             p.wait()
+            print(f"PID {p.pid} exited (rc={p.returncode}), {remaining - 1} remaining")
             if p.returncode != 0:
                 exit_code = p.returncode
 
         sys.exit(exit_code)
+
+    print(f"Spawned: {' '.join(sys.argv)}")
 
     # Single config — proceed as before
     args.config = configs[0]
@@ -5174,9 +5182,6 @@ def main() -> None:
     VERBOSE = args.verbose
     MAX_THREADS = args.threads
     STATEFILE = args.statefile
-
-    if VERBOSE:
-        print(f"-    - --=[ {__app_name__} v{__version__} ]=--- -     -")
 
     if MAX_THREADS < 1:
         print("Error: threads must be a positive integer greater than 0", file=sys.stderr)
