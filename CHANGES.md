@@ -9,7 +9,7 @@ Multithreaded high speed availability checking for SNMP, PING, TCP/UDP, QUIC & H
 Integrates w/Site24x7 heartbeat monitoring for failover alerts + MRTG + Slack & Pushover webhooks.
 Thread safe, reentrant, modifiable.
 
-# Release 1.3.10 (???): ???
+# Release 1.3.10 (7-Apr-26): Advanced Recommendations Guide
 - Added alarms: false to silence alarm generation at site or monitor level
 - Changed location of FSF logo
 - Added physical security tips/details

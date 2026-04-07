@@ -187,212 +187,6 @@ Or is it, if you have this? YMMV.
 
 See DOI [10.13140/RG.2.2.12609.84321](https://doi.org/10.13140/RG.2.2.12609.84321) and associated [LinkedIn post](https://www.linkedin.com/feed/update/urn:li:activity:7331490410197905409/) for more information on the Pillars of Information Security. It borrows from a piece of work I did back when #PARC needed me to work on #BookMasters in the digital era.
 
-## Recommended configurations for addressing the first pillar: Physical Security
-
-Using `APMonitor.py` to address Availability & System Integrity can help with maintaining Physical Security. Here are some tips from the trenches on keeping server equipment secure.
-
-### Removing SIM Cards from Inner Range T4000 remote monitored alarm devices
-
-Inner Range has become a dominating force in access control and alarm systems in IDCs, offices and high-end homes around the western world in recent times. 
-What installers don't tell you is that they are full of vendor backdoors. The best way to address this is to remove it's access to your monitoring station via 3G/4G via The Internets entirely and put it into your LAN so it goes through normal governance, risk and compliance as per all other devices.
-
-NB: Know this: in addition to vendor backdoors, every remote monitored alarm is a reverse shell. That's just how it is.
-
-Steps to securing your T4000 and Inner Range devices from Vendor Backdoors:
-
-1. Block all communications with Inner Range directly fromm your IOT network:
-
-    You do not want your T4000, Inception or Integriti devices communicating with the <a href="https://www.skytunnel.com.au/info">default IPs associated with Inner Range which are published here</a>.
-
-2. Remove the SIMs from your T4000 so all traffic routes through your availability monitored network:
-
-    A boxed T4000 unit:
-
-    <img src="images/T4000-boxed.jpeg" width="500" />
-
-    A T4000 unit with it's SIMs removed:
-
-    <img src="images/T4000-sim-strated.jpeg" width="500" />
-
-    This will stop it talking to home base with reverse shells and vendor backdoors.
-
-4. Plugin the GigE adapter from your IOT network to the T4000 (grey cable in picture above).
-
-NB: Removing the SIMs breaks the circuit that allows the device to communicate wirelesley.
-
-NNB: This is a valid enterprise grade T4000 configuration.
-
-
-
-
-
-
-### Using Chinese made pin entry locks with protective covers
-
-All locks can be picked, and all high security registered key systems can have additional keys cut by the police
-or anyone persuasive enough (read: vendor backdoors & $$$ respectively) to get a locksmith to make spare key.
-I've seen it happen to server rooms several times over the years.
-
-To get around the problem, we combine normal physical locks with <a href="https://www.ebay.com/sch/159907/i.html?_nkw=electronic+pin+door+lock&_salic=45&LH_LocatedIn=1&mkcid=1&mkrid=711-53200-19255-0&siteid=0&campid=5339147142&customid=&toolid=10001&mkevt=1">Chinese made electronic pin locks from eBay</a>,
-but they all suffer the same issue of being circumventable using a credit card or knife, as this video demonstrates how easy it is:
-
-<img src="physical-security/IMG_0944.gif" width="500" height="888" /><br /><br />
-
-To address the problem, we get a metal fab to manufacture a protective plate to cover the lock so it can't be so easily circumvented:
-
-<img src="physical-security/striker-plate-cover.jpeg" width="500" />
-
-Here is the same video for a lock with a plate installed - can't open it now:
-
-<img src="physical-security/IMG_4424.gif" width="500" height="888" /><br /><br />
-
-And here are the basic plans to get a metal fab to create a Protective Striker Cover Plate for you: 
-
-[![PDF preview](physical-security/Striker-Plate-Cover-CAD-design.png)](physical-security/Striker-Plate-Cover-CAD-design.pdf)
-
-For maximum security, try to customize the lip that covers the front of the door to be as wide as possible without 
-bumping into the actual lock (marked as 35.0 and 19.3 in the CAD diagram).
-
-### Using a span port + tcpdump to analyse IOT traffic for security devices
-
-Sometimes we just want to know what a device or an IOT network is communicating with on The Internets. Here is how it's done.
-First you need to slurp up some packets using tcpdump + spans, then analyse it using tshark and sed/awk/grep, as follows.
-
-Steps to monitor TCP/IP connectivity by a device:
-
-1. Setup your IOT switch so that all traffic over the uplink port is spanned onto a secondary port (all managed switches do this - look at the manual on how to setup a span).
-
-    NB: `APMonitor.py` may take this input as a live feed in future, so get used to working with spans and taps.
-
-2. Plug a linux box into the span port and dump the traffic on the port using `tcpdump` into daily `.pcap` files:
-
-    ```
-    apt install tcpdump wireshark tshark
-    tcpdump -i eno1 \
-        -nn -e -v -t --print --immediate-mode -l \
-        -G 86400 -Z ap -w %Y%m%d-%H%M%S-eno1.pcap -W 90 -C 10240
-    ```
-
-3. Run this script over the `.pcap` files:
-
-    ```
-    ls *.pcap | \
-    xargs -I {} tshark -r {} -d tcp.port==40844,http -d tcp.port==40844,tls -Y '(eth.addr==00:11:b9:06:93:fe or eth.addr==00:11:b9:09:04:ff) and (ip or ipv6)' -T fields -e eth.src -e eth.dst -e ip.version -e ip.proto -e ip.src -e ip.dst -e tcp.srcport -e tcp.dstport -e udp.srcport -e udp.dstport -e http.host -e tls.handshake.extensions_server_name > /tmp/tshark_output.txt
-    
-    awk -F'\t' '
-    # Pass 1: Build lookup table
-    NR==FNR {
-        ip = ($1 == "00:11:b9:06:93:fe" || $1 == "00:11:b9:09:04:ff") ? $6 : $5;
-        http_host = $11;
-        tls_sni = $12;
-        if ((http_host || tls_sni) && !app_hosts[ip]) {
-            app_hosts[ip] = http_host ? http_host : tls_sni;
-            print "added: " ip " = " app_hosts[ip] > "/dev/stderr";
-        }
-        next;
-    }
-    # Pass 2: Use lookup table
-    {
-        mac = ($1 == "00:11:b9:06:93:fe" || $1 == "00:11:b9:09:04:ff") ? $1 : $2;
-        ip = ($1 == "00:11:b9:06:93:fe" || $1 == "00:11:b9:09:04:ff") ? $6 : $5;
-        proto = ($4 == "6") ? "tcp" : ($4 == "17") ? "udp" : $4;
-        src_port = $7 ? $7 : $9;
-        dst_port = $8 ? $8 : $10;
-        remote_port = ($1 == "00:11:b9:06:93:fe" || $1 == "00:11:b9:09:04:ff") ? dst_port : src_port;
-        app_host = (app_hosts[ip] ? app_hosts[ip] : "-");
-        if (remote_port) print mac "\t" ip "\t" remote_port "/" proto "\t" app_host;
-    }
-    ' /tmp/tshark_output.txt /tmp/tshark_output.txt | \
-    sort | uniq -c | \
-    awk '{print $1 "\t" $2 "\t" $3 "\t" $4 "\t" $5}' | \
-    while IFS=$'\t' read count mac ip port_proto app_host; do
-        hostname=$(host $ip 2>/dev/null | awk '{print $NF}' | sed 's/\.$//')
-        port=$(echo $port_proto | cut -d/ -f1)
-        proto=$(echo $port_proto | cut -d/ -f2)
-        service=$(getent services "$port/$proto" 2>/dev/null | awk '{print $1}')
-        echo "$count $mac $ip $port_proto ${service:-unknown} $app_host $hostname"
-    done && rm /tmp/tshark_output.txt
-    ```
-   
-    Which for a T4000 should generate output such as the following:
-
-    ```
-    added: 142.251.2.109 = smtp.gmail.com
-    added: 74.125.137.108 = smtp.gmail.com
-    added: 74.125.137.109 = smtp.gmail.com
-    added: 142.251.2.108 = smtp.gmail.com
-    added: 142.250.101.108 = smtp.gmail.com
-    added: 142.250.141.108 = smtp.gmail.com
-    added: 142.250.141.109 = smtp.gmail.com
-    added: 142.250.101.109 = smtp.gmail.com
-    added: 212.227.81.55 = ipv4.connman.net
-    added: 172.67.221.214 = irmsg.vizdynamics.com
-    added: 104.21.67.116 = irmsg.vizdynamics.com
-    201 00:11:b9:06:93:fe 137.116.114.112 40844/tcp unknown - 3(NXDOMAIN)
-    16 00:11:b9:06:93:fe 192.168.68.1 67/udp bootps - 3(NXDOMAIN)
-    5382 00:11:b9:06:93:fe 23.101.229.107 40844/tcp unknown - 3(NXDOMAIN)
-    11 00:11:b9:06:93:fe 255.255.255.255 67/udp bootps - 3(NXDOMAIN)
-    2 00:11:b9:06:93:fe 9.9.9.9 53/udp domain - dns9.quad9.net
-    12 00:11:b9:09:04:ff 104.21.67.116 443/tcp https irmsg.vizdynamics.com 3(NXDOMAIN)
-    16 00:11:b9:09:04:ff 115.70.68.136 123/udp ntp - 115-70-68-136.ip4.exetel.com.au
-    12 00:11:b9:09:04:ff 119.18.6.37 123/udp ntp - smtp.juneks.com.au
-    31 00:11:b9:09:04:ff 129.250.35.251 123/udp ntp - y.ns.gin.ntt.net
-    3 00:11:b9:09:04:ff 129.250.35.251,192.168.68.204 40756/1,17 unknown - 3(NXDOMAIN)
-    18 00:11:b9:09:04:ff 13.55.50.68 123/udp ntp - ec2-13-55-50-68.ap-southeast-2.compute.amazonaws.com
-    46700 00:11:b9:09:04:ff 137.116.114.112 40844/tcp unknown - 3(NXDOMAIN)
-    34 00:11:b9:09:04:ff 139.180.160.82 123/udp ntp - syd.clearnet.pw
-    6 00:11:b9:09:04:ff 139.99.135.247 123/udp ntp - vps-b7eaeed7.vps.ovh.ca
-    76 00:11:b9:09:04:ff 142.250.101.108 587/tcp submission smtp.gmail.com dz-in-f108.1e100.net
-    230 00:11:b9:09:04:ff 142.250.101.109 587/tcp submission smtp.gmail.com dz-in-f109.1e100.net
-    2065 00:11:b9:09:04:ff 142.250.141.108 587/tcp submission smtp.gmail.com dd-in-f108.1e100.net
-    1500 00:11:b9:09:04:ff 142.250.141.109 587/tcp submission smtp.gmail.com dd-in-f109.1e100.net
-    380 00:11:b9:09:04:ff 142.251.2.108 587/tcp submission smtp.gmail.com dl-in-f108.1e100.net
-    1600 00:11:b9:09:04:ff 142.251.2.109 587/tcp submission smtp.gmail.com dl-in-f109.1e100.net
-    15719 00:11:b9:09:04:ff 149.112.112.112 53/udp domain - dns.quad9.net
-    54 00:11:b9:09:04:ff 150.107.75.115 123/udp ntp - time.pickworth.net
-    16 00:11:b9:09:04:ff 159.196.178.7 123/udp ntp - 3(NXDOMAIN)
-    37 00:11:b9:09:04:ff 159.196.3.239 123/udp ntp - 159-196-3-239.9fc403.mel.nbn.aussiebb.net
-    16 00:11:b9:09:04:ff 159.196.45.149 123/udp ntp - record
-    20 00:11:b9:09:04:ff 162.159.200.1 123/udp ntp - time.cloudflare.com
-    24 00:11:b9:09:04:ff 162.159.200.123 123/udp ntp - time.cloudflare.com
-    32 00:11:b9:09:04:ff 167.179.162.50 123/udp ntp - 167-179-162-50.a7b3a2.bne.nbn.aussiebb.net
-    16 00:11:b9:09:04:ff 172.105.179.71 123/udp ntp - 172-105-179-71.ip.linodeusercontent.com
-    100218 00:11:b9:09:04:ff 172.67.221.214 443/tcp https irmsg.vizdynamics.com 3(NXDOMAIN)
-    20826 00:11:b9:09:04:ff 172.67.221.214 80/tcp http irmsg.vizdynamics.com 3(NXDOMAIN)
-    6 00:11:b9:09:04:ff 180.150.8.191 123/udp ntp - bitburger.simonrumble.com
-    11 00:11:b9:09:04:ff 192.168.68.1 123/udp ntp - 3(NXDOMAIN)
-    1 00:11:b9:09:04:ff 192.168.68.1,192.168.68.203 34051/1,17 unknown - 3(NXDOMAIN)
-    1 00:11:b9:09:04:ff 192.168.68.1,192.168.68.203 35951/1,17 unknown - 3(NXDOMAIN)
-    1 00:11:b9:09:04:ff 192.168.68.1,192.168.68.203 36204/1,17 unknown - 3(NXDOMAIN)
-    1 00:11:b9:09:04:ff 192.168.68.1,192.168.68.203 38036/1,17 unknown - 3(NXDOMAIN)
-    1 00:11:b9:09:04:ff 192.168.68.1,192.168.68.203 40942/1,17 unknown - 3(NXDOMAIN)
-    1 00:11:b9:09:04:ff 192.168.68.1,192.168.68.203 44065/1,17 unknown - 3(NXDOMAIN)
-    1 00:11:b9:09:04:ff 192.168.68.1,192.168.68.203 48603/1,17 unknown - 3(NXDOMAIN)
-    1 00:11:b9:09:04:ff 192.168.68.1,192.168.68.203 55896/1,17 unknown - 3(NXDOMAIN)
-    1 00:11:b9:09:04:ff 192.168.68.1,192.168.68.204 42573/1,17 unknown - 3(NXDOMAIN)
-    1 00:11:b9:09:04:ff 192.168.68.1,192.168.68.204 52984/1,17 unknown - 3(NXDOMAIN)
-    1 00:11:b9:09:04:ff 192.168.68.1,192.168.68.204 57294/1,17 unknown - 3(NXDOMAIN)
-    31 00:11:b9:09:04:ff 192.168.68.1 67/udp bootps - 3(NXDOMAIN)
-    6 00:11:b9:09:04:ff 194.195.249.28 123/udp ntp - ap-southeast-2.clearnet.pw
-    50 00:11:b9:09:04:ff 203.12.5.225 123/udp ntp - my.blockbluemedia.com
-    24 00:11:b9:09:04:ff 203.14.0.250 123/udp ntp - tic.ntp.telstra.net
-    50 00:11:b9:09:04:ff 212.227.81.55 80/tcp http ipv4.connman.net ipv4.connman.net
-    48 00:11:b9:09:04:ff 220.158.215.20 123/udp ntp - 220-158-215-20.broadband.telesmart.co.nz
-    99 00:11:b9:09:04:ff 224.0.0.251 5353/udp mdns - mdns.mcast.net
-    6187 00:11:b9:09:04:ff 23.101.229.107 40844/tcp unknown - 3(NXDOMAIN)
-    1 00:11:b9:09:04:ff 239.255.255.250 1902/udp unknown - 3(NXDOMAIN)
-    38 00:11:b9:09:04:ff 255.255.255.255 67/udp bootps - 3(NXDOMAIN)
-    48 00:11:b9:09:04:ff 27.124.125.250 123/udp ntp - ntp1.ds.network
-    6 00:11:b9:09:04:ff 45.124.53.221 123/udp ntp - ns1.adelaidewebsites.com.au
-    8 00:11:b9:09:04:ff 67.219.100.202 123/udp ntp - mel.clearnet.pw
-    494 00:11:b9:09:04:ff 74.125.137.108 587/tcp submission smtp.gmail.com dy-in-f108.1e100.net
-    643 00:11:b9:09:04:ff 74.125.137.109 587/tcp submission smtp.gmail.com dy-in-f109.1e100.net
-    70 00:11:b9:09:04:ff 82.165.8.211 80/tcp http - 3(NXDOMAIN)
-    15739 00:11:b9:09:04:ff 9.9.9.9 53/udp domain - dns9.quad9.net
-    ```
-
-5. Inspect the list and go through each host/protocol and build a whitelist of what you want to allow.
-
 # Recommended configuration for real-time environments
 
 To put APMonitor into near-realtime mode so that it checks resources multiple times per second, use these global settings:
@@ -668,6 +462,213 @@ For host performance monitoring (CPU, memory, disk I/O), use `type: host` instea
   community: "YourCommunityString"
   check_every_n_secs: 300
 ```
+
+## Recommended configurations for addressing the first pillar: Physical Security
+
+Using `APMonitor.py` to address Availability & System Integrity can help with maintaining Physical Security. Here are some tips from the trenches on keeping server equipment secure.
+
+### Removing SIM Cards from Inner Range T4000 remote monitored alarm devices
+
+Inner Range has become a dominating force in access control and alarm systems in IDCs, offices and high-end homes around the western world in recent times. 
+What installers don't tell you is that they are full of vendor backdoors. The best way to address this is to remove it's access to your monitoring station via 3G/4G via The Internets entirely and put it into your LAN so it goes through normal governance, risk and compliance as per all other devices.
+
+NB: Know this: in addition to vendor backdoors, every remote monitored alarm is a reverse shell. That's just how it is.
+
+Steps to securing your T4000 and Inner Range devices from Vendor Backdoors:
+
+1. Block all communications with Inner Range directly fromm your IOT network:
+
+    You do not want your T4000, Inception or Integriti devices communicating with the <a href="https://www.skytunnel.com.au/info">default IPs associated with Inner Range which are published here</a>.
+
+2. Remove the SIMs from your T4000 so all traffic routes through your availability monitored network:
+
+    A boxed T4000 unit:
+
+    <img src="images/T4000-boxed.jpeg" width="500" />
+
+    A T4000 unit with it's SIMs removed:
+
+    <img src="images/T4000-sim-strated.jpeg" width="500" />
+
+    This will stop it talking to home base with reverse shells and vendor backdoors.
+
+4. Plugin the GigE adapter from your IOT network to the T4000 (grey cable in picture above).
+
+NB: Removing the SIMs breaks the circuit that allows the device to communicate wirelesley.
+
+NNB: This is a valid enterprise grade T4000 configuration.
+
+
+
+
+
+
+### Using Chinese made pin entry locks with protective covers
+
+All locks can be picked, and all high security registered key systems can have additional keys cut by the police
+or anyone persuasive enough (read: vendor backdoors & $$$ respectively) to get a locksmith to make spare key.
+I've seen it happen to server rooms several times over the years.
+
+To get around the problem, we combine normal physical locks with <a href="https://www.ebay.com/sch/159907/i.html?_nkw=electronic+pin+door+lock&_salic=45&LH_LocatedIn=1&mkcid=1&mkrid=711-53200-19255-0&siteid=0&campid=5339147142&customid=&toolid=10001&mkevt=1">Chinese made electronic pin locks from eBay</a>,
+but they all suffer the same issue of being circumventable using a credit card or knife, as this video demonstrates how easy it is:
+
+<img src="physical-security/IMG_0944.gif" width="500" height="888" /><br /><br />
+
+To address the problem, we get a metal fab to manufacture a protective plate to cover the lock so it can't be so easily circumvented:
+
+<img src="physical-security/striker-plate-cover.jpeg" width="500" />
+
+Here is the same video for a lock with a plate installed - can't open it now:
+
+<img src="physical-security/IMG_4424.gif" width="500" height="888" /><br /><br />
+
+And here are the basic plans to get a metal fab to create a Protective Striker Cover Plate for you: 
+
+[![PDF preview](physical-security/Striker-Plate-Cover-CAD-design.png)](physical-security/Striker-Plate-Cover-CAD-design.pdf)
+
+For maximum security, try to customize the lip that covers the front of the door to be as wide as possible without 
+bumping into the actual lock (marked as 35.0 and 19.3 in the CAD diagram).
+
+### Using a span port + tcpdump to analyse IOT traffic for security devices
+
+Sometimes we just want to know what a device or an IOT network is communicating with on The Internets. Here is how it's done.
+First you need to slurp up some packets using tcpdump + spans, then analyse it using tshark and sed/awk/grep, as follows.
+
+Steps to monitor TCP/IP connectivity by a device:
+
+1. Setup your IOT switch so that all traffic over the uplink port is spanned onto a secondary port (all managed switches do this - look at the manual on how to setup a span).
+
+    NB: `APMonitor.py` may take this input as a live feed in future, so get used to working with spans and taps.
+
+2. Plug a linux box into the span port and dump the traffic on the port using `tcpdump` into daily `.pcap` files:
+
+    ```
+    apt install tcpdump wireshark tshark
+    tcpdump -i eno1 \
+        -nn -e -v -t --print --immediate-mode -l \
+        -G 86400 -Z ap -w %Y%m%d-%H%M%S-eno1.pcap -W 90 -C 10240
+    ```
+
+3. Run this script over the `.pcap` files:
+
+    ```
+    ls *.pcap | \
+    xargs -I {} tshark -r {} -d tcp.port==40844,http -d tcp.port==40844,tls -Y '(eth.addr==00:11:b9:06:93:fe or eth.addr==00:11:b9:09:04:ff) and (ip or ipv6)' -T fields -e eth.src -e eth.dst -e ip.version -e ip.proto -e ip.src -e ip.dst -e tcp.srcport -e tcp.dstport -e udp.srcport -e udp.dstport -e http.host -e tls.handshake.extensions_server_name > /tmp/tshark_output.txt
+    
+    awk -F'\t' '
+    # Pass 1: Build lookup table
+    NR==FNR {
+        ip = ($1 == "00:11:b9:06:93:fe" || $1 == "00:11:b9:09:04:ff") ? $6 : $5;
+        http_host = $11;
+        tls_sni = $12;
+        if ((http_host || tls_sni) && !app_hosts[ip]) {
+            app_hosts[ip] = http_host ? http_host : tls_sni;
+            print "added: " ip " = " app_hosts[ip] > "/dev/stderr";
+        }
+        next;
+    }
+    # Pass 2: Use lookup table
+    {
+        mac = ($1 == "00:11:b9:06:93:fe" || $1 == "00:11:b9:09:04:ff") ? $1 : $2;
+        ip = ($1 == "00:11:b9:06:93:fe" || $1 == "00:11:b9:09:04:ff") ? $6 : $5;
+        proto = ($4 == "6") ? "tcp" : ($4 == "17") ? "udp" : $4;
+        src_port = $7 ? $7 : $9;
+        dst_port = $8 ? $8 : $10;
+        remote_port = ($1 == "00:11:b9:06:93:fe" || $1 == "00:11:b9:09:04:ff") ? dst_port : src_port;
+        app_host = (app_hosts[ip] ? app_hosts[ip] : "-");
+        if (remote_port) print mac "\t" ip "\t" remote_port "/" proto "\t" app_host;
+    }
+    ' /tmp/tshark_output.txt /tmp/tshark_output.txt | \
+    sort | uniq -c | \
+    awk '{print $1 "\t" $2 "\t" $3 "\t" $4 "\t" $5}' | \
+    while IFS=$'\t' read count mac ip port_proto app_host; do
+        hostname=$(host $ip 2>/dev/null | awk '{print $NF}' | sed 's/\.$//')
+        port=$(echo $port_proto | cut -d/ -f1)
+        proto=$(echo $port_proto | cut -d/ -f2)
+        service=$(getent services "$port/$proto" 2>/dev/null | awk '{print $1}')
+        echo "$count $mac $ip $port_proto ${service:-unknown} $app_host $hostname"
+    done && rm /tmp/tshark_output.txt
+    ```
+   
+    Which for a T4000 should generate output such as the following:
+
+    ```
+    added: 142.251.2.109 = smtp.gmail.com
+    added: 74.125.137.108 = smtp.gmail.com
+    added: 74.125.137.109 = smtp.gmail.com
+    added: 142.251.2.108 = smtp.gmail.com
+    added: 142.250.101.108 = smtp.gmail.com
+    added: 142.250.141.108 = smtp.gmail.com
+    added: 142.250.141.109 = smtp.gmail.com
+    added: 142.250.101.109 = smtp.gmail.com
+    added: 212.227.81.55 = ipv4.connman.net
+    added: 172.67.221.214 = irmsg.vizdynamics.com
+    added: 104.21.67.116 = irmsg.vizdynamics.com
+    201 00:11:b9:06:93:fe 137.116.114.112 40844/tcp unknown - 3(NXDOMAIN)
+    16 00:11:b9:06:93:fe 192.168.68.1 67/udp bootps - 3(NXDOMAIN)
+    5382 00:11:b9:06:93:fe 23.101.229.107 40844/tcp unknown - 3(NXDOMAIN)
+    11 00:11:b9:06:93:fe 255.255.255.255 67/udp bootps - 3(NXDOMAIN)
+    2 00:11:b9:06:93:fe 9.9.9.9 53/udp domain - dns9.quad9.net
+    12 00:11:b9:09:04:ff 104.21.67.116 443/tcp https irmsg.vizdynamics.com 3(NXDOMAIN)
+    16 00:11:b9:09:04:ff 115.70.68.136 123/udp ntp - 115-70-68-136.ip4.exetel.com.au
+    12 00:11:b9:09:04:ff 119.18.6.37 123/udp ntp - smtp.juneks.com.au
+    31 00:11:b9:09:04:ff 129.250.35.251 123/udp ntp - y.ns.gin.ntt.net
+    3 00:11:b9:09:04:ff 129.250.35.251,192.168.68.204 40756/1,17 unknown - 3(NXDOMAIN)
+    18 00:11:b9:09:04:ff 13.55.50.68 123/udp ntp - ec2-13-55-50-68.ap-southeast-2.compute.amazonaws.com
+    46700 00:11:b9:09:04:ff 137.116.114.112 40844/tcp unknown - 3(NXDOMAIN)
+    34 00:11:b9:09:04:ff 139.180.160.82 123/udp ntp - syd.clearnet.pw
+    6 00:11:b9:09:04:ff 139.99.135.247 123/udp ntp - vps-b7eaeed7.vps.ovh.ca
+    76 00:11:b9:09:04:ff 142.250.101.108 587/tcp submission smtp.gmail.com dz-in-f108.1e100.net
+    230 00:11:b9:09:04:ff 142.250.101.109 587/tcp submission smtp.gmail.com dz-in-f109.1e100.net
+    2065 00:11:b9:09:04:ff 142.250.141.108 587/tcp submission smtp.gmail.com dd-in-f108.1e100.net
+    1500 00:11:b9:09:04:ff 142.250.141.109 587/tcp submission smtp.gmail.com dd-in-f109.1e100.net
+    380 00:11:b9:09:04:ff 142.251.2.108 587/tcp submission smtp.gmail.com dl-in-f108.1e100.net
+    1600 00:11:b9:09:04:ff 142.251.2.109 587/tcp submission smtp.gmail.com dl-in-f109.1e100.net
+    15719 00:11:b9:09:04:ff 149.112.112.112 53/udp domain - dns.quad9.net
+    54 00:11:b9:09:04:ff 150.107.75.115 123/udp ntp - time.pickworth.net
+    16 00:11:b9:09:04:ff 159.196.178.7 123/udp ntp - 3(NXDOMAIN)
+    37 00:11:b9:09:04:ff 159.196.3.239 123/udp ntp - 159-196-3-239.9fc403.mel.nbn.aussiebb.net
+    16 00:11:b9:09:04:ff 159.196.45.149 123/udp ntp - record
+    20 00:11:b9:09:04:ff 162.159.200.1 123/udp ntp - time.cloudflare.com
+    24 00:11:b9:09:04:ff 162.159.200.123 123/udp ntp - time.cloudflare.com
+    32 00:11:b9:09:04:ff 167.179.162.50 123/udp ntp - 167-179-162-50.a7b3a2.bne.nbn.aussiebb.net
+    16 00:11:b9:09:04:ff 172.105.179.71 123/udp ntp - 172-105-179-71.ip.linodeusercontent.com
+    100218 00:11:b9:09:04:ff 172.67.221.214 443/tcp https irmsg.vizdynamics.com 3(NXDOMAIN)
+    20826 00:11:b9:09:04:ff 172.67.221.214 80/tcp http irmsg.vizdynamics.com 3(NXDOMAIN)
+    6 00:11:b9:09:04:ff 180.150.8.191 123/udp ntp - bitburger.simonrumble.com
+    11 00:11:b9:09:04:ff 192.168.68.1 123/udp ntp - 3(NXDOMAIN)
+    1 00:11:b9:09:04:ff 192.168.68.1,192.168.68.203 34051/1,17 unknown - 3(NXDOMAIN)
+    1 00:11:b9:09:04:ff 192.168.68.1,192.168.68.203 35951/1,17 unknown - 3(NXDOMAIN)
+    1 00:11:b9:09:04:ff 192.168.68.1,192.168.68.203 36204/1,17 unknown - 3(NXDOMAIN)
+    1 00:11:b9:09:04:ff 192.168.68.1,192.168.68.203 38036/1,17 unknown - 3(NXDOMAIN)
+    1 00:11:b9:09:04:ff 192.168.68.1,192.168.68.203 40942/1,17 unknown - 3(NXDOMAIN)
+    1 00:11:b9:09:04:ff 192.168.68.1,192.168.68.203 44065/1,17 unknown - 3(NXDOMAIN)
+    1 00:11:b9:09:04:ff 192.168.68.1,192.168.68.203 48603/1,17 unknown - 3(NXDOMAIN)
+    1 00:11:b9:09:04:ff 192.168.68.1,192.168.68.203 55896/1,17 unknown - 3(NXDOMAIN)
+    1 00:11:b9:09:04:ff 192.168.68.1,192.168.68.204 42573/1,17 unknown - 3(NXDOMAIN)
+    1 00:11:b9:09:04:ff 192.168.68.1,192.168.68.204 52984/1,17 unknown - 3(NXDOMAIN)
+    1 00:11:b9:09:04:ff 192.168.68.1,192.168.68.204 57294/1,17 unknown - 3(NXDOMAIN)
+    31 00:11:b9:09:04:ff 192.168.68.1 67/udp bootps - 3(NXDOMAIN)
+    6 00:11:b9:09:04:ff 194.195.249.28 123/udp ntp - ap-southeast-2.clearnet.pw
+    50 00:11:b9:09:04:ff 203.12.5.225 123/udp ntp - my.blockbluemedia.com
+    24 00:11:b9:09:04:ff 203.14.0.250 123/udp ntp - tic.ntp.telstra.net
+    50 00:11:b9:09:04:ff 212.227.81.55 80/tcp http ipv4.connman.net ipv4.connman.net
+    48 00:11:b9:09:04:ff 220.158.215.20 123/udp ntp - 220-158-215-20.broadband.telesmart.co.nz
+    99 00:11:b9:09:04:ff 224.0.0.251 5353/udp mdns - mdns.mcast.net
+    6187 00:11:b9:09:04:ff 23.101.229.107 40844/tcp unknown - 3(NXDOMAIN)
+    1 00:11:b9:09:04:ff 239.255.255.250 1902/udp unknown - 3(NXDOMAIN)
+    38 00:11:b9:09:04:ff 255.255.255.255 67/udp bootps - 3(NXDOMAIN)
+    48 00:11:b9:09:04:ff 27.124.125.250 123/udp ntp - ntp1.ds.network
+    6 00:11:b9:09:04:ff 45.124.53.221 123/udp ntp - ns1.adelaidewebsites.com.au
+    8 00:11:b9:09:04:ff 67.219.100.202 123/udp ntp - mel.clearnet.pw
+    494 00:11:b9:09:04:ff 74.125.137.108 587/tcp submission smtp.gmail.com dy-in-f108.1e100.net
+    643 00:11:b9:09:04:ff 74.125.137.109 587/tcp submission smtp.gmail.com dy-in-f109.1e100.net
+    70 00:11:b9:09:04:ff 82.165.8.211 80/tcp http - 3(NXDOMAIN)
+    15739 00:11:b9:09:04:ff 9.9.9.9 53/udp domain - dns9.quad9.net
+    ```
+
+5. Inspect the list and go through each host/protocol and build a whitelist of what you want to allow.
+
 
 # MRTG/RRD Integration for Performance Graphing
 
