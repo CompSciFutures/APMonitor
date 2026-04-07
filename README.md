@@ -481,7 +481,7 @@ Steps to securing your T4000 and Inner Range devices from Vendor Backdoors:
 1. Block all communications with Inner Range directly fromm your IOT network:
 
     You do not want your T4000, Inception or Integriti devices communicating with the <a href="https://www.skytunnel.com.au/info">default IPs associated with Inner Range which are published here</a>. 
-    These servers act as a reverse shell and are the primary source of <a hre4f="https://x.com/search?q=VendorBackdoors&src=typed_query">Vendor Backdoor</a> access to your security computer.
+    These servers act as a reverse shell and are the primary source of <a href="https://x.com/search?q=VendorBackdoors&src=typed_query">Vendor Backdoor</a> access to your security computer.
 
     This list is not always available so the last known list of SkyTunnel servers are: 
     1. 20.188.210.209
