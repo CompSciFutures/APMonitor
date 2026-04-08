@@ -489,6 +489,8 @@ Steps to securing your T4000 and Inner Range devices from Vendor Backdoors:
     3. 52.189.230.114
     4. 137.116.114.112
 
+    A backup of the page is available via <a href="https://web.archive.org/web/20251112025012/https://www.skytunnel.com.au/info">WayBack Machine</a>
+
 
 2. Remove the SIMs from your T4000 so all traffic routes through your availability monitored network:
 
