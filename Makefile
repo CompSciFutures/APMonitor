@@ -192,7 +192,7 @@ install: check-root migrate
 	fi
 
 	@echo "==> Installing systemd service..."
-	@DEFAULT_EXEC="ExecStart=/bin/bash -c 'while true; do $(INSTALL_DIR)/APMonitor.py -vv $(CONFIG_DIR)/apmonitor-config.yaml --generate-mrtg-config; sleep 10; done'"; \
+	@DEFAULT_EXEC="ExecStart=/bin/bash -c 'while true; do $(INSTALL_DIR)/APMonitor.py -vv $(CONFIG_DIR)/apmonitor-config.yaml --generate-mrtg-config; sleep 5; done'"; \
 	if [ -f "$(SERVICE_DIR)/apmonitor.service" ]; then \
 		echo "Service file exists — merging (preserving customized ExecStart if changed)..."; \
 		CURRENT_EXEC=$$(grep '^ExecStart=' $(SERVICE_DIR)/apmonitor.service | head -1); \

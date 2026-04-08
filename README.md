@@ -320,7 +320,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/bin/bash -c 'while true; do /usr/local/bin/APMonitor.py -t 20 -vv /usr/local/etc/apmonitor-config.yaml /usr/local/etc/site2-config.yaml /usr/local/etc/site3-config.yaml --generate-mrtg-config; sleep 10; done'
+ExecStart=/bin/bash -c 'while true; do /usr/local/bin/APMonitor.py -t 20 -vv /usr/local/etc/apmonitor-config.yaml /usr/local/etc/site2-config.yaml /usr/local/etc/site3-config.yaml --generate-mrtg-config; sleep 5; done'
 Restart=always
 RestartSec=5
 User=monitoring
@@ -333,7 +333,7 @@ WantedBy=multi-user.target
 
 It is useful to keep a commented-out single-site `ExecStart` line for quick debugging:
 ```
-#ExecStart=/bin/bash -c 'while true; do /usr/local/bin/APMonitor.py -vv /usr/local/etc/apmonitor-config.yaml --generate-mrtg-config; sleep 10; done'
+#ExecStart=/bin/bash -c 'while true; do /usr/local/bin/APMonitor.py -vv /usr/local/etc/apmonitor-config.yaml --generate-mrtg-config; sleep 5; done'
 ```
 
 After editing the service file, reload systemd and restart the service:
@@ -1848,7 +1848,7 @@ Run continuously with short sleep intervals for near-realtime monitoring:
 #!/bin/bash
 while true; do
     ./APMonitor.py -t 5 monitoring-config.yaml
-    sleep 10
+    sleep 5
 done
 ```
 
@@ -1876,7 +1876,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/bin/bash -c 'while true; do /usr/local/bin/APMonitor.py -vv /usr/local/etc/apmonitor-config.yaml --generate-mrtg-config; sleep 10; done'
+ExecStart=/bin/bash -c 'while true; do /usr/local/bin/APMonitor.py -vv /usr/local/etc/apmonitor-config.yaml --generate-mrtg-config; sleep 5; done'
 Restart=always
 RestartSec=5
 User=monitoring
@@ -2093,7 +2093,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/bin/bash -c 'while true; do /usr/local/bin/APMonitor.py -vv /usr/local/etc/apmonitor-config.yaml --generate-mrtg-config; sleep 10; done'
+ExecStart=/bin/bash -c 'while true; do /usr/local/bin/APMonitor.py -vv /usr/local/etc/apmonitor-config.yaml --generate-mrtg-config; sleep 5; done'
 Restart=always
 RestartSec=5
 User=monitoring
