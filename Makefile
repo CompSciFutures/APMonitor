@@ -217,7 +217,7 @@ install: check-root migrate
 		echo "$$DEFAULT_EXEC" >> $(SERVICE_DIR)/apmonitor.service; \
 	fi; \
 	echo "Restart=always" >> $(SERVICE_DIR)/apmonitor.service; \
-	echo "RestartSec=10" >> $(SERVICE_DIR)/apmonitor.service; \
+	echo "RestartSec=5" >> $(SERVICE_DIR)/apmonitor.service; \
 	echo "User=$(USER)" >> $(SERVICE_DIR)/apmonitor.service; \
 	echo "StandardOutput=journal" >> $(SERVICE_DIR)/apmonitor.service; \
 	echo "StandardError=journal" >> $(SERVICE_DIR)/apmonitor.service; \
