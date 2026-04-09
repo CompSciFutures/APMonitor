@@ -215,9 +215,9 @@ NB: If you are running `APMonitor.py` out of `systemd` with a default install, n
 
 ***IOT is not supposed to be a thing*** - to compensate **if you have an NVR**, you need L2 monitoring of MAC address changes for each OT/ICS device such as cameras, NVRs & Security Computer on your IOT network.
 
-Use <a href="Added note about NVRs, SSL pinning, MAC port monitoring/pinning & reverse shells">Layer 2 Port MAC Change Monitoring</a>,
-<a href="https://github.com/CompSciFutures/APMonitor?tab=readme-ov-file#https-monitor-with-certificate-pinning">Layer 4 HTTPS Self-Signed Certificate Pinning</a> and
-<a href="https://github.com/CompSciFutures/APMonitor#single-port-mac-pinning-monitor">Layer 2 MAC Address Pinning</a> so your network can't be tampered with.
+Use <a href="#switch-port-status--metrics--mac-change-monitor">Layer 2 Port MAC Change Monitoring</a>,
+<a href="#https-monitor-with-certificate-pinning">Layer 4 HTTPS Self-Signed Certificate Pinning</a> and
+<a href="#single-port-mac-pinning-monitor">Layer 2 MAC Address Pinning</a> so your network can't be tampered with.
 
 To avoid <a href="https://x.com/search?q=%23VendorBackdoors&src=typed_query">vendor backdoors</a>, disable IPV6 and stop your IOT devices from communicating directly with The Internets excepting whitelisted addresses for purposes you specify (don't whitelist any cloud admin reverse shells).
 
