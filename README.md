@@ -38,7 +38,7 @@ Ex Chief Scientist @ Clemenger BBDO / Omnicom</i>
 
 [![buy-me-a-coffee.png](images/buy-me-a-coffee.png)](https://www.paypal.com/donate/?hosted_button_id=WN472NX5XC5CJ)
 
-<i>If you have any changed or find APMonitor.py useful in your NOCs, for monitoring your IOT/ICS devices,
+<i>If you have any changes or find APMonitor.py useful in your NOCs, for monitoring your IOT/ICS devices,
 or would like email / telephone support, please do let me know and consider
 <a href="https://www.paypal.com/donate/?hosted_button_id=WN472NX5XC5CJ">a regular donation via Buy me a coffee</a>,
 so I can keep improving it.<br />
