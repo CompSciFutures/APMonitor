@@ -38,10 +38,14 @@ Ex Chief Scientist @ Clemenger BBDO / Omnicom</i>
 
 [![buy-me-a-coffee.png](images/buy-me-a-coffee.png)](https://www.paypal.com/donate/?hosted_button_id=WN472NX5XC5CJ)
 
-<i>If you find APMonitor.py useful in your NOC, for monitoring your IOT/ICS devices,
-or would like email / telephone support, please consider
+<i>If you have any changed or find APMonitor.py useful in your NOCs, for monitoring your IOT/ICS devices,
+or would like email / telephone support, please do let me know and consider
 <a href="https://www.paypal.com/donate/?hosted_button_id=WN472NX5XC5CJ">a regular donation via Buy me a coffee</a>,
 so I can keep improving it.<br />
+
+<i>My plan is to add "Humanizing Data" automated information retrieval to it in a few months time.
+Information about common use cases you hunt for and detect that need automation would be helpful in this regard.</i><br />
+
 
 Telephone Support: +61497222775<br />
 Support email: hello@enertium.org<br />
@@ -2261,6 +2265,8 @@ sudo pip3 uninstall -y PyYAML requests pyOpenSSL urllib3 aioquic easysnmp
 - Add a Mercator + `APTree.c` `#InfoRec` inspired/styled priority queue for handling large numbers of monitored resources with proper realtime programming guarantees
   - We need this if we implement long-running monitors based on a scripting language that will Zappier/WebTest/grab logifiles/etc. Say "zappyautomoton" lang.
   - zappyautomoton lang would be composed of availability monitor primitives, basic if/then/exception control flow plus some other verb like actions we can do (eg: archive & compare)
+
+## Humanizing Data vizualisation
 
 - Do <i>Humanizing Data</i> [https://x.com/CompSciFutures/status/1930974323424321985](https://x.com/CompSciFutures/status/1930974323424321985) on MRTG+AP charts to show <a href="https://en.wikipedia.org/wiki/Regime_shift">regime shifts</a> and correlated sub-graphs over response times & SNMP stats
   - Traffic spikes: which host/network is it? E.g., a big system update or install will make a spike and the hostname should be shown.

@@ -11,6 +11,7 @@ Thread safe, reentrant, modifiable.
 
 # Release 1.3.12 (???): ???
 - fixed broken link in README.md re: monitoring IOT networks
+- added note about use cases & Humanizing Data
 
 # Release 1.3.11 (10-Apr-26): Minor Tweaks
 - Adjusted telemetry so we have a bit better an idea whats going on with multi-site setups running in parallel
