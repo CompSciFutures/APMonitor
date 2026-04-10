@@ -46,7 +46,7 @@ so I can keep improving it.<br />
 <i>If I get enough support, my plan is to add RMON/RMON2 support and "<a href="#humanizing-data-vizualisation">Humanizing Data</a>" automated information retrieval to it in a few months time.
 Information about common use cases you hunt for and detect that need automation would be helpful in this regard.</i><br />
 
-
+Feel free to contact me for a chat...<br />
 Telephone Support: +61497222775<br />
 Support email: hello@enertium.org<br />
 </i>
