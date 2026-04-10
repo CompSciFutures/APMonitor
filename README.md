@@ -43,7 +43,7 @@ or would like email / telephone support, please do let me know and consider
 <a href="https://www.paypal.com/donate/?hosted_button_id=WN472NX5XC5CJ">a regular donation via Buy me a coffee</a>,
 so I can keep improving it.<br />
 
-<i>My plan is to add "<a href="#humanizing-data-vizualisation">Humanizing Data</a>" automated information retrieval to it in a few months time.
+<i>If I get enough support, my plan is to add RMON/RMON2 support and "<a href="#humanizing-data-vizualisation">Humanizing Data</a>" automated information retrieval to it in a few months time.
 Information about common use cases you hunt for and detect that need automation would be helpful in this regard.</i><br />
 
 
