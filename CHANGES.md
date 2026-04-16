@@ -9,6 +9,9 @@ Multithreaded high speed availability checking for SNMP, PING, TCP/UDP, QUIC & H
 Integrates w/Site24x7 heartbeat monitoring for failover alerts + MRTG + Slack & Pushover webhooks.
 Thread safe, reentrant, modifiable.
 
+# Release 1.3.13 (???): ???
+- Edited Security Sensors notes.
+
 # Release 1.3.12 (17-Apr-26): Security Sensors
 - fixed broken link in README.md re: monitoring IOT networks
 - added note about use cases & Humanizing Data

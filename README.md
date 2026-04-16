@@ -715,6 +715,10 @@ When getting sensors installed for computer science / electrical engineering bas
 - Always leave the PIR lights ON. That way we can constantly check they are working ourselves when we are
     passing through the environments that we are responsible for or manage.
 
+- Learn to do regular Walk Tests using both visual inspection of the PIR lights, and with a laptop in hand. This is not
+  always easy, as we like to keep Security Computer off all networks if possible. Just use the lights most times.
+  If police or governments get the chance, they will de-tune a sensor we've setup - always. I've seen it before, lots. 
+
 - Our industry associations are <a href="https://www.ieee.org/">IEEE</a> and <a href="https://acm.org/">ACM</a>:
     make sure your local state police and the security installer's industry
     association is registered a member of both as an "individual organisation". As a collective unit they
@@ -739,15 +743,15 @@ When getting sensors installed for computer science / electrical engineering bas
     you may invalidate their engineering.
 
 - Be wary of security advice given to us by governments and police - assume some possibility they are usually corrupt  
-     criminals working with intelligence agencies.
+  criminals working with intelligence agencies.
 
-The bigger and more global your relevance, the more of problem the abovementioned is relevant and important to you. 
+The bigger and more global your relevance, the more of a problem the abovementioned is relevant and important to you. 
 
 Also note: To get these setup properly, you might find a situation where CS & EE people are going to need to talk to
 each other. CS people (that do Discrete Mathematics and deal in systems where EVERYTHING is 'abstract') and
 a real EE (whom do Real Mathematics and deal in systems where EVERYTHING is actually real physics and hard sciences)
 are not supposed to talk too much as our mathematical tutelage is a little incompatible in places.
-Just stay on topic and try to combine forces without talking to each other too much about "why", just "how".
+Just stay on topic and try to combine forces without talking to each other too much about "why", just "what & how".
 
 Those are the people that are supposed to be quite measured about what they can say to each other about their respective
 fields, NOT governments/police vs. us.
@@ -787,9 +791,15 @@ Hand them this picture:
 (NB: I think this is the correct photo - it has been a while. Please confirm if you set one of these up)
 
 Once they have a basic install done and you can walk past and see the PIR light go on, take control of the sensor and
-tell the Installer to leave, then carefulkly adjust the DIP switches and sensor fusion rotary trimpots to get both
-microwave + infrared working (configure the range on each separately, then turn on fusion). You may need to get the
-installer to show you the basics of "how do I tune the infrared distance using the trimpot and the sensor light?".
+tell the Installer to leave, then carefully adjust the DIP switches and sensor fusion rotary trimpots to get both
+microwave + infrared working (tip: with the controls you have, try to configure the range on each separately, then
+turn on fusion - this is not immediately possible at first glance aftear reading the manual, but it is if you
+think about it). You may need to get the installer to show you the basics of "how do I tune the infrared distance 
+using the trimpot and the sensor light?" first before solving the rest of the problem.
+
+Also try to document your settings because these things do get changed on these sensors - governments/police hate them.
+I do wish there was a one-way tab we could break off once we knew we had the sensor setup correctly so the controls then
+couldn't be changed.
 
 In terms of distances and tolerances - leave at least one footwidth length between the end of the sensor beam and the wall,
 or you may get false positives from water moving through pipes or people in the next room, and expect to take a few attempts
@@ -801,10 +811,11 @@ NB: There are also some plastic twiddly bits on the cover plate to tweak the fre
 ### Setting up the DG467 360' ceiling mount PIR
 
 These are a zero-config sensor, there is nothing else to do other than to get them into the correct spot and not have other
-sensors overlapping the beam width area by some margin. Their special power comes from setting up an array of these so 
-that their 360' PIR beams overlap (by some margin) so they can't be sneak past.
+SKU/class of sensors overlapping the beam width area by some margin (these DG467s we do overlap as an array, however).
+Their special power comes from setting up an array of these so that their 360' PIR beams overlap (by some margin)
+so they can't be sneak past.
 
-Read the manual, find the beam radius and make sure the beam areas DO overlap.
+Read the manual, find the beam radius and make sure the beam areas DO overlap, but don't mix with other SKU/classes of sensors or things get confusing re: false positives.
 
 This is what the box looks like:
 
@@ -815,12 +826,20 @@ And this is one installed in a ceiling with the sensor light on:
 <img src="physical-security/Paradox-DG467-PIR.jpeg" width="500" />
 
 In some environments there may be some utility in providing an extra mild steel metal plate above
-these to prevent tampering comping from the roof cavity above. Get something made up by your local metal fab if this
+these to prevent tampering coming from the roof cavity above. Get something made up by your local metal fab if this
 is a concern for you.
 
 If you want to check the revision is correct, ask a full university qualified EE (not a half-baked CS EE such as myself) that can handle themselves in an Intel-spec chip-fab
 (they do exist - globally) to contact the manufacturer and ask for "Timing Diagrams, Wiring Diagrams, Chip Wafer Die Picture Diagrams and OEM Manuals preferably on A0 in Intel Colour".
 They won't send them to you. You need to be a proper EE to get these things.
+
+NB: I'm not sure "A0 with Intel Colour" even exists anymore, but it was a thing once upon a time.
+Also note that CS is not allowed to look at printed output that is from a plotter in colour (EE loves it).
+Ask for monochrome only if you see multi-colour plotter output. It hurts my head anyways.
+Also EE students aren't allowed to see Intel Colour until they are in Industry or it stuffs up their education.
+If in doubt, talk to your local EE professor, but please make a donation to their endowment first before wasting their time:
+it resolves industry/academia/government quid-pro-quo problems, and they really do need the money usually.
+We do like good EE tutelage, and in the fullness of time, we now know interacting with CS is always dramatic for EE.
 
 
 ## Remote keystroke logging in Windows 11
@@ -2444,7 +2463,7 @@ under the [GNU General Public License version 3](LICENSE.txt).
 `mrtg-rrd.cgi.pl` is licensed by Jan "Yenya" Kasprzak <kas@fi.muni.cz><br />
 under the [GNU General Public License version 2](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html).
 ```
-Software: APMonitor 1.3.12
+Software: APMonitor 1.3.13
 License: GNU General Public License version 3
 Licensor: Andrew (AP) Prendergast, ap@andrewprendergast.com -- FSF Member
 
