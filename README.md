@@ -681,6 +681,161 @@ Steps to monitor TCP/IP connectivity by a device:
 
 5. Inspect the list and go through each host/protocol and build a whitelist of what you want to allow.
 
+## Recommended PIR Sensors that are for Computer Science to use
+
+There are only two PIR sensors on the market that have anywhere near the level of controls and quality
+that could be used in a computer science based environment when we have things like Physical Security requirements
+that need to be compliant with the needs of Regulated Industry and Tier-1 environents that have significant
+problems being constantly targeted by State Actors.
+
+You have two options:
+
+- An array of zero-config ceiling mounted <a href="https://www.manualslib.com/products/Paradox-Paradome-Dg467-9092336.html">Paradox DG467 360' PIR</a> sensors ([Paradox-DG467-Manual.pdf](physical-security/Paradox-DG467-Manual.pdf)).
+- Carefully tuned sensor fused <a href="https://www.manualslib.com/manual/1444971/Paradox-Nv75mw.html">Paradox NV75MW room corner PIR</a> sensors ([Paradox-NV75MW-Manual.pdf](physical-security/Paradox-NV75MW-Manual.pdf)).
+
+Keeping these on the market are a constant source of problems. You may have to order 100 or 1000 units
+to get the ones you want and know they authentic. Talk directly to <a href="https://www.paradox.com/web/contact-us/">the manufacturer</a>
+if you have problems.
+
+All the other sensors aren't suitably equipped with tamper detection/resistance, and are easily 
+crept past by any Security Alarm Installer worth more than 2c. It's quite extrordinary getting a demo
+from a Security Installer that can dance and shuffle through an array of normal PIR sensors and not let
+one off - they do it on site quite regularly when setting up systems as it's easier than pressing
+buttons on a control pad that might be several rooms away.
+
+When getting sensors installed for computer science / electrical engineering based environments:
+
+- Understand that all security equipment that is electronic falls under IEEE, in which we are significantly more 
+    senior at a global level than any technician or state based police laws prohibiting our access to their end
+    user documentation or installation thereof.
+    We build the fabs and train the engineers that design and manufacture their equipment.
+
+- Always take posession of the instruction manuals for all the equipment from the installers that come with the equipment.
+
+- Always leave the PIR lights ON. That way we can constantly check they are working ourselves when we are
+    passing through the environments that we are responsible for or manage.
+
+- Our industry associations are <a href="https://www.ieee.org/">IEEE</a> and <a href="https://acm.org/">ACM</a>:
+    make sure your local state police and the security installer's industry
+    association is registered a member of both as an "individual organisation". As a collective unit they
+    represent collectively no more than a single member, so we have somewhere to complain to when things 
+    are being made difficult or shenanigans are afoot with backdoors and system tampering/interference.
+
+- Come to terms with this: our networks, computers, their code and our surveillance are a target by these
+    state actors to put in backdoors anywhere and all over the world. Make sure they are always suitably
+    supervised when installers or police are onsite around any of our computers, data centers or
+    networking equipment.
+
+- We are global and permanent in scale - they are hyperlocal and usually temporary. The systems we build may last
+    many decades; they will probably be out of a job next week or when the next election happens. Do not put
+    too much trust or faith that local government or police will do the right thing or maintain a consistent
+    performance level that is in accordance with our Industry Association rules and code of conduct.
+  
+    - CS: ACM's are <a href="https://www.acm.org/about-acm/acm-policies-and-procedures">available here</a>.
+
+    - EE: IEEE are a bit bigger, but <a href="https://www.ieee.org/content/dam/ieee-org/ieee/web/org/about/corporate/ieee-policies.pdf">start here</a> if you want the detail.
+
+- These people are not considered a "User" of our systems, so do not let them interact directly with them or
+    you may invalidate their engineering.
+
+- Be wary of security advice given to us by governments and police - assume some possibility they are usually corrupt  
+     criminals working with intelligence agencies.
+
+The bigger and more global your relevance, the more of problem the abovementioned is relevant and important to you. 
+
+Also note: To get these setup properly, you might find a situation where CS & EE people are going to need to talk to
+each other. CS people (that do Discrete Mathematics and deal in systems where EVERYTHING is 'abstract') and
+a real EE (whom do Real Mathematics and deal in systems where EVERYTHING is actually real physics and hard sciences)
+are not supposed to talk too much as our mathematical tutelage is a little incompatible in places.
+Just stay on topic and try to combine forces without talking to each other too much about "why", just "how".
+
+Those are the people that are supposed to be quite measured about what they can say to each other about their respective
+fields, NOT governments/police vs. us.
+
+
+### Setting up the Paradox NV75MW room corner PIR
+
+Read the installers manual from start to finish. Have a CS EE around that has done some basic AI/ML tuition such that they
+may have some sense of adversarial optimisation, sensor fusion, distance metrics and/or false positives & negatives 
+at least at a theoretical level.
+
+This sensor uses Electronic Engineering to fuse two input data sources (infared + microwave) to get a more
+accurate and less sneakable/sneak-past environment. Do some robotics at Stanford to really understand why,
+or think of it like this: two is always better than one. The vendor calls this "seetrue".
+Do not overlap beams with these sensors or you may get false negatives caused by destructive cancellation/interference or
+false positives cause by constructive cancellation/interference.
+
+These are the DIP switch settings to use (I think - I haven't checked lately YMMY). 
+This enables proper sensor fusion and tamper detection.
+Read the manual and understand why:
+
+<img src="physical-security/Paradox-NV75MW-DIP-Switches.jpg" width="500" />
+
+```
+1: ON  (LED = ON)
+2: OFF (EDGE DETECT=DUAL SENSOR)
+3: OFF (PET MODE=OFF/NO PETS + SEETRUE=ON)
+4: ON  (SEETRUE=SOFT? YMMV)
+```
+
+Your installer is not going to be able to install this out of the box as the wiring 
+is nonstandard for them, strict for us and requires an EE to interpret the manuals.
+Hand them this picture:
+
+<img src="physical-security/Paradox-NV75MW-Pinout.jpg" width="500" />
+
+(NB: I think this is the correct photo - it has been a while. Please confirm if you set one of these up)
+
+Once they have a basic install done and you can walk past and see the PIR light go on, take control of the sensor and
+tell the Installer to leave, then carefulkly adjust the DIP switches and sensor fusion rotary trimpots to get both
+microwave + infrared working (configure the range on each separately, then turn on fusion). You may need to get the
+installer to show you the basics of "how do I tune the infrared distance using the trimpot and the sensor light?".
+
+In terms of distances and tolerances - leave at least one footwidth length between the end of the sensor beam and the wall,
+or you may get false positives from water moving through pipes or people in the next room, and expect to take a few attempts
+before you get the sensitivity right.
+
+NB: There are also some plastic twiddly bits on the cover plate to tweak the freznal lens. You might need to tweak them to the room dynamics.
+
+
+### Setting up the DG467 360' ceiling mount PIR
+
+These are a zero-config sensor, there is nothing else to do other than to get them into the correct spot and not have other
+sensors overlapping the beam width area by some margin. Their special power comes from setting up an array of these so 
+that their 360' PIR beams overlap (by some margin) so they can't be sneak past.
+
+Read the manual, find the beam radius and make sure the beam areas DO overlap.
+
+This is what the box looks like:
+
+<img src="physical-security/Paradox-DG467-Box.jpeg" width="500" />
+
+And this is one installed in a ceiling with the sensor light on:
+
+<img src="physical-security/Paradox-DG467-PIR.jpeg" width="500" />
+
+In some environments there may be some utility in providing an extra mild steel metal plate above
+these to prevent tampering comping from the roof cavity above. Get something made up by your local metal fab if this
+is a concern for you.
+
+If you want to check the revision is correct, ask a full university qualified EE (not a half-baked CS EE such as myself) that can handle themselves in an Intel-spec chip-fab
+(they do exist - globally) to contact the manufacturer and ask for "Timing Diagrams, Wiring Diagrams, Chip Wafer Die Picture Diagrams and OEM Manuals preferably on A0 in Intel Colour".
+They won't send them to you. You need to be a proper EE to get these things.
+
+
+## Remote keystroke logging in Windows 11
+
+Consider this:
+
+<a href="https://x.com/raunak_yadush/status/2044740735216533564"><img src="physical-security/Windows-11-keylogger.png" width="500"></a>
+
+I really do worry sometimes how Regulated Industry expects us to maintain the controls and integrity they
+need so they can maintain their systems.
+<a href="https://x.com/CompSciFutures/status/2044621286442446952?s=20">Where have all the 64-bit computers gone to</a>?
+The ones we should be using? That were made this millenium, for this millenium by people like those 
+from Xerox PARC from last millenium that really did know what they were doing, more so than today.
+
+Anyways - don't get too bogged down in this, we can only use what we have available to us. But I do worry for the future.
 
 # MRTG/RRD Integration for Performance Graphing
 
