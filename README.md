@@ -747,6 +747,8 @@ When getting sensors installed for computer science / electrical engineering bas
 
 The bigger and more global your relevance, the more of a problem the abovementioned is relevant and important to you. 
 
+Know that "On the floor is always on the floor, you dickhead [sic]" is actually a thing in IDCs, and we expect to see 3 layers of physical security to get on the floor. (PS: And "a cage is always just a flex"). 
+
 Also note: To get these setup properly, you might find a situation where CS & EE people are going to need to talk to
 each other. CS people (that do Discrete Mathematics and deal in systems where EVERYTHING is 'abstract') and
 a real EE (whom do Real Mathematics and deal in systems where EVERYTHING is actually real physics and hard sciences)
