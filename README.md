@@ -754,7 +754,7 @@ a real EE (whom do Real Mathematics and deal in systems where EVERYTHING is actu
 are not supposed to talk too much as our mathematical tutelage is a little incompatible in places.
 Just stay on topic and try to combine forces without talking to each other too much about "why", just "what & how".
 
-Those are the people that are supposed to be quite measured about what they can say to each other about their respective
+Those are the people that are supposed to be quite measured about what they can and can't say to each other about their respective
 fields, NOT governments/police vs. us.
 
 
