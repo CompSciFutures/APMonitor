@@ -794,7 +794,7 @@ If they have problems, hand them this picture:
 Once they have a basic install done and you can walk past and see the PIR light go on, take control of the sensor and
 tell the Installer to leave, then carefully adjust the DIP switches and sensor fusion rotary trimpots to get both
 microwave + infrared working (tip: with the controls you have, try to configure the range on each separately, then
-turn on fusion - this is not immediately possible at first glance aftear reading the manual, but it is if you
+turn on fusion - this is not immediately possible at first glance after reading the manual, but it is if you
 think about it). You may need to get the installer to show you the basics of "how do I tune the infrared distance 
 using the trimpot and the sensor light?" first before solving the rest of the problem.
 
