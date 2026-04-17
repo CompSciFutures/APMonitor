@@ -742,8 +742,7 @@ When getting sensors installed for computer science / electrical engineering bas
 - These people are not considered a "User" of our systems, so do not let them interact directly with them or
     you may invalidate their engineering.
 
-- Be wary of security advice given to us by governments and police - assume some possibility they are usually corrupt  
-  criminals working with intelligence agencies.
+- Be wary of security advice given to us by governments and police - assume some possibility they are usually corrupt criminals working with intelligence agencies.
 
 The bigger and more global your relevance, the more of a problem the abovementioned is relevant and important to you. 
 
@@ -786,7 +785,7 @@ Read the manual and understand why:
 
 Your installer is not going to be able to install this out of the box as the wiring 
 is nonstandard for them, strict for us and requires an EE to interpret the manuals.
-Hand them this picture:
+If they have problems, hand them this picture:
 
 <img src="physical-security/Paradox-NV75MW-Pinout.jpg" width="500" />
 
@@ -801,13 +800,14 @@ using the trimpot and the sensor light?" first before solving the rest of the pr
 
 Also try to document your settings because these things do get changed on these sensors - governments/police hate them.
 I do wish there was a one-way tab we could break off once we knew we had the sensor setup correctly so the controls then
-couldn't be changed.
+couldn't be changed - tamper tape/tamper seals are useful in this regard, and have backup stock locked away should you
+wish to install a new one because something has been tampered with. 
 
 In terms of distances and tolerances - leave at least one footwidth length between the end of the sensor beam and the wall,
 or you may get false positives from water moving through pipes or people in the next room, and expect to take a few attempts
 before you get the sensitivity right.
 
-NB: There are also some plastic twiddly bits on the cover plate to tweak the freznal lens. You might need to tweak them to the room dynamics.
+NB: There are also some plastic twiddly bits on the internal lens cover plate to tweak the freznal lens. You might/will need to tweak them to the room dynamics. DO NOT LEAVE FINGERPRINTS ON OR TOUCH THE SENSORS. Someone that can handle chips without breaking off one solder ball or bending one chip is able to do this without touching the sensors.
 
 
 ### Setting up the DG467 360' ceiling mount PIR
@@ -818,6 +818,7 @@ Their special power comes from setting up an array of these so that their 360' P
 so they can't be sneak past.
 
 Read the manual, find the beam radius and make sure the beam areas DO overlap, but don't mix with other SKU/classes of sensors or things get confusing re: false positives.
+Some margin means 0.25-0.5M in my world, s.t. you should be able to stand in a spot that lights up multiple sensors - they are quite sensitive.
 
 This is what the box looks like:
 
