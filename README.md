@@ -478,9 +478,12 @@ Using `APMonitor.py` to address Availability & System Integrity can help with ma
 - Get off Google & Microsoft Cloud (they have McKinsey CEOs that like to 'oh-whoops' your data out of existence)
 - Get off anything connected to McKinsey or InQTel - they are where CIA psychos go to work when they don't have a CIA gig. They are CIA controlled.
 - Your local police & government work with McKinsey and InQTel so they can access CIA tech. Try to avoid them.
+- Avoid #SaltLakeCity connected technology (e.g.: #Adobe. #NSA & #SaltLakeCity mormons are buddies because that's where their data center is, and #CIA controls #NSA).
 
 Get over it, that's reality. So Police, Office365, Azure, Windows 11 & Google Workspace (unless you can get on staff) is out,
 otherwise forget about security anything. Welcome to the 2020s.
+
+NB: Through a weird twist of fate, Xerox PARC & The Commonwealth actually owns the #SaltLakeCity land #NSA, #Adobe and #Mormons are on - don't ask, DYODD. FR.
 
 ## Removing SIM Cards from Inner Range T4000 remote monitored alarm devices
 
