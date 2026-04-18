@@ -9,7 +9,7 @@ Multithreaded high speed availability checking for SNMP, PING, TCP/UDP, QUIC & H
 Integrates w/Site24x7 heartbeat monitoring for failover alerts + MRTG + Slack & Pushover webhooks.
 Thread safe, reentrant, modifiable.
 
-# Release 1.3.13 (???): ???
+# Release 1.3.13 (19-Apr-26): Physical Cyber Security
 - Edited Security Sensors notes.
 - Updated physical security notes
 - Added example of SPAN port being labelled PROMISC
