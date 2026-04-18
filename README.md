@@ -539,9 +539,11 @@ And here are the basic plans to get a metal fab to create a Protective Striker C
 [![PDF preview](physical-security/Striker-Plate-Cover-CAD-design.png)](physical-security/Striker-Plate-Cover-CAD-design.pdf)
 
 For maximum security, try to customize the lip that covers the front of the door to be as wide as possible without 
-bumping into the actual lock (marked as 35.0 and 19.3 in the CAD diagram). You want to prevent the possibility of
-someone getting anything under the plate itself by butressing the plate up against the lock as much as is practically possible.
-My first few attempts at this were unsuccsesful before working out this is the trick that really does make this solution work.
+bumping into the actual lock (marked as 35.0 and 19.3 in the CAD diagram).
+
+You want to prevent the possibility of someone getting anything under the plate itself by butressing the plate up against
+the lock as much as is practically possible. My first few attempts at this were unsuccsesful before working out this is
+the trick that really does make this solution work.
 
 If I encounter a failure again, I'm going to do a round cutout in the plate for the doorknob itself. Do let me know how you go with this solution. 
 
