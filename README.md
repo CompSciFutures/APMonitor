@@ -869,8 +869,8 @@ from Xerox PARC from last millenium that really did know what they were doing, m
 - Get off anything connected to McKinsey or InQTel - they are where CIA psychos go to work when they don't have a CIA gig. They are CIA controlled.
 - Your local police & government work with McKinsey and InQTel so they can access CIA tech. Try to avoid them.
 - Avoid #SaltLakeCity connected technology (e.g.: #Adobe. #NSA & #SaltLakeCity mormons are buddies because that's where their data center is, and #CIA controls #NSA).
-- When #CIA is around, assume this: every speaker is a microphone, every microphone is a speaker. And every IOT is connected to CIA.
 - When #NSA is around, every OT network is an IOT network, and it's impossible to keep #OT off The Internet. 
+- When #CIA is around, assume this: every speaker is a microphone, every microphone is a speaker. And every IOT is connected to CIA.
 
 Get over it, that's reality. So Police, Office365, Azure, Windows 11 & Google Workspace (unless you can get on staff) is out,
 otherwise forget about security anything. Welcome to the 2020s.
