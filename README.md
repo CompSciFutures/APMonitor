@@ -561,9 +561,9 @@ Steps to monitor TCP/IP connectivity by a device:
     <br />
     Label your SPAN port correctly as "PROMISC" so you don't use it as a normal port then leave it setup, eg:<br /><br />
 
-    <img src="physical-security/Promisc-Port-eg1.jpeg" width="400" /><br /><br />
+    <img src="physical-security/Promisc-Port-eg1.jpeg" width="550" /><br /><br />
 
-    <img src="physical-security/Promisc-Port-eg2.jpeg" width="400" /><br />
+    <img src="physical-security/Promisc-Port-eg2.jpeg" width="550" /><br />
 
 
 2. Plug a linux box into the span port and dump the traffic on the port using `tcpdump` into daily `.pcap` files:
