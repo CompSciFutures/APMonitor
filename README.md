@@ -558,7 +558,6 @@ Steps to monitor TCP/IP connectivity by a device:
 
     NB: `APMonitor.py` may take this input as a live feed in future, so get used to working with spans and taps.
 
-    <br />
     Label your SPAN port correctly as "PROMISC" so you don't use it as a normal port then leave it setup, eg:<br /><br />
 
     <img src="physical-security/Promisc-Port-eg1.jpeg" width="550" /><br /><br />
