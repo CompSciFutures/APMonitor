@@ -473,6 +473,15 @@ For host performance monitoring (CPU, memory, disk I/O), use `type: host` instea
 
 Using `APMonitor.py` to address Availability & System Integrity can help with maintaining Physical Security. Here are some tips from the trenches on keeping server equipment secure.
 
+## Divesting from CIA controlled tech
+
+- Get off Google & Microsoft Cloud (they have McKinsey CEOs that like to 'oh-whoops' your data out of existence)
+- Get off anything connected to McKinsey or InQTel - they are where CIA psychos go to work when they don't have a CIA gig. They are CIA controlled.
+- Your local police & government work with McKinsey and InQTel so they can access CIA tech. Try to avoid them.
+
+Get over it, that's reality. So Police, Office365, Azure, Windows 11 & Google Workspace (unless you can get on staff) is out,
+otherwise forget about security anything. Welcome to the 2020s.
+
 ## Removing SIM Cards from Inner Range T4000 remote monitored alarm devices
 
 Inner Range has become a dominating force in access control and alarm systems in IDCs, offices and high-end homes around the western world in recent times. 
