@@ -473,18 +473,6 @@ For host performance monitoring (CPU, memory, disk I/O), use `type: host` instea
 
 Using `APMonitor.py` to address Availability & System Integrity can help with maintaining Physical Security. Here are some tips from the trenches on keeping server equipment secure.
 
-## Divesting from CIA controlled tech
-
-- Get off Google & Microsoft Cloud (they have McKinsey CEOs that like to 'oh-whoops' your data out of existence)
-- Get off anything connected to McKinsey or InQTel - they are where CIA psychos go to work when they don't have a CIA gig. They are CIA controlled.
-- Your local police & government work with McKinsey and InQTel so they can access CIA tech. Try to avoid them.
-- Avoid #SaltLakeCity connected technology (e.g.: #Adobe. #NSA & #SaltLakeCity mormons are buddies because that's where their data center is, and #CIA controls #NSA).
-
-Get over it, that's reality. So Police, Office365, Azure, Windows 11 & Google Workspace (unless you can get on staff) is out,
-otherwise forget about security anything. Welcome to the 2020s.
-
-NB: Through a weird twist of fate, Xerox PARC & The Commonwealth actually owns the #SaltLakeCity land #NSA, #Adobe and #Mormons are on - don't ask, DYODD. FR.
-
 ## Removing SIM Cards from Inner Range T4000 remote monitored alarm devices
 
 Inner Range has become a dominating force in access control and alarm systems in IDCs, offices and high-end homes around the western world in recent times. 
@@ -875,7 +863,22 @@ need so they can maintain their systems.
 The ones we should be using? That were made this millenium, for this millenium by people like those 
 from Xerox PARC from last millenium that really did know what they were doing, more so than today.
 
-Anyways - don't get too bogged down in this, we can only use what we have available to us. But I do worry for the future.
+### Divesting from CIA controlled tech
+
+- Get off Google & Microsoft Cloud (they have McKinsey CEOs that like to 'oh-whoops' your data out of existence)
+- Get off anything connected to McKinsey or InQTel - they are where CIA psychos go to work when they don't have a CIA gig. They are CIA controlled.
+- Your local police & government work with McKinsey and InQTel so they can access CIA tech. Try to avoid them.
+- Avoid #SaltLakeCity connected technology (e.g.: #Adobe. #NSA & #SaltLakeCity mormons are buddies because that's where their data center is, and #CIA controls #NSA).
+- When #CIA is around, assume this: every speaker is a microphone, every microphone is a speaker. And every IOT is connected to CIA.
+- When #NSA is around, every OT network is an IOT network, and it's impossible to keep #OT off The Internet. 
+
+Get over it, that's reality. So Police, Office365, Azure, Windows 11 & Google Workspace (unless you can get on staff) is out,
+otherwise forget about security anything. Welcome to the 2020s.
+
+NB: Through a weird twist of fate, Xerox PARC & The Commonwealth actually owns the #SaltLakeCity land #NSA, #Adobe and #Mormons are on - don't ask, DYODD. FR.
+
+Anyways - don't get too bogged down in this: At least you now know the risk profile, we can only use what we have available to us. But I do worry for the future.
+
 
 # MRTG/RRD Integration for Performance Graphing
 
