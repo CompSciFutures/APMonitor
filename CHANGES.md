@@ -11,6 +11,9 @@ Thread safe, reentrant, modifiable.
 
 # Release 1.3.13 (???): ???
 - Edited Security Sensors notes.
+- Updated physical security notes
+- Added example of SPAN port being labelled PROMISC
+- Added info about Krone Fluke meters and finding cables/RF/bugs
 
 # Release 1.3.12 (17-Apr-26): Security Sensors
 - fixed broken link in README.md re: monitoring IOT networks

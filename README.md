@@ -558,6 +558,14 @@ Steps to monitor TCP/IP connectivity by a device:
 
     NB: `APMonitor.py` may take this input as a live feed in future, so get used to working with spans and taps.
 
+    <br />
+    Label your SPAN port correctly as "PROMISC" so you don't use it as a normal port then leave it setup, eg:<br /><br />
+
+    <img src="physical-security/Promisc-Port-eg1.jpeg" width="400" /><br /><br />
+
+    <img src="physical-security/Promisc-Port-eg2.jpeg" width="400" /><br />
+
+
 2. Plug a linux box into the span port and dump the traffic on the port using `tcpdump` into daily `.pcap` files:
 
     ```
@@ -686,6 +694,28 @@ Steps to monitor TCP/IP connectivity by a device:
     ```
 
 5. Inspect the list and go through each host/protocol and build a whitelist of what you want to allow.
+
+
+## Recommended tools for finding rogue cabling, RF and bugs
+
+We use these - the "<a href="https://www.fluke.com/en-au/product/network-cable-testers/copper/pro3000kit">Fluke Networks Pro3000(TM) Tone Generator and Probe Kit</a>", aka a 'Krone Fluke':
+
+<img src="physical-security/Fluke-Pro3000.jpeg" width="550" />
+
+You will probably also want to pickup an inline GigE-to-GigE Female-to-Female inline Cat5/Cat6 coupler, for example the <a href="https://www.startech.com/en-eu/cables/in-cat6a-coupler-s1">IN-CAT6A-COUPLER-S1</a> from StarTech. BlackBox should have something similar.
+
+You do need a Network Engineer to train you how to use one of these, but basically:
+
+```
+BEEPING TONE:    You are close
+WHIRRING SOUND:  That's 50/60hz AC or DC/microwave energy/electricity
+CLICKING:        That's data
+```
+
+Here is a <a href="https://x.com/CompSciFutures/status/2035128367704596572?s=20">demo of it in action</a> - see if you can spot the CLICKING from the WHIRRING. Make a map of your environment early, like an Electricial Engineer would do wiring architecture diagrams submittable to council for building approval, then compare your environment to the architecture diagrams often (but not frequently).
+
+NB. USB-C/Firewire does not belong in data centers, because it hasn't been treated for Tempest, and HDMI does not belong in Tier-1 data centers, because of HDMI-ARC/CEC.
+
 
 ## Recommended PIR Sensors that are for Computer Science to use
 
