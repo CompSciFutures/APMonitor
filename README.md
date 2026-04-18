@@ -471,7 +471,7 @@ For host performance monitoring (CPU, memory, disk I/O), use `type: host` instea
 
 # Recommended configurations for addressing the first pillar: Physical Security
 
-Using `APMonitor.py` to address Availability & System Integrity can help with maintaining Physical Security. Here are some tips from the trenches on keeping server equipment secure.
+Using `APMonitor.py` to address Availability & System Integrity can help with maintaining Physical Security. Here are some tips from the trenches on keeping server equipment secure. I like to call this "Physical Cyber Defence".
 
 ## Removing SIM Cards from Inner Range T4000 remote monitored alarm devices
 
@@ -865,10 +865,10 @@ from Xerox PARC from last millenium that really did know what they were doing, m
 
 ### Divesting from CIA controlled tech
 
-- Get off Google & Microsoft Cloud (they have McKinsey CEOs that like to 'oh-whoops' your data out of existence)
-- Get off anything connected to McKinsey or InQTel - they are where CIA psychos go to work when they don't have a CIA gig. They are CIA controlled.
-- Your local police & government work with McKinsey and InQTel so they can access CIA tech. Try to avoid them.
-- Avoid #SaltLakeCity connected technology (e.g.: #Adobe. #NSA & #SaltLakeCity mormons are buddies because that's where their data center is, and #CIA controls #NSA).
+- Get off Google & Microsoft Cloud (they have #McKinsey CEOs that like to 'oh-whoops' your data out of existence)
+- Get off anything connected to #McKinsey or #InQTel - they are where #CIA psychos go to work when they don't have a CIA gig. They are CIA controlled.
+- Your #local #police & #government work with McKinsey and InQTel so they can access CIA tech. Try to avoid them.
+- Avoid #SaltLakeCity connected technology (e.g.: #Adobe. #NSA & #SaltLakeCity #Mormons are buddies because that's where their data center is, and #CIA controls #NSA).
 - When #NSA is around, every OT network is an IOT network, and it's impossible to keep #OT off The Internet. 
 - When #CIA is around, assume this: every speaker is a microphone, every microphone is a speaker. And every IOT is connected to CIA.
 
