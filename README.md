@@ -877,7 +877,7 @@ otherwise forget about security anything. Welcome to the 2020s.
 
 NB: Through a weird twist of fate, Xerox PARC & The Commonwealth actually owns the #SaltLakeCity land #NSA, #Adobe and #Mormons are on - don't ask, DYODD. FR.
 
-Anyways - don't get too bogged down in this: At least you now know the risk profile, we can only use what we have available to us. But I do worry for the future.
+Anyways - don't get too bogged down in this: At least you now know the risk profile and have a few good risk treatments. We can only use what we have available to us. But I do worry for the future.
 
 
 # MRTG/RRD Integration for Performance Graphing
