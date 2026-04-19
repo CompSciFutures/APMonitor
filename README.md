@@ -942,6 +942,8 @@ Anyways - don't get too bogged down in this: At least you now know the risk prof
 
 - And #CIA is premised on this #RulesBasedOrder rule: "#CIA cannot exist without #Compartmentalisation". #Compartmentalisation died ages ago due to globalization, and #CIA have been off the chain ever since.
 
+- NB: In USA, there is the no-write-down rule associated with the <a href="https://medium.com/@lydia.cao26/security-policies-the-bell-lapadula-model-and-the-biba-model-24ddb500c8a1">Bell-LaPadula</a> model. This may be relevant to you - I ignore it because #proprietary is so much more secret than any label any government anything has, their top top top top secret ends well before our "Public Corpus of Knowledge" begins.
+
 - The only solution I see to this moving forward is: #ComputerScienceWithGuns. I have seen it before during peak #ServerMasters era, it's not really my style, but it does work. Soon #CS schools will include #BasicWeaponsTraining from #Military or #SIGINT, or have it as a prerequisite.
 
 HTH.
