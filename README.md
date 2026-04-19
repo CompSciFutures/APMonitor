@@ -697,7 +697,7 @@ Steps to monitor TCP/IP connectivity by a device:
 
 ## Recommended tools for finding rogue cabling, RF and bugs
 
-We use these - the "<a href="https://www.fluke.com/en-au/product/network-cable-testers/copper/pro3000kit">Fluke Networks Pro3000(TM) Tone Generator and Probe Kit</a>", aka a 'Krone Fluke':
+We use these - the "<a href="https://www.fluke.com/en-au/product/network-cable-testers/copper/pro3000kit">Fluke Networks Pro3000(TM) Tone Generator and Probe Kit</a>", aka a 'Krone Fluke' not to be confused with a Telco DC 'Butt Phone':
 
 <img src="physical-security/Fluke-Pro3000.jpeg" width="550" />
 
@@ -908,6 +908,45 @@ NB: Through a weird twist of fate, Xerox PARC & The Commonwealth actually owns t
 
 Anyways - don't get too bogged down in this: At least you now know the risk profile and have a few good risk treatments. We can only use what we have available to us. But I do worry for the future.
 
+## Classification labels and #Commerce vs. #Military vs. #Intelligence
+
+- We (CS & EE) are classified as #civilian / #commerce, however secrectly, we actually have a classification label so secret no government is allowed to know about it: #Proprietary.
+
+- If you are in heavy duty #SiliconValley innovation or hardcore #ComputerScience like I am, then we carry an even more secret label: #FutureProprietary.
+
+- Signals Intelligence/#SIGINT is actually #Military #Defence, but only in peacetime - not when #Military goes full #WAR. We work with/as Defence Industrial Contractors all the time. They are cool.
+
+- #Intelligence is not allowed anywhere near #Military, #Defence, #Commerce or #Civillians. They are freeking bat-shit-crazy lunatics. If you ever need to communicate with intelligence, there are #DMZs you can communicate in but best to hand it to someone oboarded to 5-eyes like myself to handle.
+
+- If you really have to speak to #Intelligence, there is always a "front door" in every country that is supposed to have sane peopple manning the phones/letterbox. Write your note on a piece of paper drop it in the box then RUN. RUN FOR YOUR LIVES! FR. This is a problem because "some things you do not write down" (actually lots of things in #ComputerScience). They understand that concept, just say those words. Or hand it to a #CS/#EE that has been onboarded to 5-eyes and they will fly to a DMZ (every 5-eyes approved site has a #DMZ nearby where we can talk as #Professional #Civillians - or is supposed to. I do miss the old days).
+
+- And again: #Intelligence is not allowed near #Commerce, #Civillian, #Industry, #Academia and definitely not #proprietary.
+
+- #Government is definitely not allowed to mess with #proprietary either, which dates back at least 1000 years via the #BritishEmpire/#RomanEmpire/#ChineseEmpire because: #SilkRoad, #Commerce, #Logistics & #TradeWinds was an amazing thing 1,000 years ago. 
+
+- #Intelligence (such as CIA) is not allowed near #ComputerScience or #SiliconValley (so what is #McKinsey & #InQTel? - it's a hole in the network)
+
+- What is 5 eyes? It's a system of treaties designed to prevent #Intelligence from putting holes in our network.
+
+- My personal label is: #InternetCommerce. I represent the future and current #proprietary of #InternetCommerce, and I'm definitely listed in global databases as #ComputerScience and #SiliconValley, so I'm a DEFINITELY DO NOT COME NEAR ME.
+
+- #Police these days we classify as #Intelligence, because they've been speaking to and use too much technology from #CIA & #NSA.
+
+- Once upon a time #NSA (when they were No Such Agency) were respected and we could talk to them, but these days, they are just #CIA #Intelligence.
+
+- If a nation state wants computers, it must have #ComputerScience. To have Computer Science, they must abide by #RulesBasedOrder. We are very committed to #RulesBasedOrder - it's a necessary requirement before learning properly good #ComputerScience. 
+
+- The particular rule from #RulesBasedOrder that #CompSci requires to exist is at an absolute minimum: "Respecting the #Privacy of #Proprietary"
+
+- The second rule from #RulesBasedOrder that #Government must adhere to is: "#Intelligence is not allowed to move one single chess piece, ever"
+
+- And #CIA is premised on this #RulesBasedOrder rule: "#CIA cannot exist without #Compartmentalisation". #Compartmentalisation died ages ago due to globalization, and #CIA have been off the chain ever since.
+
+- The only solution I see to this moving forward is: #ComputerScienceWithGuns. I have seen it before during peak #ServerMasters era, it's not really my style, but it does work. Soon #CS schools will include #BasicWeaponsTraining from #Military or #SIGINT, or have it as a prerequisite.
+
+HTH.
+
+Q.E.D
 
 # MRTG/RRD Integration for Performance Graphing
 
@@ -2516,7 +2555,7 @@ under the [GNU General Public License version 3](LICENSE.txt).
 `mrtg-rrd.cgi.pl` is licensed by Jan "Yenya" Kasprzak <kas@fi.muni.cz><br />
 under the [GNU General Public License version 2](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html).
 ```
-Software: APMonitor 1.3.13
+Software: APMonitor 1.3.14
 License: GNU General Public License version 3
 Licensor: Andrew (AP) Prendergast, ap@andrewprendergast.com -- FSF Member
 
