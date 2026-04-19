@@ -729,7 +729,7 @@ You have two options:
 - Carefully tuned sensor fused <a href="https://www.manualslib.com/manual/1444971/Paradox-Nv75mw.html">Paradox NV75MW room corner PIR</a> sensors ([Paradox-NV75MW-Manual.pdf](physical-security/Paradox-NV75MW-Manual.pdf)).
 
 Keeping these on the market are a constant source of problems. You may have to order 100 or 1000 units
-to get the ones you want and know they authentic. Talk directly to <a href="https://www.paradox.com/web/contact-us/">the manufacturer</a>
+to get the ones you want and know they are authentic. Talk directly to <a href="https://www.paradox.com/web/contact-us/">the manufacturer</a>
 if you have problems.
 
 All the other sensors aren't suitably equipped with tamper detection/resistance, and are easily 
@@ -842,7 +842,7 @@ In terms of distances and tolerances - leave at least one footwidth length betwe
 or you may get false positives from water moving through pipes or people in the next room, and expect to take a few attempts
 before you get the sensitivity right.
 
-NB: There are also some plastic twiddly bits on the internal lens cover plate to tweak the freznal lens. You might/will need to tweak them to the room dynamics. DO NOT LEAVE FINGERPRINTS ON OR TOUCH THE SENSORS. Someone that can handle chips without breaking off one solder ball or bending one chip is able to do this without touching the sensors.
+NB: There are also some plastic twiddly bits on the internal lens cover plate to tweak the freznal lens. You might/will need to tweak them to the room dynamics. DO NOT LEAVE FINGERPRINTS ON OR TOUCH THE SENSORS. Someone that can handle chips without breaking off one solder ball or bending one pin is able to do this without touching the sensors.
 
 
 ### Setting up the DG467 360' ceiling mount PIR
