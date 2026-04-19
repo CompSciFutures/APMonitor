@@ -934,7 +934,7 @@ Anyways - don't get too bogged down in this: At least you now know the risk prof
 
 - Once upon a time #NSA (when they were No Such Agency) were respected and we could talk to them, but these days, they are just #CIA #Intelligence.
 
-- If a nation state wants computers, it must have #ComputerScience. To have Computer Science, they must abide by #RulesBasedOrder. We are very committed to #RulesBasedOrder - it's a necessary requirement before learning properly good #ComputerScience. 
+- If a nation state wants computers, it must have #ComputerScience. To have Computer Science, they must have #Modernity, which is only possible if they have #RulesBasedOrder. We are very committed to #RulesBasedOrder - it's a necessary requirement before learning properly good #ComputerScience. 
 
 - The particular rule from #RulesBasedOrder that #CompSci requires to exist is at an absolute minimum: "Respecting the #Privacy of #Proprietary"
 
@@ -945,6 +945,8 @@ Anyways - don't get too bogged down in this: At least you now know the risk prof
 - NB: In USA, there is the no-write-down rule associated with the <a href="https://medium.com/@lydia.cao26/security-policies-the-bell-lapadula-model-and-the-biba-model-24ddb500c8a1">Bell-LaPadula</a> model. This may be relevant to you - I ignore it because #proprietary is so much more secret than any label any government anything has, their top top top top secret ends well before our "Public Corpus of Knowledge" begins.
 
 - The only solution I see to this moving forward is: #ComputerScienceWithGuns. I have seen it before during peak #ServerMasters era, it's not really my style, but it does work. Soon #CS schools will include #BasicWeaponsTraining from #Military or #SIGINT, or have it as a prerequisite.
+
+Violate this framework and you will all be unwinding #Modernity and #Civilization and going back to #HunterGatherers where 100% of your time is about food, for everyone on the planet.
 
 HTH.
 
