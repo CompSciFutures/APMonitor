@@ -910,7 +910,7 @@ Anyways - don't get too bogged down in this: At least you now know the risk prof
 
 ## Classification labels and #Commerce vs. #Military vs. #Intelligence
 
-- We (CS & EE) are classified as #civilian / #commerce, however secrectly, we actually have a classification label so secret no government is allowed to know about it: #Proprietary.
+- We (CS & EE) are classified as #civilian / #commerce, however secrectly, we actually have a classification label so secret no government is allowed to know about it: #Proprietary. Commerce can't function without #Proprietary.
 
 - If you are in heavy duty #SiliconValley innovation or hardcore #ComputerScience like I am, then we carry an even more secret label: #FutureProprietary.
 
