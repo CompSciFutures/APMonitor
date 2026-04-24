@@ -883,9 +883,10 @@ We do like good EE tutelage, and in the fullness of time, we now know interactin
 
 The spread of #Ericsson #AXS #SS7 telephony switches in #TelephonyDataCenters (not to be confused with #InternetDataCenters or #IDCs)
 has caused us a little problem: The security of #SS7 switching is so bad that anyone from any nation state can use VOIP to access the
-signalling channel to throw code at any #SS7 switch from anywhere in the world and surveil your calls. 
+signalling channel to throw code at any #SS7 switch from anywhere in the world to surveil your calls. 
 
 If you data is encapsulated in #SS7 #Data and there is compute nearby, then your data can be wiretapped and edited as well.
+(NB: We do say "compute does not belong next to telephony in any known universe", and "telephony does not belong in IDCs". This is a problem with the recent proliferation of VOIP providers in Internet Data Centers)
 
 #NSA & #CIA have since layered on top of this #CyberTorture #FusionCenters, and if you are an #EE, #CS or involved in #IDC ops, you will already be on a target list and the #FusionCenters will most likely be tapping your calls.
 
@@ -893,7 +894,7 @@ As a minimum risk treatment for #SS7 #Voice #Wiretapping, #SiliconValley has mad
 
 Do not communicate with #ComputerScience over insecure channels.
 
-A joint note was signed by 5-Eyes (excluding the UK) was signed on 4-Dec-2024, 
+A joint note was signed by 5-Eyes (excluding the UK) on 4-Dec-2024, 
 <a href="https://www.cisa.gov/resources-tools/resources/enhanced-visibility-and-hardening-guidance-communications-infrastructure">recommending the use of Signal Messenger</a> (<a href="https://signal.org/">https://signal.org/</a>).
 The important bits are as follows:
 
