@@ -13,6 +13,7 @@ Thread safe, reentrant, modifiable.
 - Physical security grammar edits
 - added info on classification labels.
 - Added CISA note about Fusion Centers & Signal Messenger
+- Fixed AXE typo in README
 
 # Release 1.3.13 (19-Apr-26): Physical Cyber Security
 - Edited Security Sensors notes.

@@ -881,7 +881,7 @@ We do like good EE tutelage, and in the fullness of time, we now know interactin
 
 ## Using Signal Messenger & #CyberTorture #FusionCenters
 
-The spread of #Ericsson #AXS #SS7 telephony switches in #TelephonyDataCenters (not to be confused with #InternetDataCenters or #IDCs)
+The spread of #Ericsson #AXE #SS7 telephony switches in #TelephonyDataCenters (not to be confused with #InternetDataCenters or #IDCs)
 has caused us a little problem: The security of #SS7 switching is so bad that anyone from any nation state can use VOIP to access the
 signalling channel to throw code at any #SS7 switch from anywhere in the world to surveil your calls. 
 
