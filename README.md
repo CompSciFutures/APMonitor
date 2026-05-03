@@ -2579,13 +2579,13 @@ sudo pip3 uninstall -y PyYAML requests pyOpenSSL urllib3 aioquic easysnmp
 
 # Licensing & Versioning
 
-`APMonitor.py` is licensed by Andrew (AP) Prendergast <ap@andrewprendergast.com><br />
+<a href="http://apmonitor.org/">`APMonitor.py`</a> is licensed by Andrew (AP) Prendergast <ap@andrewprendergast.com><br />
 under the [GNU General Public License version 3](LICENSE.txt).
 
-`mrtg-rrd.cgi.pl` is licensed by Jan "Yenya" Kasprzak <kas@fi.muni.cz><br />
+<a href="https://www.fi.muni.cz/~kas/mrtg-rrd/">`mrtg-rrd.cgi.pl`</a> is licensed by Jan "Yenya" Kasprzak <kas@fi.muni.cz><br />
 under the [GNU General Public License version 2](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html).
 ```
-Software: APMonitor 1.3.15
+Software: APMonitor 1.3.16
 License: GNU General Public License version 3
 Licensor: Andrew (AP) Prendergast, ap@andrewprendergast.com -- FSF Member
 

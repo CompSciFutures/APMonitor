@@ -267,6 +267,9 @@ installmrtg: check-root
 	@echo "==> Installing nginx configuration..."
 	install -m 644 mrtg-nginx.conf $(NGINX_CONF_DIR)/mrtg-nginx.conf
 
+	@echo "==> Installing MRTG banner icons..."
+	cp images/mrtg-l.png images/mrtg-m.png images/mrtg-r.png $(MRTG_WORK_DIR)/
+
 	@echo "==> Setting up fcgiwrap socket permissions..."
 	@if ! systemctl is-active --quiet fcgiwrap.service; then \
 		echo "Starting fcgiwrap service..."; \
