@@ -9,6 +9,9 @@ Multithreaded high speed availability checking for SNMP, PING, TCP/UDP, QUIC & H
 Integrates w/Site24x7 heartbeat monitoring for failover alerts + MRTG + Slack & Pushover webhooks.
 Thread safe, reentrant, modifiable.
 
+# Release 1.3.l5 (???): ???
+- Added link to Physical Cyber Defence in Quickstart 
+
 # Release 1.3.14 (27-Apr-26): Physical Cyber Security II
 - Physical security grammar edits
 - added info on classification labels.

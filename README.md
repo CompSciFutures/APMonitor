@@ -53,6 +53,10 @@ Support email: hello@enertium.org<br />
 
 # Quickstart
 
+> To get started with "Physical Cyber Defence" jump to the tips section 
+> "<a href="#recommended-configurations-for-addressing-the-first-pillar-physical-security">Recommended configurations for addressing the first pillar: Physical Security</a>"
+> 
+
 To run APMonitor with a configuration file and auto-derived statefile under `/var/tmp/APMonitor/`:
 ```bash
 ./APMonitor.py test-apmonitor-config.yaml --generate-rrds
@@ -2581,7 +2585,7 @@ under the [GNU General Public License version 3](LICENSE.txt).
 `mrtg-rrd.cgi.pl` is licensed by Jan "Yenya" Kasprzak <kas@fi.muni.cz><br />
 under the [GNU General Public License version 2](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html).
 ```
-Software: APMonitor 1.3.14
+Software: APMonitor 1.3.15
 License: GNU General Public License version 3
 Licensor: Andrew (AP) Prendergast, ap@andrewprendergast.com -- FSF Member
 
