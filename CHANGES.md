@@ -11,6 +11,7 @@ Thread safe, reentrant, modifiable.
 
 # Release 1.3.l5 (???): ???
 - Added link to Physical Cyber Defence in Quickstart 
+- Added alarm + diff when a config file changes
 
 # Release 1.3.14 (27-Apr-26): Physical Cyber Security II
 - Physical security grammar edits

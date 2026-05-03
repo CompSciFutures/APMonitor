@@ -44,7 +44,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-__version__ = "1.3.12"
+__version__ = "1.3.15"
 __app_name__ = "APMonitor"
 
 import argparse
@@ -72,6 +72,7 @@ import traceback
 from typing import Any, Dict, List, Optional, Tuple, Union
 import rrdtool
 import tempfile
+import difflib
 
 # NB: check_quic_url() already has aioquic defined as a function local import so you don't have to lug it around if you don't need it
 
@@ -5108,6 +5109,107 @@ def update_mrtg_rrd_cgi_config(work_dir: str, mrtg_config_path: str, site_name: 
             pass
 
 
+def get_config_previous_path(config_path: str) -> str:
+    """Return path to cached previous config file for change detection.
+
+    Args:
+        config_path: Path to the config file being monitored
+
+    Returns:
+        str: Full path to .previous file under /var/tmp/APMonitor/
+    """
+    config_filename = Path(config_path).name  # preserve full filename, not just stem
+    state_dir       = Path(get_default_statefile(config_path)).parent
+    return str(state_dir / f"{config_filename}.previous")
+
+
+def check_config_changed_and_notify(config_path: str, config: Dict[str, Any]) -> None:
+    """Compare current config file bytes against cached previous copy.
+
+    On first run or any change: saves current bytes to .previous and fires
+    a one-shot notification via outage_emails/outage_webhooks.
+    No throttling, no recovery, no state tracking — pure one-shot.
+    Respects site-level alarms flag.
+
+    Args:
+        config_path: Path to the config file that was loaded
+        config:      Parsed config dict (used for site name and notification targets)
+    """
+    prefix         = getattr(thread_local, 'prefix', '')
+    site_name      = config['site']['name']
+    alarms_enabled = to_natural_language_boolean(config['site'].get('alarms', True))
+    previous_path  = get_config_previous_path(config_path)
+
+    # Read current raw bytes
+    try:
+        with open(config_path, 'rb') as f:
+            current_bytes = f.read()
+    except Exception as e:
+        print(f"{prefix}Config change check FAILED: could not read '{config_path}': {e}", file=sys.stderr)
+        return
+
+    # Read previous bytes if exists
+    previous_bytes = None
+    if os.path.exists(previous_path):
+        try:
+            with open(previous_path, 'rb') as f:
+                previous_bytes = f.read()
+        except Exception as e:
+            if VERBOSE:
+                print(f"{prefix}Config change check: could not read previous '{previous_path}': {e}")
+
+    # No change
+    if previous_bytes is not None and current_bytes == previous_bytes:
+        if VERBOSE:
+            print(f"{prefix}Config unchanged: {config_path}")
+        return
+
+    # Save current as new previous (before notifying — idempotent on repeated runs)
+    try:
+        with open(previous_path, 'wb') as f:
+            f.write(current_bytes)
+    except Exception as e:
+        print(f"{prefix}Config change check: could not write '{previous_path}': {e}", file=sys.stderr)
+
+    # First run — no previous to diff against, silent save
+    if previous_bytes is None:
+        if VERBOSE:
+            print(f"{prefix}Config baseline saved: {config_path}")
+        return
+
+    # Build unified diff
+    previous_lines = previous_bytes.decode('utf-8', errors='replace').splitlines(keepends=True)
+    current_lines  = current_bytes.decode('utf-8', errors='replace').splitlines(keepends=True)
+    diff_lines     = list(difflib.unified_diff(
+        previous_lines, current_lines,
+        fromfile=f"{config_path} (previous)",
+        tofile=f"{config_path} (current)",
+        lineterm='',
+    ))
+    diff_text = ''.join(diff_lines) if diff_lines else "(no textual diff — binary change?)"
+
+    timestamp_str = datetime.now().strftime('%I:%M %p %Z').lstrip('0').strip()
+    message = (
+        f"Config file changed: {config_path} in {site_name} at {timestamp_str}\n\n"
+        f"{diff_text}"
+    )
+
+    print(f"{prefix}##### CONFIG CHANGE: {config_path} #####", file=sys.stderr)
+    if VERBOSE:
+        print(f"{prefix}{diff_text}")
+
+    if not alarms_enabled:
+        return
+
+    if 'outage_emails' in config['site']:
+        for email_entry in config['site']['outage_emails']:
+            notify_resource_outage_with_email(
+                email_entry, site_name, message, config['site'], 'outage')
+
+    if 'outage_webhooks' in config['site']:
+        for webhook in config['site']['outage_webhooks']:
+            notify_resource_outage_with_webhook(webhook, site_name, message)
+
 def main() -> None:
     global VERBOSE, MAX_THREADS, STATEFILE, STATE, MAX_RETRIES, MAX_TRY_SECS, DEFAULT_CHECK_EVERY_N_SECS, DEFAULT_NOTIFY_EVERY_N_SECS, DEFAULT_AFTER_EVERY_N_NOTIFICATIONS, RRD_ENABLED
 
@@ -5198,6 +5300,8 @@ def main() -> None:
             print(json.dumps(config, indent=2))
 
         print_and_exit_on_bad_config(config)
+        if not args.test_config:
+            check_config_changed_and_notify(args.config, config)
 
         # Test mode for config validation
         if args.test_config:
