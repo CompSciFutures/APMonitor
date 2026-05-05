@@ -1962,7 +1962,7 @@ def check_host_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Dict[s
             # host uses empty interfaces dict — no per-interface DS
             # fixed DS count = 0 per-interface + 22 fixed DS total
             interfaces_rrd    = {}
-            expected_ds_count = 22
+            expected_ds_count = 29
 
             if os.path.exists(rrd_path):
                 needs_recreation = False
@@ -2112,12 +2112,22 @@ def check_ports_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Dict[
     OID_DOT1Q_TP_FDB_STATUS  = '1.3.6.1.2.1.17.7.1.2.2.1.3'
 
     # ARP tables (RFC 4293 preferred, RFC 2011 fallback)
-    OID_IP_NET_TO_PHYSICAL   = '1.3.6.1.2.1.4.35.1.4'  # ipNetToPhysicalPhysAddress
-    OID_IP_NET_TO_MEDIA      = '1.3.6.1.2.1.4.22.1.2'   # ipNetToMediaPhysAddress
+    OID_IP_NET_TO_PHYSICAL   = '1.3.6.1.2.1.4.35.1.4'
+    OID_IP_NET_TO_MEDIA      = '1.3.6.1.2.1.4.22.1.2'
 
     # ARP IP address columns (parallel to the physical address OIDs above)
-    OID_IP_NET_TO_PHYSICAL_ADDR = '1.3.6.1.2.1.4.35.1.4'  # value IS the MAC; IP is in OID tail
-    OID_IP_NET_TO_MEDIA_ADDR    = '1.3.6.1.2.1.4.22.1.2'   # value IS the MAC; IP is in OID tail
+    OID_IP_NET_TO_PHYSICAL_ADDR = '1.3.6.1.2.1.4.35.1.4'
+    OID_IP_NET_TO_MEDIA_ADDR    = '1.3.6.1.2.1.4.22.1.2'
+
+    # RMON-MIB etherStatsTable (RFC 2819) packet size distribution
+    # OID: 1.3.6.1.2.1.16.1.1.1.{col}.{etherStatsIndex} — summed across all indices
+    OID_RMON_PKTS_64        = '1.3.6.1.2.1.16.1.1.1.4'   # etherStatsPkts64Octets
+    OID_RMON_PKTS_65_127    = '1.3.6.1.2.1.16.1.1.1.5'   # etherStatsPkts65to127Octets
+    OID_RMON_PKTS_128_255   = '1.3.6.1.2.1.16.1.1.1.6'   # etherStatsPkts128to255Octets
+    OID_RMON_PKTS_256_511   = '1.3.6.1.2.1.16.1.1.1.7'   # etherStatsPkts256to511Octets
+    OID_RMON_PKTS_512_1023  = '1.3.6.1.2.1.16.1.1.1.8'   # etherStatsPkts512to1023Octets
+    OID_RMON_PKTS_1024_1518 = '1.3.6.1.2.1.16.1.1.1.9'   # etherStatsPkts1024to1518Octets
+    OID_RMON_PKTS_JUMBO     = '1.3.6.1.2.1.16.1.1.1.11'  # etherStatsJabbers (>1518)
 
     OPER_STATUS = {
         '1': 'up', '2': 'down', '3': 'testing',
@@ -2223,7 +2233,7 @@ def check_ports_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Dict[
                 interfaces[if_index]['out_errors'] = None
 
             # Per-interface combined errors for RRD
-            in_err = interfaces[if_index].get('in_errors')
+            in_err  = interfaces[if_index].get('in_errors')
             out_err = interfaces[if_index].get('out_errors')
             interfaces[if_index]['errors'] = (
                 (in_err or 0) + (out_err or 0)
@@ -2237,15 +2247,15 @@ def check_ports_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Dict[
 
         for if_index in interfaces:
             if_pkts_in = if_pkts_out = 0
-            if_bmcast = 0
+            if_bmcast  = 0
 
             for oid, is_in, is_ucast in [
-                (OID_IF_HC_IN_UCAST_PKTS, True, True),
-                (OID_IF_HC_IN_MCAST_PKTS, True, False),
-                (OID_IF_HC_IN_BCAST_PKTS, True, False),
-                (OID_IF_HC_OUT_UCAST_PKTS, False, True),
-                (OID_IF_HC_OUT_MCAST_PKTS, False, False),
-                (OID_IF_HC_OUT_BCAST_PKTS, False, False),
+                (OID_IF_HC_IN_UCAST_PKTS,   True,  True),
+                (OID_IF_HC_IN_MCAST_PKTS,   True,  False),
+                (OID_IF_HC_IN_BCAST_PKTS,   True,  False),
+                (OID_IF_HC_OUT_UCAST_PKTS,  False, True),
+                (OID_IF_HC_OUT_MCAST_PKTS,  False, False),
+                (OID_IF_HC_OUT_BCAST_PKTS,  False, False),
             ]:
                 try:
                     v = int(session.get(f"{oid}.{if_index}").value)
@@ -2255,20 +2265,20 @@ def check_ports_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Dict[
                             total_pkts_ucast_in += v
                         else:
                             total_pkts_bmcast_in += v
-                            if_bmcast += v
+                            if_bmcast            += v
                     else:
                         if_pkts_out += v
                         if is_ucast:
                             total_pkts_ucast_out += v
                         else:
                             total_pkts_bmcast_out += v
-                            if_bmcast += v
+                            if_bmcast             += v
                 except Exception:
                     pass
 
             interfaces[if_index]['bmcast_pkts'] = if_bmcast if if_bmcast > 0 else None
 
-            total_pkts_in += if_pkts_in
+            total_pkts_in  += if_pkts_in
             total_pkts_out += if_pkts_out
 
             if VERBOSE:
@@ -2434,14 +2444,12 @@ def check_ports_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Dict[
                 'macs':  sorted(macs_by_ifindex.get(if_index, [])),
             }
 
-        # --- Tamper detection: active port count (free — derived from current_ports_state) ---
+        # --- Tamper detection: active port count ---
         ports_up_count = sum(1 for s in current_ports_state.values() if s['oper'] == 'up')
         if VERBOSE:
             print(f"{prefix}PORTS up count: {ports_up_count}/{len(current_ports_state)}")
 
-        # --- Tamper detection: NVRAM + flash used bytes (vendor-neutral hrStorage walk) ---
-        # Keywords matched case-insensitively; sum used×units across all matching entries.
-        # Silent U if no matching entries — consistent with partial-data philosophy.
+        # --- Tamper detection: NVRAM + flash used bytes ---
         nvram_flash_bytes = None
         try:
             storage_descr_items = session.walk(OID_HR_STORAGE_DESCR)
@@ -2461,27 +2469,22 @@ def check_ports_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Dict[
             if VERBOSE:
                 print(f"{prefix}PORTS hrStorage NVRAM/flash walk FAILED: {e}")
 
-        # --- Network capacity: MAC count (free — already have macs_by_ifindex from FDB walk) ---
+        # --- Network capacity: MAC count ---
         mac_count = sum(len(v) for v in macs_by_ifindex.values())
         if VERBOSE:
             print(f"{prefix}PORTS MAC count: {mac_count}")
 
         # --- Network capacity: ARP entry count + build mac→ip map for detail page ---
-        # ipNetToPhysicalTable (RFC 4293) preferred; ipNetToMediaTable (RFC 2011) fallback.
-        # OID tail for ipNetToPhysicalTable: ifIndex.ipVersion.ip1.ip2.ip3.ip4
-        # OID tail for ipNetToMediaTable:    ifIndex.ip1.ip2.ip3.ip4
         arp_count  = None
-        arp_by_mac: Dict[str, str] = {}  # mac → ip
+        arp_by_mac: Dict[str, str] = {}
 
         def _parse_arp_physical(items: list) -> Dict[str, str]:
             """Parse ipNetToPhysicalTable items → {mac: ip}."""
             result = {}
             for item in items:
                 try:
-                    # OID tail: ifIndex.addrType.ip1.ip2.ip3.ip4
                     parts = item.oid.split('.')
                     ip = '.'.join(parts[-4:])
-                    # value is MAC as hex octets separated by spaces or as raw bytes
                     raw = item.value
                     if raw:
                         mac_str = ':'.join(f'{int(b):02X}' for b in raw.split() if b) if ' ' in raw \
@@ -2508,21 +2511,48 @@ def check_ports_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Dict[
             return result
 
         try:
-            arp_items = session.walk(OID_IP_NET_TO_PHYSICAL)
-            arp_count = len(arp_items)
+            arp_items  = session.walk(OID_IP_NET_TO_PHYSICAL)
+            arp_count  = len(arp_items)
             arp_by_mac = _parse_arp_physical(arp_items)
             if VERBOSE:
                 print(f"{prefix}PORTS ARP count (ipNetToPhysicalTable): {arp_count}")
             if arp_count == 0:
-                # Fallback — some devices only populate the older table
-                arp_items = session.walk(OID_IP_NET_TO_MEDIA)
-                arp_count = len(arp_items)
+                arp_items  = session.walk(OID_IP_NET_TO_MEDIA)
+                arp_count  = len(arp_items)
                 arp_by_mac = _parse_arp_media(arp_items)
                 if VERBOSE:
                     print(f"{prefix}PORTS ARP count (ipNetToMediaTable fallback): {arp_count}")
         except Exception as e:
             if VERBOSE:
                 print(f"{prefix}PORTS ARP walk FAILED: {e}")
+
+        # --- RMON packet size distribution (switch only — non-fatal) ---
+        pkts_64 = pkts_65_127 = pkts_128_255 = pkts_256_511 = None
+        pkts_512_1023 = pkts_1024_1518 = pkts_jumbo = None
+
+        if resource['type'] == 'switch':
+            def _rmon_sum(oid: str) -> Optional[int]:
+                try:
+                    items = session.walk(oid)
+                    return sum(int(item.value) for item in items) if items else None
+                except Exception as e:
+                    if VERBOSE:
+                        print(f"{prefix}RMON walk FAILED {oid}: {e}")
+                    return None
+
+            pkts_64        = _rmon_sum(OID_RMON_PKTS_64)
+            pkts_65_127    = _rmon_sum(OID_RMON_PKTS_65_127)
+            pkts_128_255   = _rmon_sum(OID_RMON_PKTS_128_255)
+            pkts_256_511   = _rmon_sum(OID_RMON_PKTS_256_511)
+            pkts_512_1023  = _rmon_sum(OID_RMON_PKTS_512_1023)
+            pkts_1024_1518 = _rmon_sum(OID_RMON_PKTS_1024_1518)
+            pkts_jumbo     = _rmon_sum(OID_RMON_PKTS_JUMBO)
+
+            if VERBOSE:
+                print(f"{prefix}RMON pkt size: 64={pkts_64} 65-127={pkts_65_127} "
+                      f"128-255={pkts_128_255} 256-511={pkts_256_511} "
+                      f"512-1023={pkts_512_1023} 1024-1518={pkts_1024_1518} "
+                      f"jumbo={pkts_jumbo}")
 
         if VERBOSE:
             print(f"{prefix}PORTS poll SUCCESS for '{name}': {len(current_ports_state)} interfaces")
@@ -2537,7 +2567,6 @@ def check_ports_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Dict[
                       f"macs=[{mac_str}]")
 
         # --- Detail page data collection ---
-        # Enrich interfaces dict with oper/admin strings for collect_snmp_detail
         for if_index in interfaces:
             oper_raw  = oper_by_index.get(if_index, '4')
             admin_raw = admin_by_index.get(if_index, '2')
@@ -2554,7 +2583,7 @@ def check_ports_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Dict[
             rras               = create_rrd_rras(check_every_n_secs)
 
             if os.path.exists(rrd_path):
-                expected_ds_count = 4 * len(interfaces) + 22  # per-interface pairs + 22 fixed DS
+                expected_ds_count = 4 * len(interfaces) + 29
                 needs_recreation  = False
                 try:
                     info            = rrdtool.info(rrd_path)
@@ -2589,11 +2618,18 @@ def check_ports_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Dict[
                     total_errors_in, total_errors_out,
                     cpu_load, memory_pct,
                     total_pkts_ucast, total_pkts_bmcast,
-                    # host DS — U for ports
+                    # host DS — U for ports/switch
                     ports_up_count=ports_up_count,
                     nvram_flash_bytes=nvram_flash_bytes,
                     mac_count=mac_count,
                     arp_count=arp_count,
+                    pkts_64=pkts_64,
+                    pkts_65_127=pkts_65_127,
+                    pkts_128_255=pkts_128_255,
+                    pkts_256_511=pkts_256_511,
+                    pkts_512_1023=pkts_512_1023,
+                    pkts_1024_1518=pkts_1024_1518,
+                    pkts_jumbo=pkts_jumbo,
                 )
                 if rrd_err:
                     return rrd_err, {}
@@ -2872,7 +2908,7 @@ def check_port_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Option
 
         rras = create_rrd_rras(check_every_n_secs)
         if os.path.exists(rrd_path):
-            expected_ds_count = 4 * len(interfaces_rrd) + 22
+            expected_ds_count = 4 * len(interfaces_rrd) + 29
             needs_recreation = False
             try:
                 info = rrdtool.info(rrd_path)
@@ -3559,6 +3595,15 @@ def create_snmp_rrd(rrd_path: str, step_secs: int, interfaces: Dict[str, Dict[st
     data_sources.append(f'DS:mac_count:GAUGE:{heartbeat}:0:U')
     data_sources.append(f'DS:arp_count:GAUGE:{heartbeat}:0:U')
 
+    # Fixed RMON packet size distribution DS (switch only — ports/port/host store U)
+    data_sources.append(f'DS:pkts_64:COUNTER:{heartbeat}:0:U')
+    data_sources.append(f'DS:pkts_65_127:COUNTER:{heartbeat}:0:U')
+    data_sources.append(f'DS:pkts_128_255:COUNTER:{heartbeat}:0:U')
+    data_sources.append(f'DS:pkts_256_511:COUNTER:{heartbeat}:0:U')
+    data_sources.append(f'DS:pkts_512_1023:COUNTER:{heartbeat}:0:U')
+    data_sources.append(f'DS:pkts_1024_1518:COUNTER:{heartbeat}:0:U')
+    data_sources.append(f'DS:pkts_jumbo:COUNTER:{heartbeat}:0:U')
+
     rras = create_rrd_rras(step_secs)
 
     try:
@@ -3590,7 +3635,11 @@ def update_snmp_rrd(rrd_path: str, timestamp: datetime, interfaces: Dict[str, Di
                     disk_space_pct: Optional[float] = None, swap_used: Optional[int] = None,
                     interrupts: Optional[int] = None,
                     ports_up_count: Optional[int] = None, nvram_flash_bytes: Optional[int] = None,
-                    mac_count: Optional[int] = None, arp_count: Optional[int] = None) -> Optional[str]:
+                    mac_count: Optional[int] = None, arp_count: Optional[int] = None,
+                    pkts_64: Optional[int] = None, pkts_65_127: Optional[int] = None,
+                    pkts_128_255: Optional[int] = None, pkts_256_511: Optional[int] = None,
+                    pkts_512_1023: Optional[int] = None, pkts_1024_1518: Optional[int] = None,
+                    pkts_jumbo: Optional[int] = None) -> Optional[str]:
     """Update SNMP RRD file with latest interface metrics, system resources, and host performance.
 
     All numeric parameters accept None → stored as 'U' (unknown) in RRD.
@@ -3681,6 +3730,15 @@ def update_snmp_rrd(rrd_path: str, timestamp: datetime, interfaces: Dict[str, Di
     ds_names.append('nvram_flash_bytes'); values.append(_v(nvram_flash_bytes))
     ds_names.append('mac_count');         values.append(_v(mac_count))
     ds_names.append('arp_count');         values.append(_v(arp_count))
+
+    # Fixed RMON packet size distribution DS (switch only — ports/port/host pass None → U)
+    ds_names.append('pkts_64');        values.append(_v(pkts_64))
+    ds_names.append('pkts_65_127');    values.append(_v(pkts_65_127))
+    ds_names.append('pkts_128_255');   values.append(_v(pkts_128_255))
+    ds_names.append('pkts_256_511');   values.append(_v(pkts_256_511))
+    ds_names.append('pkts_512_1023');  values.append(_v(pkts_512_1023))
+    ds_names.append('pkts_1024_1518'); values.append(_v(pkts_1024_1518))
+    ds_names.append('pkts_jumbo');     values.append(_v(pkts_jumbo))
 
     template  = ':'.join(ds_names)
     value_str = ':'.join(values)
@@ -4338,7 +4396,7 @@ def _generate_switch_mrtg_targets(
         rrd_path: str,
         ports_state: Dict[str, Any],
         percentile: Optional[int]) -> None:
-    """Generate 4 stacked per-interface MRTG targets for a switch monitor.
+    """Generate 5 stacked per-interface MRTG targets for a switch monitor.
 
     Each chart uses a synthetic Target[] line (first interface DS pair) so
     mrtg-rrd.cgi.pl can locate the RRD, then the stacked AREA/STACK graph
@@ -4350,6 +4408,7 @@ def _generate_switch_mrtg_targets(
       -packets:       per-interface total packets in+out stacked
       -packets-bmcast: per-interface bmcast packets stacked
       -errors:        per-interface errors stacked
+      -pkt-size:      aggregate packet size distribution by bucket (RMON)
     """
     COLOURS = [
         '#00cc00', '#0000ff', '#cc0000', '#ff9900', '#9900cc',
@@ -4358,8 +4417,8 @@ def _generate_switch_mrtg_targets(
         '#33cc33', '#3333ff', '#ff3333', '#ffcc33', '#cc33ff',
     ]
 
-    address     = resource['address']
-    if_indices  = sorted(ports_state.keys(), key=lambda x: int(x))
+    address    = resource['address']
+    if_indices = sorted(ports_state.keys(), key=lambda x: int(x))
 
     if not if_indices:
         return
@@ -4371,11 +4430,11 @@ def _generate_switch_mrtg_targets(
         """Emit one stacked-area MRTG target block."""
         graph_args = []
         for i, if_index in enumerate(if_indices):
-            colour     = COLOURS[i % len(COLOURS)]
-            ds0        = ds0_fn(if_index)
-            ds1        = ds1_fn(if_index)
-            cdef_name  = f"if{if_index}v"
-            if_name    = ports_state[if_index]['name']
+            colour    = COLOURS[i % len(COLOURS)]
+            ds0       = ds0_fn(if_index)
+            ds1       = ds1_fn(if_index)
+            cdef_name = f"if{if_index}v"
+            if_name   = ports_state[if_index]['name']
             safe_label = re.sub(r'[^\w/]', '', if_name)[:20]
 
             graph_args.append(f"DEF:{cdef_name}a={rrd_path}:{ds0}:AVERAGE")
@@ -4458,6 +4517,62 @@ def _generate_switch_mrtg_targets(
         lambda idx: f"if{idx}_errors",
         'err/s', 1_000_000,
     )
+
+    # --- Packet size distribution chart (RMON etherStatsTable, aggregate across all ports) ---
+    PKT_SIZE_BUCKETS = [
+        ('pkts_64',        '64B',        '#00cc00'),
+        ('pkts_65_127',    '65-127B',    '#0000ff'),
+        ('pkts_128_255',   '128-255B',   '#cc0000'),
+        ('pkts_256_511',   '256-511B',   '#ff9900'),
+        ('pkts_512_1023',  '512-1023B',  '#9900cc'),
+        ('pkts_1024_1518', '1024-1518B', '#00cccc'),
+        ('pkts_jumbo',     'Jumbo',      '#cc00cc'),
+    ]
+
+    pkt_graph_args = []
+    for i, (ds, label, colour) in enumerate(PKT_SIZE_BUCKETS):
+        cdef_name = f"b{i}"
+        pkt_graph_args.append(f"DEF:{cdef_name}={rrd_path}:{ds}:AVERAGE")
+        if i == 0:
+            pkt_graph_args.append(f"AREA:{cdef_name}{colour}:{label}")
+        else:
+            pkt_graph_args.append(f"STACK:{cdef_name}{colour}:{label}")
+
+    legend_rows_pkt = ''.join(
+        f"<tr>"
+        f"<td width='40'></td>"
+        f"<td width='20'>"
+        f"<span style='display:inline-block;width:30px;height:12px;"
+        f"background:{colour};vertical-align:middle;border:1px solid #999;'></span>"
+        f"</td>"
+        f"<td><font size='-1'><b>{label}</b></font></td>"
+        f"</tr>"
+        for ds, label, colour in PKT_SIZE_BUCKETS
+    )
+    page_foot_pkt = (
+        f"<hr><table width='500' border='0' cellpadding='4' cellspacing='0'>"
+        f"{legend_rows_pkt}"
+        f"</table>"
+    )
+
+    mrtg_lines.extend([
+        f"######################################################################",
+        f"# {display_name} - Packet Size Distribution",
+        f"",
+        f"Target[{safe_name}-pkt-size]: if{first_idx}_in&if{first_idx}_out:{rrd_path}",
+        f"MaxBytes1[{safe_name}-pkt-size]: 10000000",
+        f"MaxBytes2[{safe_name}-pkt-size]: 10000000",
+        f"Title[{safe_name}-pkt-size]: {display_name} - Packet Size Distribution",
+        f"PageTop[{safe_name}-pkt-size]: <h1>{display_name} ({address})</h1><h2>Packet Size Distribution</h2>",
+        f"PageFoot[{safe_name}-pkt-size]: {page_foot_pkt}",
+        f"Options[{safe_name}-pkt-size]: gauge,nopercent,growright,noi,noo",
+        f"YLegend[{safe_name}-pkt-size]: pps",
+        f"ShortLegend[{safe_name}-pkt-size]: pps",
+        f"WithPeak[{safe_name}-pkt-size]: dwmy",
+        f"ExtraArgs[{safe_name}-pkt-size]: {' '.join(pkt_graph_args)}",
+        *([f"Percentile[{safe_name}-pkt-size]: {percentile}"] if percentile else []),
+        f"",
+    ])
 
 def generate_mrtg_config(config: Dict[str, Any], work_dir: str, mrtg_config_path: str,
                           state: Dict[str, Any]) -> None:
@@ -4999,7 +5114,7 @@ def generate_mrtg_index(config: Dict[str, Any], index_path: str, state: Dict[str
         ])
 
     def _emit_switch_row(resource: Dict[str, Any]) -> None:
-        """Emit one switch monitor row (label + 4-cell network-row grid)."""
+        """Emit one switch monitor row (label + 5-cell network-row grid)."""
         safe_name = re.sub(r'[^\w\-.]', '_', resource['name'])
         display_name = f"switch: {resource['name']}"
         monitor_state = state.get(resource['name'], {}) if state else {}
@@ -5016,11 +5131,12 @@ def generate_mrtg_index(config: Dict[str, Any], index_path: str, state: Dict[str
             ('-packets', 'Packets Per Port'),
             ('-packets-bmcast', 'B+Mcast Per Port'),
             ('-errors', 'Errors Per Port'),
+            ('-pkt-size', 'Pkt Size Dist'),
         ]
 
         html_lines.extend([
             f"    <div class='{label_class}'><a href='{detail_href}'>{display_name}</a>{outage_str}</div>",
-            f"    <div class='network-row' style='grid-template-columns: repeat(4, 1fr); --cols-narrow: 2;'>",
+            f"    <div class='network-row' style='grid-template-columns: repeat(5, 1fr); --cols-narrow: 3;'>",
         ])
         for suffix, heading in targets:
             html_lines.extend([
