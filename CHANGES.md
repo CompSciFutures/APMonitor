@@ -10,6 +10,7 @@ Integrates w/Site24x7 heartbeat monitoring for failover alerts + MRTG + Slack & 
 Thread safe, reentrant, modifiable.
 
 # Release 1.4.0 (???): ???
+- added basic support for 'switch' primitive
 
 # Release 1.3.16 (5-May-26): Physical Cyber Security IV
 - Added installation of MRTG banner images
