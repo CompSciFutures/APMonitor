@@ -11,6 +11,8 @@ Thread safe, reentrant, modifiable.
 
 # Release 1.4.0 (???): ???
 - added basic support for 'switch' primitive
+- got basic multi-interface charts working
+- added debug output for fcgiwrap.service
 
 # Release 1.3.16 (5-May-26): Physical Cyber Security IV
 - Added installation of MRTG banner images

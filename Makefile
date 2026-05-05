@@ -278,6 +278,11 @@ installmrtg: check-root
 	fi
 	chmod 777 /var/run/fcgiwrap.socket
 
+	@echo "==> Configuring fcgiwrap to log to journald..."
+	mkdir -p /etc/systemd/system/fcgiwrap.service.d
+	@echo "[Service]" > /etc/systemd/system/fcgiwrap.service.d/logging.conf
+	@echo "StandardError=journal" >> /etc/systemd/system/fcgiwrap.service.d/logging.conf
+
 	@echo "==> Creating systemd service for MRTG nginx..."
 	@echo "[Unit]" > $(SERVICE_DIR)/apmonitor-nginx.service
 	@echo "Description=APMonitor MRTG Web Interface (nginx)" >> $(SERVICE_DIR)/apmonitor-nginx.service

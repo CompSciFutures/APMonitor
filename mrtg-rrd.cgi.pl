@@ -420,6 +420,8 @@ sub do_image($$)
 
 	return unless defined $file;
 
+    warn "DEBUG args: " . join(" ", @{$target->{args}}) . "\n";
+
 	# Now the vertical rule at the end of the day
 	my @t = localtime(time);
 	$t[0] = $t[1] = $t[2] = 0;
@@ -770,6 +772,15 @@ sub common_args($$$)
 		push @args, 'HRULE:' . $target->{maxbytes2} . '#cccc00'
 			if $target->{maxbytes2} != $target->{maxbytes1};
 	}
+
+    # Append any extra RRDtool graph args from ExtraArgs[] directive (used by switch monitors
+    # for stacked per-interface AREA/STACK/CDEF elements)
+    if (defined $target->{extraargs} && $target->{extraargs} ne '') {
+        push @args, split(/\s+/, $target->{extraargs});
+        warn "DEBUG extraargs appended: " . scalar(split(/\s+/, $target->{extraargs})) . " tokens\n";
+    } else {
+        warn "DEBUG extraargs missing or empty for " . ($target->{name} // 'undef') . "\n";
+    }
 
 	@{$target->{args}} = @args;
 
