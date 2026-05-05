@@ -44,7 +44,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-__version__ = "1.3.16"
+__version__ = "1.4.0"
 __app_name__ = "APMonitor"
 
 import argparse
@@ -489,7 +489,7 @@ def print_and_exit_on_bad_config(config: Dict[str, Any]) -> None:
             monitor_names.add(name)
 
             # 'snmp' removed — direct users to 'ports'
-            valid_types = ['ping', 'http', 'quic', 'tcp', 'udp', 'ports', 'port', 'host']
+            valid_types = ['ping', 'http', 'quic', 'tcp', 'udp', 'ports', 'port', 'host', 'switch']
             if monitor['type'] == 'snmp':
                 raise ConfigError(f"Monitor {i} (name: {name}): type 'snmp' is not valid. Did you mean type: ports?")
             if monitor['type'] not in valid_types:
@@ -593,7 +593,7 @@ def print_and_exit_on_bad_config(config: Dict[str, Any]) -> None:
                     if forbidden in monitor:
                         raise ConfigError(f"Monitor {i} (name: {name}): '{forbidden}' field is not valid for {monitor_type} monitors")
 
-            elif monitor_type == 'ports':
+            elif monitor_type in ('ports', 'switch'):
                 # ports: merged snmp metrics + port state/MAC monitoring
                 parsed = urlparse(address)
                 if parsed.scheme != 'snmp':
@@ -2222,6 +2222,14 @@ def check_ports_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Dict[
             except Exception:
                 interfaces[if_index]['out_errors'] = None
 
+            # Per-interface combined errors for RRD
+            in_err = interfaces[if_index].get('in_errors')
+            out_err = interfaces[if_index].get('out_errors')
+            interfaces[if_index]['errors'] = (
+                (in_err or 0) + (out_err or 0)
+                if in_err is not None or out_err is not None else None
+            )
+
         # --- Packet counters ---
         total_pkts_ucast_in = total_pkts_ucast_out = 0
         total_pkts_bmcast_in = total_pkts_bmcast_out = 0
@@ -2229,33 +2237,42 @@ def check_ports_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Dict[
 
         for if_index in interfaces:
             if_pkts_in = if_pkts_out = 0
+            if_bmcast = 0
 
             for oid, is_in, is_ucast in [
-                (OID_IF_HC_IN_UCAST_PKTS,   True,  True),
-                (OID_IF_HC_IN_MCAST_PKTS,   True,  False),
-                (OID_IF_HC_IN_BCAST_PKTS,   True,  False),
-                (OID_IF_HC_OUT_UCAST_PKTS,  False, True),
-                (OID_IF_HC_OUT_MCAST_PKTS,  False, False),
-                (OID_IF_HC_OUT_BCAST_PKTS,  False, False),
+                (OID_IF_HC_IN_UCAST_PKTS, True, True),
+                (OID_IF_HC_IN_MCAST_PKTS, True, False),
+                (OID_IF_HC_IN_BCAST_PKTS, True, False),
+                (OID_IF_HC_OUT_UCAST_PKTS, False, True),
+                (OID_IF_HC_OUT_MCAST_PKTS, False, False),
+                (OID_IF_HC_OUT_BCAST_PKTS, False, False),
             ]:
                 try:
                     v = int(session.get(f"{oid}.{if_index}").value)
                     if is_in:
                         if_pkts_in += v
-                        if is_ucast: total_pkts_ucast_in  += v
-                        else:        total_pkts_bmcast_in += v
+                        if is_ucast:
+                            total_pkts_ucast_in += v
+                        else:
+                            total_pkts_bmcast_in += v
+                            if_bmcast += v
                     else:
                         if_pkts_out += v
-                        if is_ucast: total_pkts_ucast_out  += v
-                        else:        total_pkts_bmcast_out += v
+                        if is_ucast:
+                            total_pkts_ucast_out += v
+                        else:
+                            total_pkts_bmcast_out += v
+                            if_bmcast += v
                 except Exception:
                     pass
 
-            total_pkts_in  += if_pkts_in
+            interfaces[if_index]['bmcast_pkts'] = if_bmcast if if_bmcast > 0 else None
+
+            total_pkts_in += if_pkts_in
             total_pkts_out += if_pkts_out
 
             if VERBOSE:
-                print(f"{prefix}Interface {if_index} packets: in={if_pkts_in:,} out={if_pkts_out:,}")
+                print(f"{prefix}Interface {if_index} packets: in={if_pkts_in:,} out={if_pkts_out:,} bmcast={if_bmcast:,}")
 
         total_bits_in  = total_octets_in  * 8
         total_bits_out = total_octets_out * 8
@@ -2537,7 +2554,7 @@ def check_ports_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Dict[
             rras               = create_rrd_rras(check_every_n_secs)
 
             if os.path.exists(rrd_path):
-                expected_ds_count = 2 * len(interfaces) + 22  # per-interface pairs + 22 fixed DS
+                expected_ds_count = 4 * len(interfaces) + 22  # per-interface pairs + 22 fixed DS
                 needs_recreation  = False
                 try:
                     info            = rrdtool.info(rrd_path)
@@ -2812,27 +2829,40 @@ def check_port_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Option
 
         ucast_in = bmcast_in = ucast_out = bmcast_out = 0
         for oid, bucket in [
-            (OID_IF_HC_IN_UCAST_PKTS,  'ucast_in'),
-            (OID_IF_HC_IN_MCAST_PKTS,  'bmcast_in'),
-            (OID_IF_HC_IN_BCAST_PKTS,  'bmcast_in'),
+            (OID_IF_HC_IN_UCAST_PKTS, 'ucast_in'),
+            (OID_IF_HC_IN_MCAST_PKTS, 'bmcast_in'),
+            (OID_IF_HC_IN_BCAST_PKTS, 'bmcast_in'),
             (OID_IF_HC_OUT_UCAST_PKTS, 'ucast_out'),
             (OID_IF_HC_OUT_MCAST_PKTS, 'bmcast_out'),
             (OID_IF_HC_OUT_BCAST_PKTS, 'bmcast_out'),
         ]:
             try:
                 v = int(session.get(f"{oid}.{if_index}").value)
-                if   bucket == 'ucast_in':   ucast_in   += v
-                elif bucket == 'bmcast_in':  bmcast_in  += v
-                elif bucket == 'ucast_out':  ucast_out  += v
-                else:                        bmcast_out += v
+                if bucket == 'ucast_in':
+                    ucast_in += v
+                elif bucket == 'bmcast_in':
+                    bmcast_in += v
+                elif bucket == 'ucast_out':
+                    ucast_out += v
+                else:
+                    bmcast_out += v
             except Exception:
                 pass
 
-        total_bits_in  = octets_in  * 8
+        interfaces_rrd[if_index]['bmcast_pkts'] = (bmcast_in + bmcast_out) or None
+
+        try:
+            in_err = int(session.get(f"{OID_IF_IN_ERRORS}.{if_index}").value)
+            out_err = int(session.get(f"{OID_IF_OUT_ERRORS}.{if_index}").value)
+            interfaces_rrd[if_index]['errors'] = in_err + out_err
+        except Exception:
+            interfaces_rrd[if_index]['errors'] = None
+
+        total_bits_in = octets_in * 8
         total_bits_out = octets_out * 8
-        total_pkts_in  = ucast_in  + bmcast_in
+        total_pkts_in = ucast_in + bmcast_in
         total_pkts_out = ucast_out + bmcast_out
-        total_pkts_ucast  = ucast_in  + ucast_out
+        total_pkts_ucast = ucast_in + ucast_out
         total_pkts_bmcast = bmcast_in + bmcast_out
 
         if VERBOSE:
@@ -2842,10 +2872,10 @@ def check_port_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Option
 
         rras = create_rrd_rras(check_every_n_secs)
         if os.path.exists(rrd_path):
-            expected_ds_count = 2 * len(interfaces_rrd) + 22  # per-interface pairs + 22 fixed DS
-            needs_recreation  = False
+            expected_ds_count = 4 * len(interfaces_rrd) + 22
+            needs_recreation = False
             try:
-                info            = rrdtool.info(rrd_path)
+                info = rrdtool.info(rrd_path)
                 actual_ds_count = len([k for k in info if k.startswith('ds[') and k.endswith('].type')])
                 if actual_ds_count < expected_ds_count:
                     print(f"{prefix}PORT RRD deleted for recreation: {rrd_path} "
@@ -2870,11 +2900,11 @@ def check_port_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Option
 
         rrd_err = update_snmp_rrd(
             rrd_path, datetime.now(), interfaces_rrd,
-            None,               # tcp_retrans — not polled for single port
+            None,  # tcp_retrans
             total_bits_in, total_bits_out,
             total_pkts_in, total_pkts_out,
-            None, None,         # errors — not aggregated for single port
-            None, None,         # cpu_load / memory_pct — not polled for single port
+            None, None,  # errors — not aggregated for single port
+            None, None,  # cpu_load / memory_pct
             total_pkts_ucast, total_pkts_bmcast,
             # host DS — all None for port
             # tamper/network DS — all None for port
@@ -2901,7 +2931,7 @@ def check_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Optional[in
             error_msg   = check_ping_resource(resource)
             ports_state = None
 
-        elif resource['type'] == 'ports':
+        elif resource['type'] in ('ports', 'switch'):
             error_msg, ports_state = check_ports_resource(resource)
 
         elif resource['type'] == 'host':
@@ -3468,18 +3498,19 @@ def update_rrd(rrd_path: str, timestamp: datetime, response_time_ms: Optional[in
 def create_snmp_rrd(rrd_path: str, step_secs: int, interfaces: Dict[str, Dict[str, Any]]) -> None:
     """Create RRD file for SNMP interface metrics, system resources, and host performance metrics.
 
-    Unified schema for port, ports, and host monitor types:
-    - Per-interface DS pairs (ports/port only, empty for host)
-    - 11 fixed aggregate network DS (ports/port populated, host stores U)
-    - 7 fixed host performance DS (host populated, ports/port store U)
-    - 4 fixed tamper/network DS (ports only — port/host store U)
+    Unified schema for port, ports, switch, and host monitor types:
+    - Per-interface DS quads (ports/port/switch only, empty for host)
+    - 11 fixed aggregate network DS (ports/port/switch populated, host stores U)
+    - 7 fixed host performance DS (host populated, ports/port/switch store U)
+    - 4 fixed tamper/network DS (ports/switch only — port/host store U)
 
     Args:
         rrd_path: Full path to RRD file to create
         step_secs: Update interval in seconds
         interfaces: Dict mapping interface index to interface data (with 'name' key)
 
-    NB: DS count is now 22 fixed. Existing RRDs with <22 fixed DS will be auto-healed (deleted and recreated).
+    NB: DS count is now 22 fixed + 4 per interface. Existing RRDs with fewer DS will be
+    auto-healed (deleted and recreated).
     """
     global RRD_ELAPSED_MS
     prefix = getattr(thread_local, 'prefix', '')
@@ -3490,13 +3521,15 @@ def create_snmp_rrd(rrd_path: str, step_secs: int, interfaces: Dict[str, Dict[st
 
     data_sources = []
 
-    # Per-interface byte counters (ports/port only — empty for host)
+    # Per-interface DS quads (ports/port/switch only — empty for host)
     for if_index in interfaces:
         safe_if_name = f"if{if_index}"
         data_sources.append(f'DS:{safe_if_name}_in:COUNTER:{heartbeat}:0:U')
         data_sources.append(f'DS:{safe_if_name}_out:COUNTER:{heartbeat}:0:U')
+        data_sources.append(f'DS:{safe_if_name}_bmcast:COUNTER:{heartbeat}:0:U')
+        data_sources.append(f'DS:{safe_if_name}_errors:COUNTER:{heartbeat}:0:U')
 
-    # Fixed aggregate network DS (ports/port populated, host stores U)
+    # Fixed aggregate network DS (ports/port/switch populated, host stores U)
     data_sources.append(f'DS:tcp_retrans:COUNTER:{heartbeat}:0:U')
     data_sources.append(f'DS:total_bits_in:COUNTER:{heartbeat}:0:U')
     data_sources.append(f'DS:total_bits_out:COUNTER:{heartbeat}:0:U')
@@ -3511,7 +3544,7 @@ def create_snmp_rrd(rrd_path: str, step_secs: int, interfaces: Dict[str, Dict[st
     data_sources.append(f'DS:cpu_load:GAUGE:{heartbeat}:0:100')
     data_sources.append(f'DS:memory_pct:GAUGE:{heartbeat}:0:100')
 
-    # Fixed host performance DS (host populated, ports/port store U)
+    # Fixed host performance DS (host populated, ports/port/switch store U)
     data_sources.append(f'DS:context_switches:COUNTER:{heartbeat}:0:U')
     data_sources.append(f'DS:swap_io:COUNTER:{heartbeat}:0:U')
     data_sources.append(f'DS:disk_read:COUNTER:{heartbeat}:0:U')
@@ -3520,7 +3553,7 @@ def create_snmp_rrd(rrd_path: str, step_secs: int, interfaces: Dict[str, Dict[st
     data_sources.append(f'DS:swap_used:GAUGE:{heartbeat}:0:U')
     data_sources.append(f'DS:interrupts:COUNTER:{heartbeat}:0:U')
 
-    # Fixed tamper/network capacity DS (ports only — port/host store U)
+    # Fixed tamper/network capacity DS (ports/switch only — port/host store U)
     data_sources.append(f'DS:ports_up_count:GAUGE:{heartbeat}:0:U')
     data_sources.append(f'DS:nvram_flash_bytes:GAUGE:{heartbeat}:0:U')
     data_sources.append(f'DS:mac_count:GAUGE:{heartbeat}:0:U')
@@ -3614,10 +3647,10 @@ def update_snmp_rrd(rrd_path: str, timestamp: datetime, interfaces: Dict[str, Di
     for if_index in sorted(interfaces.keys()):
         if_data      = interfaces[if_index]
         safe_if_name = f"if{if_index}"
-        ds_names.append(f'{safe_if_name}_in')
-        ds_names.append(f'{safe_if_name}_out')
-        values.append(_v(if_data.get('in_octets')))
-        values.append(_v(if_data.get('out_octets')))
+        ds_names.append(f'{safe_if_name}_in');          values.append(_v(if_data.get('in_octets')))
+        ds_names.append(f'{safe_if_name}_out');         values.append(_v(if_data.get('out_octets')))
+        ds_names.append(f'{safe_if_name}_bmcast');      values.append(_v(if_data.get('bmcast_pkts')))
+        ds_names.append(f'{safe_if_name}_errors');      values.append(_v(if_data.get('errors')))
 
     # Fixed aggregate network DS
     ds_names.append('tcp_retrans');       values.append(_v(tcp_retrans))
@@ -3800,7 +3833,7 @@ def check_and_heartbeat_r(resource: Dict[str, Any], site_config: Dict[str, Any])
 
     # Handle ports monitor diff/notify logic
     # 'host' skips this block — it has no port state to diff
-    if resource['type'] == 'ports' and is_up and current_ports_state:
+    if resource['type'] in ('ports', 'switch') and is_up and current_ports_state:
         if prev_ports_state is None:
             if VERBOSE:
                 print(f"{prefix}PORTS baseline established for '{resource['name']}': {len(current_ports_state)} interfaces")
@@ -3956,7 +3989,7 @@ def check_and_heartbeat_r(resource: Dict[str, Any], site_config: Dict[str, Any])
 
     # Update RRD database for availability monitors (ping, http, quic, tcp, udp)
     # SNMP-family RRDs (ports, host, port) are handled in check_resource() / check_port_resource()
-    if RRD_ENABLED and resource['type'] not in ('ports', 'host', 'port'):
+    if RRD_ENABLED and resource['type'] not in ('ports', 'switch', 'host', 'port'):
         rrd_path = get_rrd_path(resource['name'], 'availability')
         rras = create_rrd_rras(check_every_n_secs)
 
@@ -3989,7 +4022,7 @@ def check_and_heartbeat_r(resource: Dict[str, Any], site_config: Dict[str, Any])
         'last_config_checksum':     resource_checksum,
     }
 
-    if resource['type'] == 'ports' and current_ports_state:
+    if resource['type'] in ('ports', 'switch') and current_ports_state:
         new_state['ports_state'] = current_ports_state
     else:
         new_state['down_count']        = down_count
@@ -4297,6 +4330,111 @@ def _set_www_data_group(path: str) -> None:
             print(f"Warning: could not set www-data group on '{path}': {e}")
 
 
+def _generate_switch_mrtg_targets(
+        mrtg_lines: List[str],
+        safe_name: str,
+        display_name: str,
+        resource: Dict[str, Any],
+        rrd_path: str,
+        ports_state: Dict[str, Any],
+        percentile: Optional[int]) -> None:
+    """Generate 4 stacked per-interface MRTG targets for a switch monitor.
+
+    Each chart uses a synthetic Target[] line (first interface DS pair) so
+    mrtg-rrd.cgi.pl can locate the RRD, then the stacked AREA/STACK graph
+    elements are injected via the ExtraArgs[] directive which mrtg-rrd.cgi.pl
+    appends verbatim to the RRDs::graph call.
+
+    Charts:
+      -bandwidth:     per-interface if{N}_in + if{N}_out bits stacked
+      -packets:       per-interface total packets in+out stacked
+      -packets-bmcast: per-interface bmcast packets stacked
+      -errors:        per-interface errors stacked
+    """
+    COLOURS = [
+        '#00cc00', '#0000ff', '#cc0000', '#ff9900', '#9900cc',
+        '#00cccc', '#cc00cc', '#cccc00', '#006600', '#000066',
+        '#660000', '#996600', '#660066', '#006666', '#666600',
+        '#33cc33', '#3333ff', '#ff3333', '#ffcc33', '#cc33ff',
+    ]
+
+    address     = resource['address']
+    if_indices  = sorted(ports_state.keys(), key=lambda x: int(x))
+
+    if not if_indices:
+        return
+
+    first_idx = if_indices[0]
+
+    def _stacked_chart(suffix: str, title: str, ds0_fn, ds1_fn,
+                       ylabel: str, maxbytes: int) -> None:
+        """Emit one stacked-area MRTG target block."""
+        graph_args = []
+        for i, if_index in enumerate(if_indices):
+            colour     = COLOURS[i % len(COLOURS)]
+            ds0        = ds0_fn(if_index)
+            ds1        = ds1_fn(if_index)
+            cdef_name  = f"if{if_index}v"
+            if_name    = ports_state[if_index]['name']
+            safe_label = re.sub(r'[^\w/]', '', if_name)[:20]
+
+            graph_args.append(f"DEF:{cdef_name}a={rrd_path}:{ds0}:AVERAGE")
+            if ds1 != ds0:
+                graph_args.append(f"DEF:{cdef_name}b={rrd_path}:{ds1}:AVERAGE")
+                graph_args.append(f"CDEF:{cdef_name}={cdef_name}a,{cdef_name}b,+")
+            else:
+                graph_args.append(f"CDEF:{cdef_name}={cdef_name}a,2,*")
+
+            if i == 0:
+                graph_args.append(f"AREA:{cdef_name}{colour}:{safe_label}")
+            else:
+                graph_args.append(f"STACK:{cdef_name}{colour}:{safe_label}")
+
+        extra_args = ' '.join(graph_args)
+
+        mrtg_lines.extend([
+            f"######################################################################",
+            f"# {display_name} - {title}",
+            f"",
+            f"Target[{safe_name}-{suffix}]: if{first_idx}_in&if{first_idx}_out:{rrd_path}",
+            f"MaxBytes1[{safe_name}-{suffix}]: {maxbytes}",
+            f"MaxBytes2[{safe_name}-{suffix}]: {maxbytes}",
+            f"Title[{safe_name}-{suffix}]: {display_name} - {title}",
+            f"PageTop[{safe_name}-{suffix}]: <h1>{display_name} ({address})</h1><h2>{title}</h2>",
+            f"Options[{safe_name}-{suffix}]: gauge,nopercent,growright,noi,noo",
+            f"YLegend[{safe_name}-{suffix}]: {ylabel}",
+            f"ShortLegend[{safe_name}-{suffix}]: ",
+            f"WithPeak[{safe_name}-{suffix}]: dwmy",
+            f"ExtraArgs[{safe_name}-{suffix}]: {extra_args}",
+            *([f"Percentile[{safe_name}-{suffix}]: {percentile}"] if percentile else []),
+            f"",
+        ])
+
+    _stacked_chart(
+        'bandwidth', 'Total Bandwidth Per Port',
+        lambda idx: f"if{idx}_in",
+        lambda idx: f"if{idx}_out",
+        'Bits/s', 10_000_000_000,
+    )
+    _stacked_chart(
+        'packets', 'Total Packets Per Port',
+        lambda idx: f"if{idx}_in",
+        lambda idx: f"if{idx}_out",
+        'pps', 10_000_000,
+    )
+    _stacked_chart(
+        'packets-bmcast', 'Broadcast+Multicast Packets Per Port',
+        lambda idx: f"if{idx}_bmcast",
+        lambda idx: f"if{idx}_bmcast",
+        'pps', 10_000_000,
+    )
+    _stacked_chart(
+        'errors', 'Errors Per Port',
+        lambda idx: f"if{idx}_errors",
+        lambda idx: f"if{idx}_errors",
+        'err/s', 1_000_000,
+    )
+
 def generate_mrtg_config(config: Dict[str, Any], work_dir: str, mrtg_config_path: str,
                           state: Dict[str, Any]) -> None:
     """Generate MRTG configuration from APMonitor config with atomic file rotation.
@@ -4330,12 +4468,22 @@ def generate_mrtg_config(config: Dict[str, Any], work_dir: str, mrtg_config_path
         if not to_natural_language_boolean(resource.get('display', True)):
             continue
 
-        if monitor_type in ('ports', 'port', 'host'):
-            rrd_path     = get_rrd_path(resource['name'], 'snmp')
-            percentile   = resource.get('percentile') if monitor_type in ('ports', 'port') else None
+        if monitor_type in ('ports', 'port', 'host', 'switch'):
+            rrd_path = get_rrd_path(resource['name'], 'snmp')
+            percentile = resource.get('percentile') if monitor_type in ('ports', 'port', 'switch') else None
             display_name = f"{monitor_type}: {resource['name']}"
 
-            if monitor_type == 'host':
+            if monitor_type == 'switch':
+                ports_state = state.get(resource['name'], {}).get('ports_state', {}) if state else {}
+                if not ports_state:
+                    if VERBOSE:
+                        print(f"{prefix}SWITCH MRTG config skipped for '{resource['name']}': no ports_state yet")
+                else:
+                    _generate_switch_mrtg_targets(
+                        mrtg_lines, safe_name, display_name, resource,
+                        rrd_path, ports_state, percentile)
+
+            elif monitor_type == 'host':
                 disk_space_pct = state.get(resource['name'], {}).get('disk_space_pct')
                 disk_space_str = f"{disk_space_pct:.1f}%" if disk_space_pct is not None else "N/A"
 
@@ -4826,6 +4974,41 @@ def generate_mrtg_index(config: Dict[str, Any], index_path: str, state: Dict[str
             "    </div>",
         ])
 
+    def _emit_switch_row(resource: Dict[str, Any]) -> None:
+        """Emit one switch monitor row (label + 4-cell network-row grid)."""
+        safe_name = re.sub(r'[^\w\-.]', '_', resource['name'])
+        display_name = f"switch: {resource['name']}"
+        monitor_state = state.get(resource['name'], {}) if state else {}
+        is_down = not monitor_state.get('is_up', True)
+        label_class = "network-host-label down" if is_down else "network-host-label"
+        cell_class = "network-cell down" if is_down else "network-cell"
+        outage_str = (f" &nbsp;<span style='font-weight: normal; font-size: 13px;'>"
+                      f"Down {format_time_ago(monitor_state.get('last_alarm_started'))}</span>"
+                      if is_down else "")
+        detail_href = _detail_href('switch', safe_name)
+
+        targets = [
+            ('-bandwidth', 'Bandwidth Per Port'),
+            ('-packets', 'Packets Per Port'),
+            ('-packets-bmcast', 'B+Mcast Per Port'),
+            ('-errors', 'Errors Per Port'),
+        ]
+
+        html_lines.extend([
+            f"    <div class='{label_class}'><a href='{detail_href}'>{display_name}</a>{outage_str}</div>",
+            f"    <div class='network-row' style='grid-template-columns: repeat(4, 1fr); --cols-narrow: 2;'>",
+        ])
+        for suffix, heading in targets:
+            html_lines.extend([
+                f"        <div class='{cell_class}'>",
+                f"            <h4>{heading}</h4>",
+                f"            <a href='/mrtg-rrd/{safe_name}{suffix}.html'>",
+                f"                <img src='/mrtg-rrd/{safe_name}{suffix}-day.png' alt='{display_name} {heading}'>",
+                "            </a>",
+                "        </div>",
+            ])
+        html_lines.append("    </div>")
+
     def _emit_port_host_group(run: List[Tuple[str, str, Dict[str, Any]]]) -> None:
         """Emit a contiguous run of port/host monitors as a single grid (8-up or 4-up).
 
@@ -4896,7 +5079,7 @@ def generate_mrtg_index(config: Dict[str, Any], index_path: str, state: Dict[str
     displayed  = [r for r in monitors if     to_natural_language_boolean(r.get('display', True))]
     hidden     = [r for r in monitors if not to_natural_language_boolean(r.get('display', True))]
 
-    snmp_types  = ('ports', 'port', 'host')
+    snmp_types = ('ports', 'port', 'host', 'switch')
     avail_types = ('ping', 'http', 'quic', 'tcp', 'udp')
 
     has_snmp  = any(r['type'] in snmp_types  for r in displayed)
@@ -4918,6 +5101,11 @@ def generate_mrtg_index(config: Dict[str, Any], index_path: str, state: Dict[str
                     _emit_port_host_group(port_host_run)
                     port_host_run = []
                 _emit_snmp_row(resource)
+            elif monitor_type == 'switch':
+                if port_host_run:
+                    _emit_port_host_group(port_host_run)
+                    port_host_run = []
+                _emit_switch_row(resource)
             else:
                 port_host_run.append((safe_name, monitor_type, resource))
 
@@ -4989,7 +5177,7 @@ def generate_mrtg_index(config: Dict[str, Any], index_path: str, state: Dict[str
         _set_www_data_group(str(current_path))
 
         if VERBOSE:
-            snmp_count   = sum(1 for r in displayed if r['type'] == 'ports')
+            snmp_count   = sum(1 for r in displayed if r['type'] in ('ports', 'switch'))
             port_count   = sum(1 for r in displayed if r['type'] == 'port')
             host_count   = sum(1 for r in displayed if r['type'] == 'host')
             avail_count  = sum(1 for r in displayed if r['type'] in avail_types)
