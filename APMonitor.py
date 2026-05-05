@@ -4392,6 +4392,29 @@ def _generate_switch_mrtg_targets(
 
         extra_args = ' '.join(graph_args)
 
+        # Build per-interface legend table for PageFoot
+        legend_rows = ''.join(
+            f"<tr>"
+            f"<td align='right' width='40'>"
+            f"<font size='-1' color='#666'><b>{if_index}</b></font>"
+            f"</td>"
+            f"<td width='20'>"
+            f"<span style='display:inline-block;width:30px;height:12px;"
+            f"background:{COLOURS[i % len(COLOURS)]};vertical-align:middle;"
+            f"border:1px solid #999;'></span>"
+            f"</td>"
+            f"<td>"
+            f"<font size='-1'><b>{ports_state[if_index]['name']}</b></font>"
+            f"</td>"
+            f"</tr>"
+            for i, if_index in enumerate(if_indices)
+        )
+        page_foot = (
+            f"<hr><table width='500' border='0' cellpadding='4' cellspacing='0'>"
+            f"{legend_rows}"
+            f"</table>"
+        )
+
         mrtg_lines.extend([
             f"######################################################################",
             f"# {display_name} - {title}",
@@ -4401,6 +4424,7 @@ def _generate_switch_mrtg_targets(
             f"MaxBytes2[{safe_name}-{suffix}]: {maxbytes}",
             f"Title[{safe_name}-{suffix}]: {display_name} - {title}",
             f"PageTop[{safe_name}-{suffix}]: <h1>{display_name} ({address})</h1><h2>{title}</h2>",
+            f"PageFoot[{safe_name}-{suffix}]: {page_foot}",
             f"Options[{safe_name}-{suffix}]: gauge,nopercent,growright,noi,noo",
             f"YLegend[{safe_name}-{suffix}]: {ylabel}",
             f"ShortLegend[{safe_name}-{suffix}]: ",

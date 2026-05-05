@@ -13,6 +13,7 @@ Thread safe, reentrant, modifiable.
 - added basic support for 'switch' primitive
 - got basic multi-interface charts working
 - added debug output for fcgiwrap.service
+- added legend to multi-interface charts
 
 # Release 1.3.16 (5-May-26): Physical Cyber Security IV
 - Added installation of MRTG banner images
