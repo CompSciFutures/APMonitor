@@ -867,6 +867,8 @@ And this is one installed in a ceiling with the sensor light on:
 
 <img src="physical-security/Paradox-DG467-PIR.jpeg" width="500" />
 
+E.G: For a ceiling height of 2680mm, a sensor distance of 4400mm in a grid pattern is sensible and will mean multiple sensors will glow red when standing in one position.
+
 In some environments there may be some utility in providing an extra mild steel metal plate above
 these to prevent tampering coming from the roof cavity above. Get something made up by your local metal fab if this
 is a concern for you.
