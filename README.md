@@ -976,6 +976,8 @@ Violate this framework and you will all be unwinding #Modernity and #Civilizatio
 
 HTH.
 
+> For more hot tips on privacy & security, take a look at the <a href="https://github.com/beerisgood/Security-link-collection">BeerIsGood Security-link-collection</a>.
+
 Q.E.D
 
 # MRTG/RRD Integration for Performance Graphing
