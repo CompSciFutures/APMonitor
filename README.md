@@ -1130,7 +1130,7 @@ DS names use the raw ifIndex integer (e.g., `if1_in`, `if2_out`), not the interf
 | Historical | 1-day | 732 (~2 years) | 22692 (~62 years) |
 
 > [!WARNING]
-> Be careful if upgrading to the 1.3.x stream. This release contains RRD schema changes that require existing RRD files to be deleted and recreated before upgrading. APMonitor will auto-heal existing RRDs on first run when `--generate-rrds` or `--generate-mrtg-config` is specified.
+> Be careful if upgrading to the 1.3.x stream (and again for the 1.4.x stream). These releases contains RRD schema changes that require existing RRD files to be deleted and recreated before upgrading. APMonitor will auto-heal existing RRDs on first run when `--generate-rrds` or `--generate-mrtg-config` is specified.
 
 To use custom retention, modify the row constants in `create_rrd_rras()`:
 ```python
