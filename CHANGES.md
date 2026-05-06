@@ -19,6 +19,7 @@ Thread safe, reentrant, modifiable.
 - Added link to BeerIsGood Security-links-collection
 - Added note about upgrading to the 1.4.x stream being destructive
 - Added note about DG467 360' PIR example measurements
+- Added stacked errors by port & errors by type to 'switch' primitive
 
 # Release 1.3.16 (5-May-26): Physical Cyber Security IV
 - Added installation of MRTG banner images

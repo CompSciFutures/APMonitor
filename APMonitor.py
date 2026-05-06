@@ -1962,7 +1962,7 @@ def check_host_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Dict[s
             # host uses empty interfaces dict — no per-interface DS
             # fixed DS count = 0 per-interface + 22 fixed DS total
             interfaces_rrd    = {}
-            expected_ds_count = 29
+            expected_ds_count = 35
 
             if os.path.exists(rrd_path):
                 needs_recreation = False
@@ -2006,7 +2006,13 @@ def check_host_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Dict[s
                     disk_space_pct=disk_space_pct,
                     swap_used=swap_used,
                     interrupts=interrupts,
-                    # tamper/network DS — U for host
+                    # RMON error DS — U for host
+                    rmon_crc = None,
+                    rmon_undersize = None,
+                    rmon_oversize = None,
+                    rmon_fragments = None,
+                    rmon_jabbers = None,
+                    rmon_collisions = None,
                 )
                 if rrd_err:
                     return rrd_err, {}
@@ -2529,6 +2535,8 @@ def check_ports_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Dict[
         # --- RMON packet size distribution (switch only — non-fatal) ---
         pkts_64 = pkts_65_127 = pkts_128_255 = pkts_256_511 = None
         pkts_512_1023 = pkts_1024_1518 = pkts_jumbo = None
+        rmon_crc = rmon_undersize = rmon_oversize = None
+        rmon_fragments = rmon_jabbers = rmon_collisions = None
 
         if resource['type'] == 'switch':
             def _rmon_sum(oid: str) -> Optional[int]:
@@ -2548,11 +2556,20 @@ def check_ports_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Dict[
             pkts_1024_1518 = _rmon_sum(OID_RMON_PKTS_1024_1518)
             pkts_jumbo     = _rmon_sum(OID_RMON_PKTS_JUMBO)
 
+            rmon_crc = _rmon_sum('1.3.6.1.2.1.16.1.1.1.13')  # etherStatsCRCAlignErrors
+            rmon_undersize = _rmon_sum('1.3.6.1.2.1.16.1.1.1.14')  # etherStatsUndersizePkts
+            rmon_oversize = _rmon_sum('1.3.6.1.2.1.16.1.1.1.15')  # etherStatsOversizePkts
+            rmon_fragments = _rmon_sum('1.3.6.1.2.1.16.1.1.1.16')  # etherStatsFragments
+            rmon_jabbers = _rmon_sum('1.3.6.1.2.1.16.1.1.1.17')  # etherStatsJabbers
+            rmon_collisions = _rmon_sum('1.3.6.1.2.1.16.1.1.1.18')  # etherStatsCollisions
+
             if VERBOSE:
                 print(f"{prefix}RMON pkt size: 64={pkts_64} 65-127={pkts_65_127} "
-                      f"128-255={pkts_128_255} 256-511={pkts_256_511} "
-                      f"512-1023={pkts_512_1023} 1024-1518={pkts_1024_1518} "
-                      f"jumbo={pkts_jumbo}")
+                        f"128-255={pkts_128_255} 256-511={pkts_256_511} "
+                        f"512-1023={pkts_512_1023} 1024-1518={pkts_1024_1518} "
+                        f"jumbo={pkts_jumbo} crc={rmon_crc} undersize={rmon_undersize} "
+                        f"oversize={rmon_oversize} fragments={rmon_fragments} "
+                        f"jabbers={rmon_jabbers} collisions={rmon_collisions}")
 
         if VERBOSE:
             print(f"{prefix}PORTS poll SUCCESS for '{name}': {len(current_ports_state)} interfaces")
@@ -2583,7 +2600,7 @@ def check_ports_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Dict[
             rras               = create_rrd_rras(check_every_n_secs)
 
             if os.path.exists(rrd_path):
-                expected_ds_count = 4 * len(interfaces) + 29
+                expected_ds_count = 4 * len(interfaces) + 35
                 needs_recreation  = False
                 try:
                     info            = rrdtool.info(rrd_path)
@@ -2630,6 +2647,12 @@ def check_ports_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Dict[
                     pkts_512_1023=pkts_512_1023,
                     pkts_1024_1518=pkts_1024_1518,
                     pkts_jumbo=pkts_jumbo,
+                    rmon_crc = rmon_crc,
+                    rmon_undersize = rmon_undersize,
+                    rmon_oversize = rmon_oversize,
+                    rmon_fragments = rmon_fragments,
+                    rmon_jabbers = rmon_jabbers,
+                    rmon_collisions = rmon_collisions,
                 )
                 if rrd_err:
                     return rrd_err, {}
@@ -2908,7 +2931,7 @@ def check_port_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Option
 
         rras = create_rrd_rras(check_every_n_secs)
         if os.path.exists(rrd_path):
-            expected_ds_count = 4 * len(interfaces_rrd) + 29
+            expected_ds_count = 4 * len(interfaces_rrd) + 35
             needs_recreation = False
             try:
                 info = rrdtool.info(rrd_path)
@@ -2944,6 +2967,12 @@ def check_port_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Option
             total_pkts_ucast, total_pkts_bmcast,
             # host DS — all None for port
             # tamper/network DS — all None for port
+            rmon_crc = None,
+            rmon_undersize = None,
+            rmon_oversize = None,
+            rmon_fragments = None,
+            rmon_jabbers = None,
+            rmon_collisions = None,
         )
         if rrd_err and VERBOSE:
             print(f"{prefix}PORT RRD update failed: {rrd_err}", file=sys.stderr)
@@ -3604,6 +3633,14 @@ def create_snmp_rrd(rrd_path: str, step_secs: int, interfaces: Dict[str, Dict[st
     data_sources.append(f'DS:pkts_1024_1518:COUNTER:{heartbeat}:0:U')
     data_sources.append(f'DS:pkts_jumbo:COUNTER:{heartbeat}:0:U')
 
+    # Fixed RMON error type DS (switch only — ports/port/host store U)
+    data_sources.append(f'DS:rmon_crc:COUNTER:{heartbeat}:0:U')
+    data_sources.append(f'DS:rmon_undersize:COUNTER:{heartbeat}:0:U')
+    data_sources.append(f'DS:rmon_oversize:COUNTER:{heartbeat}:0:U')
+    data_sources.append(f'DS:rmon_fragments:COUNTER:{heartbeat}:0:U')
+    data_sources.append(f'DS:rmon_jabbers:COUNTER:{heartbeat}:0:U')
+    data_sources.append(f'DS:rmon_collisions:COUNTER:{heartbeat}:0:U')
+
     rras = create_rrd_rras(step_secs)
 
     try:
@@ -3639,7 +3676,10 @@ def update_snmp_rrd(rrd_path: str, timestamp: datetime, interfaces: Dict[str, Di
                     pkts_64: Optional[int] = None, pkts_65_127: Optional[int] = None,
                     pkts_128_255: Optional[int] = None, pkts_256_511: Optional[int] = None,
                     pkts_512_1023: Optional[int] = None, pkts_1024_1518: Optional[int] = None,
-                    pkts_jumbo: Optional[int] = None) -> Optional[str]:
+                    pkts_jumbo: Optional[int] = None,
+                    rmon_crc: Optional[int] = None, rmon_undersize: Optional[int] = None,
+                    rmon_oversize: Optional[int] = None, rmon_fragments: Optional[int] = None,
+                    rmon_jabbers: Optional[int] = None, rmon_collisions: Optional[int] = None) -> Optional[str]:
     """Update SNMP RRD file with latest interface metrics, system resources, and host performance.
 
     All numeric parameters accept None → stored as 'U' (unknown) in RRD.
@@ -3739,6 +3779,14 @@ def update_snmp_rrd(rrd_path: str, timestamp: datetime, interfaces: Dict[str, Di
     ds_names.append('pkts_512_1023');  values.append(_v(pkts_512_1023))
     ds_names.append('pkts_1024_1518'); values.append(_v(pkts_1024_1518))
     ds_names.append('pkts_jumbo');     values.append(_v(pkts_jumbo))
+
+    # Fixed RMON error type DS (switch only — ports/port/host pass None → U)
+    ds_names.append('rmon_crc');        values.append(_v(rmon_crc))
+    ds_names.append('rmon_undersize');  values.append(_v(rmon_undersize))
+    ds_names.append('rmon_oversize');   values.append(_v(rmon_oversize))
+    ds_names.append('rmon_fragments');  values.append(_v(rmon_fragments))
+    ds_names.append('rmon_jabbers');    values.append(_v(rmon_jabbers))
+    ds_names.append('rmon_collisions'); values.append(_v(rmon_collisions))
 
     template  = ':'.join(ds_names)
     value_str = ':'.join(values)
@@ -4409,6 +4457,7 @@ def _generate_switch_mrtg_targets(
       -packets-bmcast: per-interface bmcast packets stacked
       -errors:        per-interface errors stacked
       -pkt-size:      aggregate packet size distribution by bucket (RMON)
+      -err-type:      aggregate error type distribution (RMON + IF-MIB)
     """
     COLOURS = [
         '#00cc00', '#0000ff', '#cc0000', '#ff9900', '#9900cc',
@@ -4571,6 +4620,63 @@ def _generate_switch_mrtg_targets(
         f"WithPeak[{safe_name}-pkt-size]: dwmy",
         f"ExtraArgs[{safe_name}-pkt-size]: {' '.join(pkt_graph_args)}",
         *([f"Percentile[{safe_name}-pkt-size]: {percentile}"] if percentile else []),
+        f"",
+    ])
+
+    # --- Error type distribution chart (RMON + IF-MIB aggregate, switch only) ---
+    ERROR_TYPE_BUCKETS = [
+        ('total_errors_in', 'IF_In_Errors', '#cc0000'),
+        ('total_errors_out', 'IF_Out_Errors', '#ff6600'),
+        ('rmon_crc', 'CRC/Align', '#0000ff'),
+        ('rmon_undersize', 'Undersize', '#00cc00'),
+        ('rmon_oversize', 'Oversize', '#9900cc'),
+        ('rmon_fragments', 'Fragments', '#00cccc'),
+        ('rmon_jabbers', 'Jabbers', '#cc00cc'),
+        ('rmon_collisions', 'Collisions', '#ff9900'),
+    ]
+
+    err_graph_args = []
+    for i, (ds, label, colour) in enumerate(ERROR_TYPE_BUCKETS):
+        cdef_name = f"e{i}"
+        err_graph_args.append(f"DEF:{cdef_name}={rrd_path}:{ds}:AVERAGE")
+        if i == 0:
+            err_graph_args.append(f"AREA:{cdef_name}{colour}:{label}")
+        else:
+            err_graph_args.append(f"STACK:{cdef_name}{colour}:{label}")
+
+    legend_rows_err = ''.join(
+        f"<tr>"
+        f"<td width='40'></td>"
+        f"<td width='20'>"
+        f"<span style='display:inline-block;width:30px;height:12px;"
+        f"background:{colour};vertical-align:middle;border:1px solid #999;'></span>"
+        f"</td>"
+        f"<td><font size='-1'><b>{label}</b></font></td>"
+        f"</tr>"
+        for ds, label, colour in ERROR_TYPE_BUCKETS
+    )
+    page_foot_err = (
+        f"<hr><table width='500' border='0' cellpadding='4' cellspacing='0'>"
+        f"{legend_rows_err}"
+        f"</table>"
+    )
+
+    mrtg_lines.extend([
+        f"######################################################################",
+        f"# {display_name} - Error Type Distribution",
+        f"",
+        f"Target[{safe_name}-err-type]: total_errors_in&total_errors_out:{rrd_path}",
+        f"MaxBytes1[{safe_name}-err-type]: 1000000",
+        f"MaxBytes2[{safe_name}-err-type]: 1000000",
+        f"Title[{safe_name}-err-type]: {display_name} - Error Type Distribution",
+        f"PageTop[{safe_name}-err-type]: <h1>{display_name} ({address})</h1><h2>Error Type Distribution</h2>",
+        f"PageFoot[{safe_name}-err-type]: {page_foot_err}",
+        f"Options[{safe_name}-err-type]: gauge,nopercent,growright,noi,noo",
+        f"YLegend[{safe_name}-err-type]: err/s",
+        f"ShortLegend[{safe_name}-err-type]: err/s",
+        f"WithPeak[{safe_name}-err-type]: dwmy",
+        f"ExtraArgs[{safe_name}-err-type]: {' '.join(err_graph_args)}",
+        *([f"Percentile[{safe_name}-err-type]: {percentile}"] if percentile else []),
         f"",
     ])
 
@@ -5132,11 +5238,12 @@ def generate_mrtg_index(config: Dict[str, Any], index_path: str, state: Dict[str
             ('-packets-bmcast', 'B+Mcast Per Port'),
             ('-errors', 'Errors Per Port'),
             ('-pkt-size', 'Pkt Size Dist'),
+            ('-err-type', 'Error Type Dist'),
         ]
 
         html_lines.extend([
             f"    <div class='{label_class}'><a href='{detail_href}'>{display_name}</a>{outage_str}</div>",
-            f"    <div class='network-row' style='grid-template-columns: repeat(5, 1fr); --cols-narrow: 3;'>",
+            f"    <div class='network-row' style='grid-template-columns: repeat(6, 1fr); --cols-narrow: 3;'>",
         ])
         for suffix, heading in targets:
             html_lines.extend([
