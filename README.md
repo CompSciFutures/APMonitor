@@ -978,6 +978,18 @@ Violate this framework and you will all be unwinding #Modernity and #Civilizatio
 
 HTH.
 
+## Use Cloud Forensics to keep track of your MICROSOFT COPRORATION "cl0wd" files - Personal & Enterprise
+
+I've also made a rather nifty tool to keep track of your Microsoft "cl0wd" files, before they get nuked out of existence and then your whole digital life and boom your company is gone:
+
+Announcing "Cloud Forensics"....
+
+Run this regularly to keep track of lost/missing/damaged files on #OneDrive, #O365 + E3/E5 #SharePoint. Use this to keep track of your files. It's diff-able. Enterprise & Personal. All of $MSFT #MSFT #Microsoft #MicrosoftCorporation cl0wd. #CloudForensics.
+
+See: https://github.com/Enertium/MSFT-Cloud-Forensics
+
+Good Luck!
+
 > For more hot tips on privacy & security, take a look at the <a href="https://github.com/beerisgood/Security-link-collection">BeerIsGood Security-link-collection</a>.
 
 Q.E.D
