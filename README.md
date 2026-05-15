@@ -98,7 +98,7 @@ To properly setup `APMonitor.py`:
 That's it!
 
 > [!WARNING]
-> If you are upgrading to the 1.3.x stream: This is a schema change release stream that contains RRD & config YAML schema changes that require existing RRD files to be deleted and recreated before upgrading.
+> If you are upgrading to the 1.3.x stream (and again for the 1.4.x stream): This is a schema change release stream that contains RRD & config YAML schema changes that require existing RRD files to be deleted and recreated before upgrading.
 > APMonitor will auto-heal existing RRDs on first run when `--generate-rrds` or `--generate-mrtg-config` is specified.
 >
 > To do a full upgrade change your YAML to replace `type: snmp` with `type: ports` then execute something similar to this command:
