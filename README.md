@@ -24,6 +24,13 @@ APMonitor also integrates well with [Slack](https://slack.com/) and [Pushover](h
 
 APMonitor is a neat way to guarantee your on-prem availability monitoring will always let you know about an outage and to avoid putting resources onto the net that don't need to be.
 
+[![buy-me-a-coffee.png](images/buy-me-a-coffee.png)](https://www.paypal.com/donate/?hosted_button_id=WN472NX5XC5CJ)
+
+<i>If you have any changes or find APMonitor.py useful in your NOCs, for monitoring your IOT/ICS devices,
+or would like email / telephone support, please do let me know and consider
+<a href="https://www.paypal.com/donate/?hosted_button_id=WN472NX5XC5CJ">a regular donation via Buy me a coffee</a>,
+so I can keep improving it.<br />
+
 <b>Andrew (AP) Prendergast</b><br />
 https://linktr.ee/CompSciFutures<br />
 Master of Science<br />
@@ -36,12 +43,19 @@ Ex Chief Scientist @ Clemenger BBDO / Omnicom</i>
 
 <i>[ACM](https://acm.org/), [IEEE](https://ieee.org) & [INFORMS](https://informs.org) member.</i>
 
-[![buy-me-a-coffee.png](images/buy-me-a-coffee.png)](https://www.paypal.com/donate/?hosted_button_id=WN472NX5XC5CJ)
+# Technical Support
 
-<i>If you have any changes or find APMonitor.py useful in your NOCs, for monitoring your IOT/ICS devices,
-or would like email / telephone support, please do let me know and consider
-<a href="https://www.paypal.com/donate/?hosted_button_id=WN472NX5XC5CJ">a regular donation via Buy me a coffee</a>,
-so I can keep improving it.<br />
+
+Please use Discussions here for technical support. See:
+https://github.com/CompSciFutures/APMonitor/discussions
+
+For more hot tips on Cyber Security and Physical Security in these dystopian times, take a look at my Physical Security tips on APMonitor.PY here:
+
+https://github.com/CompSciFutures/APMonitor#recommended-configurations-for-addressing-the-first-pillar-physical-security
+
+And the BeerIsGood Security & Privacy links collection is also rather decent:
+
+https://github.com/beerisgood/Security-link-collection
 
 <i>If I get enough support, my plan is to add RMON/RMON2 support and "<a href="#humanizing-data-vizualisation">Humanizing Data</a>" automated information retrieval to it in a few months time.
 Information about common use cases you hunt for and detect that need automation would be helpful in this regard.</i><br />
