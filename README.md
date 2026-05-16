@@ -29,7 +29,7 @@ APMonitor is a neat way to guarantee your on-prem availability monitoring will a
 <i>If you have any changes or find APMonitor.py useful in your NOCs, for monitoring your IOT/ICS devices,
 or would like email / telephone support, please do let me know and consider
 <a href="https://www.paypal.com/donate/?hosted_button_id=WN472NX5XC5CJ">a regular donation via Buy me a coffee</a>,
-so I can keep improving it.<br />
+so I can keep improving it.<br /></i>
 
 <b>Andrew (AP) Prendergast</b><br />
 https://linktr.ee/CompSciFutures<br />
