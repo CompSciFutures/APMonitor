@@ -5891,7 +5891,7 @@ def main() -> None:
                 thread_local.prefix = ''  # clear any stale thread prefix for clean log lines
                 detail_start_ms = int(datetime.now().timestamp() * 1000)
                 for resource in config['monitors']:
-                    if resource['type'] in ('ports', 'port', 'host'):
+                    if resource['type'] in ('ports', 'port', 'host', 'switch'):
                         detail = STATE.get(resource['name'], {}).get('detail', {})
                         generate_monitor_detail_page(resource, detail, work_dir)
                 detail_elapsed_ms = int(datetime.now().timestamp() * 1000) - detail_start_ms

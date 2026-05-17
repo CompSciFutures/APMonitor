@@ -22,6 +22,7 @@ Thread safe, reentrant, modifiable.
 - Added stacked errors by port & errors by type to 'switch' primitive
 - Added link to #CloudForensics
 - Added Discussions forum
+- Fixed missing ports list index.html for switch type
 
 # Release 1.3.16 (5-May-26): Physical Cyber Security IV
 - Added installation of MRTG banner images
