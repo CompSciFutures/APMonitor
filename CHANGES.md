@@ -23,6 +23,7 @@ Thread safe, reentrant, modifiable.
 - Added link to #CloudForensics
 - Added Discussions forum
 - Fixed missing ports list index.html for switch type
+- Added linkbacks
 
 # Release 1.3.16 (5-May-26): Physical Cyber Security IV
 - Added installation of MRTG banner images

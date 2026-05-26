@@ -43,6 +43,12 @@ Ex Chief Scientist @ Clemenger BBDO / Omnicom</i>
 
 <i>[ACM](https://acm.org/), [IEEE](https://ieee.org) & [INFORMS](https://informs.org) member.</i>
 
+## Linkbacks
+
+As seen in:
+
+- <a href="https://innasiec.pl/isn-240-zwolnienia-w-cisco-nexus-group-based-policy-i-tajemnice-dns/">INNA SIEC Edn. 240</a>
+
 # Technical Support
 
 
