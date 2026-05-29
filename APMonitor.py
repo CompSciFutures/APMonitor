@@ -1406,6 +1406,7 @@ def collect_snmp_detail(
     OID_SYS_NAME = '1.3.6.1.2.1.1.5.0'
     OID_SYS_LOCATION = '1.3.6.1.2.1.1.6.0'
     OID_SYS_CONTACT = '1.3.6.1.2.1.1.4.0'
+    OID_SYS_DESCR = '1.3.6.1.2.1.1.1.0'
     OID_IF_ALIAS = '1.3.6.1.2.1.31.1.1.1.18'
     OID_IF_HIGH_SPEED = '1.3.6.1.2.1.31.1.1.1.15'  # ifHighSpeed (Mbps)
     OID_IF_SPEED = '1.3.6.1.2.1.2.2.1.5'  # ifSpeed (bps)
@@ -1439,11 +1440,12 @@ def collect_snmp_detail(
         'sys_name': None,
         'sys_location': None,
         'sys_contact': None,
+        'sys_descr': None,
         'interfaces': {},
     }
 
     # --- sysName / sysLocation / sysContact ---
-    for key, oid in [('sys_name', OID_SYS_NAME), ('sys_location', OID_SYS_LOCATION), ('sys_contact', OID_SYS_CONTACT)]:
+    for key, oid in [('sys_name', OID_SYS_NAME), ('sys_location', OID_SYS_LOCATION), ('sys_contact', OID_SYS_CONTACT), ('sys_descr', OID_SYS_DESCR)]:
         try:
             detail[key] = session.get(oid).value
         except Exception as e:
@@ -4204,6 +4206,7 @@ def generate_monitor_detail_page(resource: Dict[str, Any], detail: Dict[str, Any
     sys_name     = detail.get('sys_name')     or '—'
     sys_location = detail.get('sys_location') or '—'
     sys_contact  = detail.get('sys_contact')  or '—'
+    sys_descr    = detail.get('sys_descr')    or '—'
     interfaces   = detail.get('interfaces', {})
 
     generated_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -4308,7 +4311,7 @@ def generate_monitor_detail_page(resource: Dict[str, Any], detail: Dict[str, Any
                 max-width: 600px; min-width: min-content; }}
         h1 {{ color: #333; margin-bottom: 4px; }}
         h2 {{ color: #555; margin-top: 32px; margin-bottom: 12px; border-bottom: 2px solid #ddd; padding-bottom: 6px; }}
-        .sysinfo {{ display: flex; gap: 40px; margin-bottom: 8px; flex-wrap: wrap; }}
+        .sysinfo {{ display: flex; gap: 16px 40px; margin-bottom: 8px; flex-wrap: wrap; }}
         .sysinfo-item {{ font-size: 14px; color: #555; }}
         .sysinfo-item span {{ font-weight: bold; color: #333; }}
         table {{ border-collapse: collapse; min-width: 100%; background: white;
@@ -4341,6 +4344,7 @@ def generate_monitor_detail_page(resource: Dict[str, Any], detail: Dict[str, Any
         <div class='sysinfo-item'>Location: <span>{sys_location}</span></div>
         <div class='sysinfo-item'>Contact: <span>{sys_contact}</span></div>
         <div class='sysinfo-item'>Address: <span>{resource['address']}</span></div>
+        <div class='sysinfo-item'>System: <span>{sys_descr}</span></div>
     </div>
 
     <h2>Interfaces</h2>
