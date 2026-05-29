@@ -1666,16 +1666,17 @@ def collect_snmp_detail(
 
 
 def _parse_arp_physical_items(items: list) -> Dict[str, str]:
-    """Parse ipNetToPhysicalTable (RFC 4293) items → {mac: ip}.
+    """Parse ipNetToPhysicalTable (RFC 4293) items → {mac: ip_string}.
 
-    Robust handling for both IPv4 (addrType=1, addrLen=4) and IPv6 (addrType=2, addrLen=16).
-    OID tail: ...ifIndex . addrType . addrLen . <address octets...>
+    Returns plain string IP (IPv4 or 'ipv6:...' for IPv6) so the rest of the code
+    continues to work unchanged.
     """
     result = {}
     for item in items:
         try:
             parts = item.oid.split('.')
-            # Walk backwards to find addrLen + addrType reliably
+
+            # Robustly find addrType and addrLen
             for i in range(5, len(parts) - 3):
                 try:
                     addr_len = int(parts[-i])
@@ -1684,8 +1685,7 @@ def _parse_arp_physical_items(items: list) -> Dict[str, str]:
                     addr_type = int(parts[-i - 1])
 
                     if addr_type == 1 and addr_len == 4:          # IPv4
-                        ip_octets = parts[-4:]
-                        ip = '.'.join(ip_octets)
+                        ip = '.'.join(parts[-4:])
                         break
                     elif addr_type == 2 and addr_len == 16:       # IPv6
                         raw_octets = [int(x) for x in parts[-16:]]
@@ -1696,9 +1696,8 @@ def _parse_arp_physical_items(items: list) -> Dict[str, str]:
                 except (ValueError, IndexError):
                     continue
             else:
-                continue  # no valid IPv4/IPv6 entry
+                continue
 
-            # Parse MAC (same as before)
             raw = item.value
             if raw:
                 mac_str = ':'.join(f'{b:02X}' for b in raw.encode('latin-1'))
