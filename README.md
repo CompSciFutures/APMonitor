@@ -2621,7 +2621,7 @@ under the [GNU General Public License version 3](LICENSE.txt).
 <a href="https://www.fi.muni.cz/~kas/mrtg-rrd/">`mrtg-rrd.cgi.pl`</a> is licensed by Jan "Yenya" Kasprzak <kas@fi.muni.cz><br />
 under the [GNU General Public License version 2](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html).
 ```
-Software: APMonitor 1.4.0
+Software: APMonitor 1.4.1
 License: GNU General Public License version 3
 Licensor: Andrew (AP) Prendergast, ap@andrewprendergast.com -- FSF Member
 

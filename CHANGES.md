@@ -9,6 +9,9 @@ Multithreaded high speed availability checking for SNMP, PING, TCP/UDP, QUIC & H
 Integrates w/Site24x7 heartbeat monitoring for failover alerts + MRTG + Slack & Pushover webhooks.
 Thread safe, reentrant, modifiable.
 
+# Release 1.4.1 (???): ???
+- Refactored _walk_arp to apply once-and-only-once
+
 # Release 1.4.0 (27-May-26): Stacked Charts
 - added basic support for 'switch' primitive
 - got basic multi-interface charts working

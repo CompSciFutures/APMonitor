@@ -44,7 +44,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-__version__ = "1.4.0"
+__version__ = "1.4.1"
 __app_name__ = "APMonitor"
 
 import argparse
@@ -1647,6 +1647,77 @@ def collect_snmp_detail(
     return detail
 
 
+def _parse_arp_physical_items(items: list) -> Dict[str, str]:
+    """Parse ipNetToPhysicalTable (RFC 4293) items → {mac: ip}.
+
+    OID tail: ...ifIndex.addrType.addrLen.A.B.C.D
+    IPv6 entries (addrLen=16) are skipped — IPv4 only (addrLen=4).
+    easysnmp returns Hex-STRING values as latin-1 encoded byte strings.
+    """
+    result = {}
+    for item in items:
+        try:
+            parts = item.oid.split('.')
+            if parts[-5] != '4':
+                continue
+            ip = '.'.join(parts[-4:])
+            raw = item.value
+            if raw:
+                mac_str = ':'.join(f'{b:02X}' for b in raw.encode('latin-1'))
+                if len(mac_str.split(':')) != 6:
+                    continue
+                result[mac_str] = ip
+        except Exception:
+            pass
+    return result
+
+
+def _parse_arp_media_items(items: list) -> Dict[str, str]:
+    """Parse ipNetToMediaTable (RFC 2011) items → {mac: ip}.
+
+    OID tail: ...ifIndex.A.B.C.D — IPv4 only by design.
+    easysnmp returns Hex-STRING values as latin-1 encoded byte strings.
+    """
+    result = {}
+    for item in items:
+        try:
+            parts = item.oid.split('.')
+            ip = '.'.join(parts[-4:])
+            raw = item.value
+            if raw:
+                mac_str = ':'.join(f'{b:02X}' for b in raw.encode('latin-1'))
+                if len(mac_str.split(':')) != 6:
+                    continue
+                result[mac_str] = ip
+        except Exception:
+            pass
+    return result
+
+
+def _walk_arp(session: Any, prefix: str, verbose: bool) -> Tuple[Dict[str, str], int]:
+    """Walk ARP table via ipNetToPhysicalTable (RFC 4293) with ipNetToMediaTable fallback.
+
+    Returns ({mac: ip}, row_count) where row_count is total SNMP rows (IPv4 + IPv6).
+    Non-fatal — returns ({}, 0) on failure.
+    """
+    OID_IP_NET_TO_PHYSICAL = '1.3.6.1.2.1.4.35.1.4'
+    OID_IP_NET_TO_MEDIA    = '1.3.6.1.2.1.4.22.1.2'
+
+    try:
+        arp_items  = session.walk(OID_IP_NET_TO_PHYSICAL)
+        arp_count  = len(arp_items)
+        arp_by_mac = _parse_arp_physical_items(arp_items)
+        if arp_count == 0:
+            arp_items  = session.walk(OID_IP_NET_TO_MEDIA)
+            arp_count  = len(arp_items)
+            arp_by_mac = _parse_arp_media_items(arp_items)
+        return arp_by_mac, arp_count
+    except Exception as e:
+        if verbose:
+            print(f"{prefix}ARP walk FAILED: {e}")
+        return {}, 0
+
+
 def check_host_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Dict[str, Any]]:
     """Poll SNMP device for host performance metrics and write RRD if enabled.
 
@@ -1717,10 +1788,6 @@ def check_host_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Dict[s
     OID_IF_DESCR        = '1.3.6.1.2.1.2.2.1.2'
     OID_IF_OPER_STATUS  = '1.3.6.1.2.1.2.2.1.8'
     OID_IF_ADMIN_STATUS = '1.3.6.1.2.1.2.2.1.7'
-
-    # ARP tables (RFC 4293 preferred, RFC 2011 fallback)
-    OID_IP_NET_TO_PHYSICAL = '1.3.6.1.2.1.4.35.1.4'
-    OID_IP_NET_TO_MEDIA    = '1.3.6.1.2.1.4.22.1.2'
 
     OPER_STATUS  = {
         '1': 'up', '2': 'down', '3': 'testing',
@@ -1918,38 +1985,8 @@ def check_host_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Dict[s
             if VERBOSE:
                 print(f"{prefix}HOST interface walk FAILED for detail page: {e}")
 
-        arp_by_mac: Dict[str, str] = {}
-        try:
-            arp_items = session.walk(OID_IP_NET_TO_PHYSICAL)
-            for item in arp_items:
-                try:
-                    parts = item.oid.split('.')
-                    ip    = '.'.join(parts[-4:])
-                    raw   = item.value
-                    if raw:
-                        mac_str = ':'.join(f'{int(b):02X}' for b in raw.split() if b) if ' ' in raw \
-                                  else ':'.join(f'{ord(c):02X}' for c in raw)
-                        arp_by_mac[mac_str] = ip
-                except Exception:
-                    pass
-            if not arp_by_mac:
-                arp_items = session.walk(OID_IP_NET_TO_MEDIA)
-                for item in arp_items:
-                    try:
-                        parts = item.oid.split('.')
-                        ip    = '.'.join(parts[-4:])
-                        raw   = item.value
-                        if raw:
-                            mac_str = ':'.join(f'{int(b):02X}' for b in raw.split() if b) if ' ' in raw \
-                                      else ':'.join(f'{ord(c):02X}' for c in raw)
-                            arp_by_mac[mac_str] = ip
-                    except Exception:
-                        pass
-        except Exception as e:
-            if VERBOSE:
-                print(f"{prefix}HOST ARP walk FAILED for detail page: {e}")
-
         # host has no FDB — empty macs_by_ifindex
+        arp_by_mac, _ = _walk_arp(session, prefix, VERBOSE)
         detail = collect_snmp_detail(session, None, interfaces, {}, arp_by_mac)
         update_state({name: {**STATE.get(name, {}), 'detail': detail}})
 
@@ -2116,14 +2153,6 @@ def check_ports_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Dict[
     # Q-BRIDGE-MIB (RFC 2674)
     OID_DOT1Q_TP_FDB_PORT    = '1.3.6.1.2.1.17.7.1.2.2.1.2'
     OID_DOT1Q_TP_FDB_STATUS  = '1.3.6.1.2.1.17.7.1.2.2.1.3'
-
-    # ARP tables (RFC 4293 preferred, RFC 2011 fallback)
-    OID_IP_NET_TO_PHYSICAL   = '1.3.6.1.2.1.4.35.1.4'
-    OID_IP_NET_TO_MEDIA      = '1.3.6.1.2.1.4.22.1.2'
-
-    # ARP IP address columns (parallel to the physical address OIDs above)
-    OID_IP_NET_TO_PHYSICAL_ADDR = '1.3.6.1.2.1.4.35.1.4'
-    OID_IP_NET_TO_MEDIA_ADDR    = '1.3.6.1.2.1.4.22.1.2'
 
     # RMON-MIB etherStatsTable (RFC 2819) packet size distribution
     # OID: 1.3.6.1.2.1.16.1.1.1.{col}.{etherStatsIndex} — summed across all indices
@@ -2481,56 +2510,9 @@ def check_ports_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Dict[
             print(f"{prefix}PORTS MAC count: {mac_count}")
 
         # --- Network capacity: ARP entry count + build mac→ip map for detail page ---
-        arp_count  = None
-        arp_by_mac: Dict[str, str] = {}
-
-        def _parse_arp_physical(items: list) -> Dict[str, str]:
-            """Parse ipNetToPhysicalTable items → {mac: ip}."""
-            result = {}
-            for item in items:
-                try:
-                    parts = item.oid.split('.')
-                    ip = '.'.join(parts[-4:])
-                    raw = item.value
-                    if raw:
-                        mac_str = ':'.join(f'{int(b):02X}' for b in raw.split() if b) if ' ' in raw \
-                                  else ':'.join(f'{ord(c):02X}' for c in raw)
-                        result[mac_str] = ip
-                except Exception:
-                    pass
-            return result
-
-        def _parse_arp_media(items: list) -> Dict[str, str]:
-            """Parse ipNetToMediaTable items → {mac: ip}."""
-            result = {}
-            for item in items:
-                try:
-                    parts = item.oid.split('.')
-                    ip = '.'.join(parts[-4:])
-                    raw = item.value
-                    if raw:
-                        mac_str = ':'.join(f'{int(b):02X}' for b in raw.split() if b) if ' ' in raw \
-                                  else ':'.join(f'{ord(c):02X}' for c in raw)
-                        result[mac_str] = ip
-                except Exception:
-                    pass
-            return result
-
-        try:
-            arp_items  = session.walk(OID_IP_NET_TO_PHYSICAL)
-            arp_count  = len(arp_items)
-            arp_by_mac = _parse_arp_physical(arp_items)
-            if VERBOSE:
-                print(f"{prefix}PORTS ARP count (ipNetToPhysicalTable): {arp_count}")
-            if arp_count == 0:
-                arp_items  = session.walk(OID_IP_NET_TO_MEDIA)
-                arp_count  = len(arp_items)
-                arp_by_mac = _parse_arp_media(arp_items)
-                if VERBOSE:
-                    print(f"{prefix}PORTS ARP count (ipNetToMediaTable fallback): {arp_count}")
-        except Exception as e:
-            if VERBOSE:
-                print(f"{prefix}PORTS ARP walk FAILED: {e}")
+        arp_by_mac, arp_count = _walk_arp(session, prefix, VERBOSE)
+        if VERBOSE:
+            print(f"{prefix}PORTS ARP count: {arp_count}")
 
         # --- RMON packet size distribution (switch only — non-fatal) ---
         pkts_64 = pkts_65_127 = pkts_128_255 = pkts_256_511 = None
@@ -2732,10 +2714,6 @@ def check_port_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Option
     OID_DOT1Q_TP_FDB_PORT   = '1.3.6.1.2.1.17.7.1.2.2.1.2'
     OID_DOT1Q_TP_FDB_STATUS = '1.3.6.1.2.1.17.7.1.2.2.1.3'
 
-    # ARP tables (RFC 4293 preferred, RFC 2011 fallback)
-    OID_IP_NET_TO_PHYSICAL  = '1.3.6.1.2.1.4.35.1.4'
-    OID_IP_NET_TO_MEDIA     = '1.3.6.1.2.1.4.22.1.2'
-
     OPER_STATUS = {
         '1': 'up', '2': 'down', '3': 'testing',
         '4': 'unknown', '5': 'dormant', '6': 'notPresent', '7': 'lowerLayerDown'
@@ -2814,36 +2792,7 @@ def check_port_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Option
             return f"port ifIndex={if_index} wrong MAC: expected {pinned_mac}, got {current_mac}", oper, current_mac
 
     # --- ARP collection for detail page ---
-    arp_by_mac: Dict[str, str] = {}
-    try:
-        arp_items = session.walk(OID_IP_NET_TO_PHYSICAL)
-        for item in arp_items:
-            try:
-                parts = item.oid.split('.')
-                ip    = '.'.join(parts[-4:])
-                raw   = item.value
-                if raw:
-                    mac_str = ':'.join(f'{int(b):02X}' for b in raw.split() if b) if ' ' in raw \
-                              else ':'.join(f'{ord(c):02X}' for c in raw)
-                    arp_by_mac[mac_str] = ip
-            except Exception:
-                pass
-        if not arp_by_mac:
-            arp_items = session.walk(OID_IP_NET_TO_MEDIA)
-            for item in arp_items:
-                try:
-                    parts = item.oid.split('.')
-                    ip    = '.'.join(parts[-4:])
-                    raw   = item.value
-                    if raw:
-                        mac_str = ':'.join(f'{int(b):02X}' for b in raw.split() if b) if ' ' in raw \
-                                  else ':'.join(f'{ord(c):02X}' for c in raw)
-                        arp_by_mac[mac_str] = ip
-                except Exception:
-                    pass
-    except Exception as e:
-        if VERBOSE:
-            print(f"{prefix}PORT ARP walk FAILED for detail page: {e}")
+    arp_by_mac, _ = _walk_arp(session, prefix, VERBOSE)
 
     # --- Detail page data collection ---
     try:
