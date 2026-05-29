@@ -1649,15 +1649,15 @@ def collect_snmp_detail(
     # --- ARP-only pass: entries in arp_by_mac not covered by any FDB MAC ---
     # These appear on routers/L3 devices where Q-BRIDGE-MIB returns nothing.
     # Stored under detail['arp_only'] for rendering by generate_monitor_detail_page().
-    fdb_macs_seen = {
-        mac
+    fdb_mac_ip_seen = {
+        (mac, arp_by_mac.get(mac, ''))
         for if_index in interfaces
         for mac in macs_by_ifindex.get(if_index, [])
     }
     arp_only_entries = [
         {'mac': mac, 'ip': ip, 'hostname': hostname_by_ip.get(ip, '')}
         for mac, ip in arp_by_mac.items()
-        if mac not in fdb_macs_seen
+        if (mac, ip) not in fdb_mac_ip_seen
     ]
     if arp_only_entries:
         detail['arp_only'] = sorted(arp_only_entries, key=lambda e: e['ip'])
@@ -1668,23 +1668,42 @@ def collect_snmp_detail(
 def _parse_arp_physical_items(items: list) -> Dict[str, str]:
     """Parse ipNetToPhysicalTable (RFC 4293) items → {mac: ip}.
 
-    OID tail: ...ifIndex.addrType.addrLen.A.B.C.D
-    IPv6 entries (addrLen=16) are skipped — IPv4 only (addrLen=4).
-    easysnmp returns Hex-STRING values as latin-1 encoded byte strings.
+    Robust handling for both IPv4 (addrType=1, addrLen=4) and IPv6 (addrType=2, addrLen=16).
+    OID tail: ...ifIndex . addrType . addrLen . <address octets...>
     """
     result = {}
     for item in items:
         try:
             parts = item.oid.split('.')
-            if parts[-5] != '4':
-                continue
-            ip = '.'.join(parts[-4:])
+            # Walk backwards to find addrLen + addrType reliably
+            for i in range(5, len(parts) - 3):
+                try:
+                    addr_len = int(parts[-i])
+                    if addr_len not in (4, 16):
+                        continue
+                    addr_type = int(parts[-i - 1])
+
+                    if addr_type == 1 and addr_len == 4:          # IPv4
+                        ip_octets = parts[-4:]
+                        ip = '.'.join(ip_octets)
+                        break
+                    elif addr_type == 2 and addr_len == 16:       # IPv6
+                        raw_octets = [int(x) for x in parts[-16:]]
+                        groups = [f'{raw_octets[j] << 8 | raw_octets[j+1]:04x}'
+                                  for j in range(0, 16, 2)]
+                        ip = 'ipv6:' + ':'.join(groups)
+                        break
+                except (ValueError, IndexError):
+                    continue
+            else:
+                continue  # no valid IPv4/IPv6 entry
+
+            # Parse MAC (same as before)
             raw = item.value
             if raw:
                 mac_str = ':'.join(f'{b:02X}' for b in raw.encode('latin-1'))
-                if len(mac_str.split(':')) != 6:
-                    continue
-                result[mac_str] = ip
+                if len(mac_str.split(':')) == 6:
+                    result[mac_str] = ip
         except Exception:
             pass
     return result
@@ -4256,23 +4275,25 @@ def generate_monitor_detail_page(resource: Dict[str, Any], detail: Dict[str, Any
     # -------------------------------------------------------------------------
     # MAC / IP / Hostname table rows
     # -------------------------------------------------------------------------
-    seen_macs: set = set()
-    arp_rows  = []
+    seen_entries: set = set()  # (mac, ip) pairs — allows same MAC with multiple IPs (IPv6 NDP)
+    arp_rows = []
     for if_index in sorted(interfaces.keys(), key=lambda x: int(x)):
         iface = interfaces[if_index]
         for entry in iface.get('arp', []):
             mac = entry.get('mac', '')
-            if mac in seen_macs:
+            ip = entry.get('ip', '') or ''
+            dedup_key = (mac, ip)
+            if dedup_key in seen_entries:
                 continue
-            seen_macs.add(mac)
-            ip         = entry.get('ip', '')       or '—'
-            hostname   = entry.get('hostname', '') or '—'
+            seen_entries.add(dedup_key)
+            ip_display = ip or '—'
+            hostname = entry.get('hostname', '') or '—'
             port_label = f"{iface.get('descr', '')} <span class='sub'>if{if_index}</span>"
             arp_rows.append(
                 f"<tr>"
                 f"<td>{port_label}</td>"
                 f"<td class='mono'>{mac or '—'}</td>"
-                f"<td class='mono'>{ip}</td>"
+                f"<td class='mono'>{ip_display}</td>"
                 f"<td>{hostname}</td>"
                 f"</tr>"
             )
@@ -4280,16 +4301,20 @@ def generate_monitor_detail_page(resource: Dict[str, Any], detail: Dict[str, Any
     # ARP-only entries: router/L3 ARP table where Q-BRIDGE-MIB FDB is empty
     for entry in detail.get('arp_only', []):
         mac = entry.get('mac', '')
-        if mac in seen_macs:
+        ip = entry.get('ip', '') or ''
+        dedup_key = (mac, ip)
+        if dedup_key in seen_entries:
             continue
-        seen_macs.add(mac)
-        ip       = entry.get('ip', '')       or '—'
+        seen_entries.add(dedup_key)
+        is_ipv6 = ip.startswith('ipv6:')
+        ip_display = ip[5:] if is_ipv6 else (ip or '—')
         hostname = entry.get('hostname', '') or '—'
+        family_tag = "<span class='proto'>IPv6</span>&nbsp;" if is_ipv6 else ''
         arp_rows.append(
             f"<tr>"
-            f"<td><span class='sub'>ARP</span></td>"
+            f"<td>{family_tag}<span class='sub'>ARP</span></td>"
             f"<td class='mono'>{mac or '—'}</td>"
-            f"<td class='mono'>{ip}</td>"
+            f"<td class='mono'>{ip_display or '—'}</td>"
             f"<td>{hostname}</td>"
             f"</tr>"
         )
