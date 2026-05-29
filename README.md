@@ -24,6 +24,8 @@ APMonitor also integrates well with [Slack](https://slack.com/) and [Pushover](h
 
 APMonitor is a neat way to guarantee your on-prem availability monitoring will always let you know about an outage and to avoid putting resources onto the net that don't need to be.
 
+This is the way SNMP was meant to be used. For embedded devices. Like the way they are.
+
 [![buy-me-a-coffee.png](images/buy-me-a-coffee.png)](https://www.paypal.com/donate/?hosted_button_id=WN472NX5XC5CJ)
 
 <i>If you have any changes or find APMonitor.py useful in your NOCs, for monitoring your IOT/ICS devices,
