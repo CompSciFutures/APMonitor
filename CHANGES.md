@@ -11,6 +11,7 @@ Thread safe, reentrant, modifiable.
 
 # Release 1.4.1 (???): ???
 - Refactored _walk_arp to apply once-and-only-once
+- Added ARP info to the generate_monitor_detail_page()
 
 # Release 1.4.0 (27-May-26): Stacked Charts
 - added basic support for 'switch' primitive

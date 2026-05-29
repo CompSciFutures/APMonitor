@@ -1644,6 +1644,22 @@ def collect_snmp_detail(
             'arp': arp_entries,
         }
 
+    # --- ARP-only pass: entries in arp_by_mac not covered by any FDB MAC ---
+    # These appear on routers/L3 devices where Q-BRIDGE-MIB returns nothing.
+    # Stored under detail['arp_only'] for rendering by generate_monitor_detail_page().
+    fdb_macs_seen = {
+        mac
+        for if_index in interfaces
+        for mac in macs_by_ifindex.get(if_index, [])
+    }
+    arp_only_entries = [
+        {'mac': mac, 'ip': ip, 'hostname': hostname_by_ip.get(ip, '')}
+        for mac, ip in arp_by_mac.items()
+        if mac not in fdb_macs_seen
+    ]
+    if arp_only_entries:
+        detail['arp_only'] = sorted(arp_only_entries, key=lambda e: e['ip'])
+
     return detail
 
 
@@ -4257,6 +4273,23 @@ def generate_monitor_detail_page(resource: Dict[str, Any], detail: Dict[str, Any
                 f"<td>{hostname}</td>"
                 f"</tr>"
             )
+
+    # ARP-only entries: router/L3 ARP table where Q-BRIDGE-MIB FDB is empty
+    for entry in detail.get('arp_only', []):
+        mac = entry.get('mac', '')
+        if mac in seen_macs:
+            continue
+        seen_macs.add(mac)
+        ip       = entry.get('ip', '')       or '—'
+        hostname = entry.get('hostname', '') or '—'
+        arp_rows.append(
+            f"<tr>"
+            f"<td><span class='sub'>ARP</span></td>"
+            f"<td class='mono'>{mac or '—'}</td>"
+            f"<td class='mono'>{ip}</td>"
+            f"<td>{hostname}</td>"
+            f"</tr>"
+        )
 
     arp_table = "\n".join(arp_rows) if arp_rows else \
         "<tr><td colspan='4' class='empty'>No MAC/ARP data available</td></tr>"
