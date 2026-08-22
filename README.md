@@ -126,6 +126,9 @@ That's it!
 > 
 > To install RRDTool on Trixie, follow these steps:
 > ```
+> cd APMonitor
+> source .venv/bin/activate
+> pip install -r requirements.txt
 > pip download rrdtool --no-binary :all: --no-deps -d /tmp/rrdbuild
 > cd /tmp/rrdbuild
 > tar xzf rrdtool-0.1.16.tar.gz
