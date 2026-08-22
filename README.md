@@ -120,6 +120,21 @@ To properly setup `APMonitor.py`:
 That's it!
 
 > [!WARNING]
+> TRIXIE vs. BOOKWORM UPGRADE TIPS
+>
+> `RRDTool` is not currently supported in the latest Debian 13 (Trixie), however it is supported in the current Debian 12 (Bookworm) LTS version.
+> 
+> To install RRDTool on Trixie, follow these steps:
+> ```
+> pip download rrdtool --no-binary :all: --no-deps -d /tmp/rrdbuild
+> cd /tmp/rrdbuild
+> tar xzf rrdtool-0.1.16.tar.gz
+> cd rrdtool-0.1.16
+> sed -i '1403,1405d' rrdtoolmodule.c   # confirm line numbers match before deleting
+> pip install .
+> ```
+
+> [!WARNING]
 > If you are upgrading to the 1.3.x stream (and again for the 1.4.x stream): This is a schema change release stream that contains RRD & config YAML schema changes that require existing RRD files to be deleted and recreated before upgrading.
 > APMonitor will auto-heal existing RRDs on first run when `--generate-rrds` or `--generate-mrtg-config` is specified.
 >
