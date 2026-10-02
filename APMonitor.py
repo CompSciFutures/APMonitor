@@ -44,7 +44,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-__version__ = "1.4.1"
+__version__ = "1.4.2"
 __app_name__ = "APMonitor"
 
 import argparse
@@ -2035,7 +2035,7 @@ def check_host_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Dict[s
             # host uses empty interfaces dict — no per-interface DS
             # fixed DS count = 0 per-interface + 22 fixed DS total
             interfaces_rrd    = {}
-            expected_ds_count = 35
+            expected_ds_count = 47
 
             if os.path.exists(rrd_path):
                 needs_recreation = False
@@ -2199,6 +2199,26 @@ def check_ports_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Dict[
     OID_RMON_PKTS_512_1023  = '1.3.6.1.2.1.16.1.1.1.8'   # etherStatsPkts512to1023Octets
     OID_RMON_PKTS_1024_1518 = '1.3.6.1.2.1.16.1.1.1.9'   # etherStatsPkts1024to1518Octets
     OID_RMON_PKTS_JUMBO     = '1.3.6.1.2.1.16.1.1.1.11'  # etherStatsJabbers (>1518)
+
+    # IP-MIB ipSystemStatsTable (RFC 4293) — row index = IP version (1=ipv4, 2=ipv6)
+    OID_IP_SYS_HC_IN_RECEIVES   = '1.3.6.1.2.1.4.31.1.1.4'
+    OID_IP_SYS_HC_IN_OCTETS     = '1.3.6.1.2.1.4.31.1.1.6'
+    OID_IP_SYS_HC_OUT_TRANSMITS = '1.3.6.1.2.1.4.31.1.1.31'
+    OID_IP_SYS_HC_OUT_OCTETS    = '1.3.6.1.2.1.4.31.1.1.33'
+
+    # TCP-MIB / UDP-MIB / ICMP-MIB — HC (64-bit) preferred, 32-bit fallback
+    OID_TCP_HC_IN_SEGS      = '1.3.6.1.2.1.6.17.0'
+    OID_TCP_IN_SEGS         = '1.3.6.1.2.1.6.10.0'
+    OID_TCP_HC_OUT_SEGS     = '1.3.6.1.2.1.6.18.0'
+    OID_TCP_OUT_SEGS        = '1.3.6.1.2.1.6.11.0'
+    OID_UDP_HC_IN_DGRAMS    = '1.3.6.1.2.1.7.8.0'
+    OID_UDP_IN_DGRAMS       = '1.3.6.1.2.1.7.1.0'
+    OID_UDP_HC_OUT_DGRAMS   = '1.3.6.1.2.1.7.9.0'
+    OID_UDP_OUT_DGRAMS      = '1.3.6.1.2.1.7.4.0'
+    OID_ICMP_STATS_IN_MSGS  = '1.3.6.1.2.1.5.29.1.2'   # icmpStatsInMsgs (per IP version, summed)
+    OID_ICMP_STATS_OUT_MSGS = '1.3.6.1.2.1.5.29.1.4'   # icmpStatsOutMsgs (per IP version, summed)
+    OID_ICMP_IN_MSGS        = '1.3.6.1.2.1.5.1.0'      # legacy IPv4-only fallback
+    OID_ICMP_OUT_MSGS       = '1.3.6.1.2.1.5.14.0'     # legacy IPv4-only fallback
 
     OPER_STATUS = {
         '1': 'up', '2': 'down', '3': 'testing',
@@ -2556,6 +2576,11 @@ def check_ports_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Dict[
         rmon_crc = rmon_undersize = rmon_oversize = None
         rmon_fragments = rmon_jabbers = rmon_collisions = None
 
+        # --- Switch IP-stack counters (switch only — non-fatal) ---
+        ip4_bits_in = ip4_bits_out = ip6_bits_in = ip6_bits_out = None
+        proto_tcp_in = proto_tcp_out = proto_udp_in = proto_udp_out = None
+        proto_icmp_in = proto_icmp_out = proto_ip_in = proto_ip_out = None
+
         if resource['type'] == 'switch':
             def _rmon_sum(oid: str) -> Optional[int]:
                 try:
@@ -2589,6 +2614,43 @@ def check_ports_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Dict[
                         f"oversize={rmon_oversize} fragments={rmon_fragments} "
                         f"jabbers={rmon_jabbers} collisions={rmon_collisions}")
 
+            def _get_counter(*oids: str) -> Optional[int]:
+                """First OID returning an integer wins (HC preferred, 32-bit fallback)."""
+                for oid in oids:
+                    try:
+                        return int(session.get(oid).value)
+                    except Exception as e:
+                        if VERBOSE:
+                            print(f"{prefix}IP-stack get FAILED {oid}: {e}")
+                return None
+
+            def _get_bits(oid: str) -> Optional[int]:
+                octets = _get_counter(oid)
+                return octets * 8 if octets is not None else None
+
+            ip4_bits_in  = _get_bits(f"{OID_IP_SYS_HC_IN_OCTETS}.1")
+            ip4_bits_out = _get_bits(f"{OID_IP_SYS_HC_OUT_OCTETS}.1")
+            ip6_bits_in  = _get_bits(f"{OID_IP_SYS_HC_IN_OCTETS}.2")
+            ip6_bits_out = _get_bits(f"{OID_IP_SYS_HC_OUT_OCTETS}.2")
+
+            proto_ip_in   = _rmon_sum(OID_IP_SYS_HC_IN_RECEIVES)    # sum over IP versions
+            proto_ip_out  = _rmon_sum(OID_IP_SYS_HC_OUT_TRANSMITS)  # sum over IP versions
+            proto_tcp_in  = _get_counter(OID_TCP_HC_IN_SEGS, OID_TCP_IN_SEGS)
+            proto_tcp_out = _get_counter(OID_TCP_HC_OUT_SEGS, OID_TCP_OUT_SEGS)
+            proto_udp_in  = _get_counter(OID_UDP_HC_IN_DGRAMS, OID_UDP_IN_DGRAMS)
+            proto_udp_out = _get_counter(OID_UDP_HC_OUT_DGRAMS, OID_UDP_OUT_DGRAMS)
+            proto_icmp_in = _rmon_sum(OID_ICMP_STATS_IN_MSGS)
+            if proto_icmp_in is None:
+                proto_icmp_in = _get_counter(OID_ICMP_IN_MSGS)
+            proto_icmp_out = _rmon_sum(OID_ICMP_STATS_OUT_MSGS)
+            if proto_icmp_out is None:
+                proto_icmp_out = _get_counter(OID_ICMP_OUT_MSGS)
+
+            if VERBOSE:
+                print(f"{prefix}IP stack: v4_bits={ip4_bits_in}/{ip4_bits_out} v6_bits={ip6_bits_in}/{ip6_bits_out} "
+                      f"ip_pkts={proto_ip_in}/{proto_ip_out} tcp={proto_tcp_in}/{proto_tcp_out} "
+                      f"udp={proto_udp_in}/{proto_udp_out} icmp={proto_icmp_in}/{proto_icmp_out} (in/out)")
+
         if VERBOSE:
             print(f"{prefix}PORTS poll SUCCESS for '{name}': {len(current_ports_state)} interfaces")
             for if_index, iface in current_ports_state.items():
@@ -2618,7 +2680,7 @@ def check_ports_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Dict[
             rras               = create_rrd_rras(check_every_n_secs)
 
             if os.path.exists(rrd_path):
-                expected_ds_count = 4 * len(interfaces) + 35
+                expected_ds_count = 4 * len(interfaces) + 47
                 needs_recreation  = False
                 try:
                     info            = rrdtool.info(rrd_path)
@@ -2671,6 +2733,12 @@ def check_ports_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Dict[
                     rmon_fragments = rmon_fragments,
                     rmon_jabbers = rmon_jabbers,
                     rmon_collisions = rmon_collisions,
+                    ip4_bits_in=ip4_bits_in, ip4_bits_out=ip4_bits_out,
+                    ip6_bits_in=ip6_bits_in, ip6_bits_out=ip6_bits_out,
+                    proto_tcp_in=proto_tcp_in, proto_tcp_out=proto_tcp_out,
+                    proto_udp_in=proto_udp_in, proto_udp_out=proto_udp_out,
+                    proto_icmp_in=proto_icmp_in, proto_icmp_out=proto_icmp_out,
+                    proto_ip_in=proto_ip_in, proto_ip_out=proto_ip_out,
                 )
                 if rrd_err:
                     return rrd_err, {}
@@ -2916,7 +2984,7 @@ def check_port_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Option
 
         rras = create_rrd_rras(check_every_n_secs)
         if os.path.exists(rrd_path):
-            expected_ds_count = 4 * len(interfaces_rrd) + 35
+            expected_ds_count = 4 * len(interfaces_rrd) + 47
             needs_recreation = False
             try:
                 info = rrdtool.info(rrd_path)
@@ -3553,13 +3621,15 @@ def create_snmp_rrd(rrd_path: str, step_secs: int, interfaces: Dict[str, Dict[st
     - 11 fixed aggregate network DS (ports/port/switch populated, host stores U)
     - 7 fixed host performance DS (host populated, ports/port/switch store U)
     - 4 fixed tamper/network DS (ports/switch only — port/host store U)
+    - 7 fixed RMON packet size DS + 6 fixed RMON error DS (switch only — others store U)
+    - 12 fixed switch IP-stack DS (switch only — others store U)
 
     Args:
         rrd_path: Full path to RRD file to create
         step_secs: Update interval in seconds
         interfaces: Dict mapping interface index to interface data (with 'name' key)
 
-    NB: DS count is now 22 fixed + 4 per interface. Existing RRDs with fewer DS will be
+    NB: DS count is now 47 fixed + 4 per interface. Existing RRDs with fewer DS will be
     auto-healed (deleted and recreated).
     """
     global RRD_ELAPSED_MS
@@ -3626,6 +3696,12 @@ def create_snmp_rrd(rrd_path: str, step_secs: int, interfaces: Dict[str, Dict[st
     data_sources.append(f'DS:rmon_jabbers:COUNTER:{heartbeat}:0:U')
     data_sources.append(f'DS:rmon_collisions:COUNTER:{heartbeat}:0:U')
 
+    # Fixed switch IP-stack DS (switch only — ports/port/host store U)
+    for ds_name in ('ip4_bits_in', 'ip4_bits_out', 'ip6_bits_in', 'ip6_bits_out',
+                    'proto_tcp_in', 'proto_tcp_out', 'proto_udp_in', 'proto_udp_out',
+                    'proto_icmp_in', 'proto_icmp_out', 'proto_ip_in', 'proto_ip_out'):
+        data_sources.append(f'DS:{ds_name}:COUNTER:{heartbeat}:0:U')
+
     rras = create_rrd_rras(step_secs)
 
     try:
@@ -3664,7 +3740,13 @@ def update_snmp_rrd(rrd_path: str, timestamp: datetime, interfaces: Dict[str, Di
                     pkts_jumbo: Optional[int] = None,
                     rmon_crc: Optional[int] = None, rmon_undersize: Optional[int] = None,
                     rmon_oversize: Optional[int] = None, rmon_fragments: Optional[int] = None,
-                    rmon_jabbers: Optional[int] = None, rmon_collisions: Optional[int] = None) -> Optional[str]:
+                    rmon_jabbers: Optional[int] = None, rmon_collisions: Optional[int] = None,
+                    ip4_bits_in: Optional[int] = None, ip4_bits_out: Optional[int] = None,
+                    ip6_bits_in: Optional[int] = None, ip6_bits_out: Optional[int] = None,
+                    proto_tcp_in: Optional[int] = None, proto_tcp_out: Optional[int] = None,
+                    proto_udp_in: Optional[int] = None, proto_udp_out: Optional[int] = None,
+                    proto_icmp_in: Optional[int] = None, proto_icmp_out: Optional[int] = None,
+                    proto_ip_in: Optional[int] = None, proto_ip_out: Optional[int] = None) -> Optional[str]:
     """Update SNMP RRD file with latest interface metrics, system resources, and host performance.
 
     All numeric parameters accept None → stored as 'U' (unknown) in RRD.
@@ -3673,6 +3755,8 @@ def update_snmp_rrd(rrd_path: str, timestamp: datetime, interfaces: Dict[str, Di
     passed as None for ports/port monitors.
     Tamper/network DS (ports_up_count, nvram_flash_bytes, mac_count, arp_count) should be
     passed as None for port and host monitors — these are ports-only metrics.
+    RMON and switch IP-stack DS (pkts_*, rmon_*, ip4_*, ip6_*, proto_*) are switch-only —
+    all other types pass None.
 
     Args:
         rrd_path: Full path to RRD file
@@ -3700,6 +3784,9 @@ def update_snmp_rrd(rrd_path: str, timestamp: datetime, interfaces: Dict[str, Di
         nvram_flash_bytes: Sum of used bytes across NVRAM/flash hrStorage entries (ports only)
         mac_count: Count of learned FDB entries via Q-BRIDGE-MIB (ports only)
         arp_count: Count of ARP entries via ipNetToPhysicalTable / ipNetToMediaTable (ports only)
+        ip4_bits_in/out, ip6_bits_in/out: IP-MIB ipSystemStats octets × 8 per address family (switch only)
+        proto_tcp/udp/icmp_in/out: TCP/UDP/ICMP-MIB in/out counters (switch only)
+        proto_ip_in/out: IP-MIB ipSystemStats HC packets in/out summed over IP versions (switch only)
     """
     global RRD_ELAPSED_MS
     prefix = getattr(thread_local, 'prefix', '')
@@ -3772,6 +3859,20 @@ def update_snmp_rrd(rrd_path: str, timestamp: datetime, interfaces: Dict[str, Di
     ds_names.append('rmon_fragments');  values.append(_v(rmon_fragments))
     ds_names.append('rmon_jabbers');    values.append(_v(rmon_jabbers))
     ds_names.append('rmon_collisions'); values.append(_v(rmon_collisions))
+
+    # Fixed switch IP-stack DS (switch only — ports/port/host pass None → U)
+    ds_names.append('ip4_bits_in');    values.append(_v(ip4_bits_in))
+    ds_names.append('ip4_bits_out');   values.append(_v(ip4_bits_out))
+    ds_names.append('ip6_bits_in');    values.append(_v(ip6_bits_in))
+    ds_names.append('ip6_bits_out');   values.append(_v(ip6_bits_out))
+    ds_names.append('proto_tcp_in');   values.append(_v(proto_tcp_in))
+    ds_names.append('proto_tcp_out');  values.append(_v(proto_tcp_out))
+    ds_names.append('proto_udp_in');   values.append(_v(proto_udp_in))
+    ds_names.append('proto_udp_out');  values.append(_v(proto_udp_out))
+    ds_names.append('proto_icmp_in');  values.append(_v(proto_icmp_in))
+    ds_names.append('proto_icmp_out'); values.append(_v(proto_icmp_out))
+    ds_names.append('proto_ip_in');    values.append(_v(proto_ip_in))
+    ds_names.append('proto_ip_out');   values.append(_v(proto_ip_out))
 
     template  = ':'.join(ds_names)
     value_str = ':'.join(values)
@@ -4454,7 +4555,7 @@ def _generate_switch_mrtg_targets(
         rrd_path: str,
         ports_state: Dict[str, Any],
         percentile: Optional[int]) -> None:
-    """Generate 5 stacked per-interface MRTG targets for a switch monitor.
+    """Generate 8 stacked MRTG targets for a switch monitor.
 
     Each chart uses a synthetic Target[] line (first interface DS pair) so
     mrtg-rrd.cgi.pl can locate the RRD, then the stacked AREA/STACK graph
@@ -4468,6 +4569,8 @@ def _generate_switch_mrtg_targets(
       -errors:        per-interface errors stacked
       -pkt-size:      aggregate packet size distribution by bucket (RMON)
       -err-type:      aggregate error type distribution (RMON + IF-MIB)
+      -ip-family:     IPv4 vs IPv6 bits/s, in above X axis, out below (switch IP stack)
+      -proto:         TCP/UDP/ICMP/other pps, in above X axis, out below (switch IP stack)
     """
     COLOURS = [
         '#00cc00', '#0000ff', '#cc0000', '#ff9900', '#9900cc',
@@ -4689,6 +4792,86 @@ def _generate_switch_mrtg_targets(
         *([f"Percentile[{safe_name}-err-type]: {percentile}"] if percentile else []),
         f"",
     ])
+
+    # --- Mirrored charts: switch IP-stack counters, in above the X axis, out below ---
+    IP_STACK_SCOPE = "Switch IP stack only (management/routed traffic, not port transit)"
+
+    def _mirrored_stack_chart(suffix: str, title: str, graph_defs: List[str],
+                              series: List[Tuple[str, str, str, str]],
+                              ylabel: str, maxbytes: int) -> None:
+        """Emit one stacked MRTG target: in above the X axis, out mirrored below it.
+
+        graph_defs: DEF/CDEF strings defining every vname used by series
+        series:     (label, colour, in_vname, out_vname), stacked in list order
+        """
+        graph_args = list(graph_defs)
+        graph_args.extend(f"CDEF:{out_v}n={out_v},-1,*" for _, _, _, out_v in series)
+        for i, (label, colour, in_v, _) in enumerate(series):
+            graph_args.append(f"{'AREA' if i == 0 else 'STACK'}:{in_v}{colour}:{label}")
+        for i, (_, colour, _, out_v) in enumerate(series):
+            graph_args.append(f"{'AREA' if i == 0 else 'STACK'}:{out_v}n{colour}")
+
+        legend_rows = ''.join(
+            f"<tr><td width='40'></td><td width='20'>"
+            f"<span style='display:inline-block;width:30px;height:12px;"
+            f"background:{colour};vertical-align:middle;border:1px solid #999;'></span>"
+            f"</td><td><font size='-1'><b>{label}</b></font></td></tr>"
+            for label, colour, _, _ in series
+        )
+        page_foot = (
+            f"<hr><table width='500' border='0' cellpadding='4' cellspacing='0'>"
+            f"{legend_rows}</table>"
+        )
+
+        mrtg_lines.extend([
+            f"######################################################################",
+            f"# {display_name} - {title}",
+            f"",
+            f"Target[{safe_name}-{suffix}]: if{first_idx}_in&if{first_idx}_out:{rrd_path}",
+            f"MaxBytes1[{safe_name}-{suffix}]: {maxbytes}",
+            f"MaxBytes2[{safe_name}-{suffix}]: {maxbytes}",
+            f"Title[{safe_name}-{suffix}]: {display_name} - {title}",
+            f"PageTop[{safe_name}-{suffix}]: <h1>{display_name} ({address})</h1>"
+            f"<h2>{title}</h2><p>{IP_STACK_SCOPE} - In above axis, Out below</p>",
+            f"PageFoot[{safe_name}-{suffix}]: {page_foot}",
+            f"Options[{safe_name}-{suffix}]: gauge,nopercent,growright,noi,noo",
+            f"YLegend[{safe_name}-{suffix}]: {ylabel}",
+            f"ShortLegend[{safe_name}-{suffix}]: {ylabel}",
+            f"WithPeak[{safe_name}-{suffix}]: dwmy",
+            f"ExtraArgs[{safe_name}-{suffix}]: {' '.join(graph_args)}",
+            *([f"Percentile[{safe_name}-{suffix}]: {percentile}"] if percentile else []),
+            f"",
+        ])
+
+    _mirrored_stack_chart(
+        'ip-family', 'IPv4 vs IPv6 Bandwidth',
+        [f"DEF:v4i={rrd_path}:ip4_bits_in:AVERAGE",
+         f"DEF:v4o={rrd_path}:ip4_bits_out:AVERAGE",
+         f"DEF:v6i={rrd_path}:ip6_bits_in:AVERAGE",
+         f"DEF:v6o={rrd_path}:ip6_bits_out:AVERAGE"],
+        [('IPv4', '#0000ff', 'v4i', 'v4o'),
+         ('IPv6', '#ff9900', 'v6i', 'v6o')],
+        'Bits/s', 10_000_000_000,
+    )
+    _mirrored_stack_chart(
+        'proto', 'TCP/UDP/ICMP/Other Packets',
+        [f"DEF:tcpi={rrd_path}:proto_tcp_in:AVERAGE",
+         f"DEF:tcpo={rrd_path}:proto_tcp_out:AVERAGE",
+         f"DEF:udpi={rrd_path}:proto_udp_in:AVERAGE",
+         f"DEF:udpo={rrd_path}:proto_udp_out:AVERAGE",
+         f"DEF:icmpi={rrd_path}:proto_icmp_in:AVERAGE",
+         f"DEF:icmpo={rrd_path}:proto_icmp_out:AVERAGE",
+         f"DEF:ipi={rrd_path}:proto_ip_in:AVERAGE",
+         f"DEF:ipo={rrd_path}:proto_ip_out:AVERAGE",
+         "CDEF:othi=ipi,tcpi,-,udpi,-,icmpi,-,0,MAX",
+         "CDEF:otho=ipo,tcpo,-,udpo,-,icmpo,-,0,MAX"],
+        [('TCP',   '#0000ff', 'tcpi',  'tcpo'),
+         ('UDP',   '#00cc00', 'udpi',  'udpo'),
+         ('ICMP',  '#cc0000', 'icmpi', 'icmpo'),
+         ('Other', '#999999', 'othi',  'otho')],
+        'pps', 10_000_000,
+    )
+
 
 def generate_mrtg_config(config: Dict[str, Any], work_dir: str, mrtg_config_path: str,
                           state: Dict[str, Any]) -> None:
@@ -5230,7 +5413,7 @@ def generate_mrtg_index(config: Dict[str, Any], index_path: str, state: Dict[str
         ])
 
     def _emit_switch_row(resource: Dict[str, Any]) -> None:
-        """Emit one switch monitor row (label + 5-cell network-row grid)."""
+        """Emit one switch monitor row (label + 8-cell network-row grid)."""
         safe_name = re.sub(r'[^\w\-.]', '_', resource['name'])
         display_name = f"switch: {resource['name']}"
         monitor_state = state.get(resource['name'], {}) if state else {}
@@ -5249,11 +5432,13 @@ def generate_mrtg_index(config: Dict[str, Any], index_path: str, state: Dict[str
             ('-errors', 'Errors Per Port'),
             ('-pkt-size', 'Pkt Size Dist'),
             ('-err-type', 'Error Type Dist'),
+            ('-ip-family', 'IPv4 vs IPv6 (IP stack)'),
+            ('-proto', 'TCP/UDP/ICMP (IP stack)'),
         ]
 
         html_lines.extend([
             f"    <div class='{label_class}'><a href='{detail_href}'>{display_name}</a>{outage_str}</div>",
-            f"    <div class='network-row' style='grid-template-columns: repeat(6, 1fr); --cols-narrow: 3;'>",
+            f"    <div class='network-row' style='grid-template-columns: repeat(8, 1fr); --cols-narrow: 4;'>",
         ])
         for suffix, heading in targets:
             html_lines.extend([
@@ -5265,6 +5450,7 @@ def generate_mrtg_index(config: Dict[str, Any], index_path: str, state: Dict[str
                 "        </div>",
             ])
         html_lines.append("    </div>")
+
 
     def _emit_port_host_group(run: List[Tuple[str, str, Dict[str, Any]]]) -> None:
         """Emit a contiguous run of port/host monitors as a single grid (8-up or 4-up).
@@ -5457,15 +5643,10 @@ def update_mrtg_rrd_cgi_config(work_dir: str, mrtg_config_path: str, site_name: 
         site_name:        Sanitised site name to use as hash key
     """
     prefix   = getattr(thread_local, 'prefix', '')
-    cgi_path = Path(work_dir).parent / 'mrtg-rrd.cgi.pl'
+    cgi_path = Path(work_dir).parent.parent / 'mrtg-rrd.cgi.pl'
     new_path = Path(str(cgi_path) + '.new')
     old_path = Path(str(cgi_path) + '.old')
     lck_path = Path(tempfile.gettempdir()) / 'apmonitor-cgi-update.lock'
-
-    if not cgi_path.exists():
-        if VERBOSE:
-            print(f"{prefix}Warning: mrtg-rrd.cgi.pl not found at {cgi_path}, skipping config update")
-        return
 
     # --- PID spinlock ---
     my_pid = os.getpid()
@@ -5542,7 +5723,8 @@ def update_mrtg_rrd_cgi_config(work_dir: str, mrtg_config_path: str, site_name: 
             print(f"{prefix}Updated mrtg-rrd.cgi.pl site_config: {site_name} -> {mrtg_config_path}")
 
     except Exception as e:
-        print(f"{prefix}Failed to update mrtg-rrd.cgi.pl config: {e}", file=sys.stderr)
+        print(f"{prefix} ERROR Failed to update mrtg-rrd.cgi.pl config: {e}", file=sys.stderr)
+        sys.exit(1)
 
     finally:
         # Release lock
@@ -5668,7 +5850,7 @@ def main() -> None:
     parser.add_argument('--test-emails', action='store_true', help='Test email notifications and exit')
     parser.add_argument('--test-config', action='store_true', help='Validate configuration and print summary, then exit')
     parser.add_argument('--generate-rrds', action='store_true', help='Enable RRD database creation and updates')
-    parser.add_argument('--generate-mrtg-config', metavar='WORKDIR', nargs='?', const='/var/www/html/mrtg', help='Generate MRTG config file and exit (default workdir: /var/www/html/mrtg)')
+    parser.add_argument('--generate-mrtg-config', metavar='WORKDIR', nargs='?', const='/var/www/html/mrtg-rrd.cgi.pl', help='Generate MRTG config file and exit (default workdir: /var/www/html/mrtg-rrd.cgi.pl)')
     args = parser.parse_args()
 
     configs = args.config
@@ -5695,7 +5877,7 @@ def main() -> None:
         if args.generate_rrds:
             passthrough.append('--generate-rrds')
         if args.generate_mrtg_config is not None:
-            if args.generate_mrtg_config == '/var/www/html/mrtg':
+            if args.generate_mrtg_config == '/var/www/html/mrtg-rrd.cgi.pl':
                 passthrough.append('--generate-mrtg-config')
             else:
                 passthrough.extend(['--generate-mrtg-config', args.generate_mrtg_config])
@@ -5797,7 +5979,8 @@ def main() -> None:
 
         # Generate MRTG config mode
         if args.generate_mrtg_config is not None:
-            base_work_dir    = args.generate_mrtg_config
+            cgi_path = Path(args.generate_mrtg_config)
+            base_work_dir = str(cgi_path.parent / 'mrtg')
             site_name        = config['site']['name']
             safe_site_name   = re.sub(r'[^\w\-.]', '_', site_name)
             work_dir         = str(Path(base_work_dir) / safe_site_name)
@@ -5807,9 +5990,12 @@ def main() -> None:
 
             mrtg_start_ms = int(datetime.now().timestamp() * 1000)
 
+            if not cgi_path.exists():
+                print(f"ERROR: mrtg-rrd.cgi.pl not found at {cgi_path}", file=sys.stderr)
+                sys.exit(1)
+
             generate_mrtg_config(config, work_dir, mrtg_config_path, STATE)
-            print(f"DEBUG: calling update_mrtg_rrd_cgi_config({base_work_dir!r}, {mrtg_config_path!r}, {safe_site_name!r})", file=sys.stderr)
-            update_mrtg_rrd_cgi_config(base_work_dir, mrtg_config_path, safe_site_name)
+            update_mrtg_rrd_cgi_config(work_dir, mrtg_config_path, safe_site_name)
 
             # Generate master index into site subdirectory
             master_index_path = str(Path(work_dir) / 'index.html')
@@ -5922,7 +6108,6 @@ def main() -> None:
         # Remove lockfile on exit
         if lockfile_path and os.path.exists(lockfile_path):
             os.remove(lockfile_path)
-
 
 if __name__ == '__main__':
     main()
