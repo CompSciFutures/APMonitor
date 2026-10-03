@@ -9,7 +9,7 @@ Multithreaded high speed availability checking for SNMP, PING, TCP/UDP, QUIC & H
 Integrates w/Site24x7 heartbeat monitoring for failover alerts + MRTG + Slack & Pushover webhooks.
 Thread safe, reentrant, modifiable.
 
-# Release 1.4.2 (???): ???
+# Release 1.4.2 (03-Oct-26): Router Stats
 - Refactored _walk_arp to apply once-and-only-once
 - Added ARP info to the generate_monitor_detail_page()
 - Added SNMP System Description
@@ -19,6 +19,9 @@ Thread safe, reentrant, modifiable.
 - Added 2x basic protocol charts to router & switch to demo stacked up & down mrtg charts
 - Fixed problem with wrong directory being written to.
 - Added exampples of grammars I might use in the future
+- Changed chart preview screen
+- Changed to router/switch in config file
+
 
 # Release 1.4.0 (27-May-26): Stacked Charts
 - added basic support for 'switch' primitive
