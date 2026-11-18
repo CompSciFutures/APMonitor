@@ -44,7 +44,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-__version__ = "1.4.2"
+__version__ = "1.4.3"
 __app_name__ = "APMonitor"
 
 import argparse
@@ -488,10 +488,12 @@ def print_and_exit_on_bad_config(config: Dict[str, Any]) -> None:
                 raise ConfigError(f"Monitor {i} (name: {name}): duplicate monitor name '{name}'")
             monitor_names.add(name)
 
-            # 'snmp' removed — direct users to 'ports'
-            valid_types = ['ping', 'http', 'quic', 'tcp', 'udp', 'ports', 'port', 'host', 'switch']
+            # 'snmp' removed — direct users to 'switch'
+            valid_types = ['ping', 'http', 'quic', 'tcp', 'udp', 'switch', 'port', 'host', 'router']
             if monitor['type'] == 'snmp':
-                raise ConfigError(f"Monitor {i} (name: {name}): type 'snmp' is not valid. Did you mean type: ports?")
+                raise ConfigError(f"Monitor {i} (name: {name}): type 'snmp' is not valid. Did you mean type: switch?")
+            if monitor['type'] == 'ports':
+                raise ConfigError(f"Monitor {i} (name: {name}): type 'ports' is not valid. Did you mean type: switch?")
             if monitor['type'] not in valid_types:
                 raise ConfigError(f"Monitor {i} (name: {monitor.get('name', 'unknown')}): invalid type '{monitor['type']}', must be one of {valid_types}")
 
@@ -565,7 +567,7 @@ def print_and_exit_on_bad_config(config: Dict[str, Any]) -> None:
                     if fp_len == 0 or (fp_len & (fp_len - 1)) != 0:
                         raise ConfigError(f"Monitor {i} (name: {name}): 'ssl_fingerprint' length must be a power of two (got {fp_len} hex characters)")
                 if 'percentile' in monitor:
-                    raise ConfigError(f"Monitor {i} (name: {name}): 'percentile' field is only valid for 'ports' monitors")
+                    raise ConfigError(f"Monitor {i} (name: {name}): 'percentile' field is only valid for 'switch' monitors")
 
             elif monitor_type in ['tcp', 'udp']:
                 parsed = urlparse(address)
@@ -593,11 +595,11 @@ def print_and_exit_on_bad_config(config: Dict[str, Any]) -> None:
                     if forbidden in monitor:
                         raise ConfigError(f"Monitor {i} (name: {name}): '{forbidden}' field is not valid for {monitor_type} monitors")
 
-            elif monitor_type in ('ports', 'switch'):
-                # ports: merged snmp metrics + port state/MAC monitoring
+            elif monitor_type in ('switch', 'router'):
+                # switch: merged snmp metrics + port state/MAC monitoring
                 parsed = urlparse(address)
                 if parsed.scheme != 'snmp':
-                    raise ConfigError(f"Monitor {i} (name: {name}): ports monitor must use 'snmp://' scheme, got '{address}'")
+                    raise ConfigError(f"Monitor {i} (name: {name}): switch monitor must use 'snmp://' scheme, got '{address}'")
                 if not parsed.netloc:
                     raise ConfigError(f"Monitor {i} (name: {name}): 'address' must include hostname/IP, got '{address}'")
 
@@ -621,7 +623,7 @@ def print_and_exit_on_bad_config(config: Dict[str, Any]) -> None:
 
                 for forbidden in ('expect', 'ssl_fingerprint', 'ignore_ssl_expiry', 'send', 'content_type'):
                     if forbidden in monitor:
-                        raise ConfigError(f"Monitor {i} (name: {name}): '{forbidden}' field not valid for ports monitors")
+                        raise ConfigError(f"Monitor {i} (name: {name}): '{forbidden}' field not valid for switch monitors")
 
             elif monitor_type == 'host':
                 parsed = urlparse(address)
@@ -2122,7 +2124,7 @@ def check_ports_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Dict[
     except ImportError as e:
         error_msg = f"easysnmp library import failed: {e} (try: pip install easysnmp)"
         prefix = getattr(thread_local, 'prefix', '')
-        print(f"{prefix}PORTS check FAILED: {error_msg}", file=sys.stderr)
+        print(f"{prefix}SWITCH check FAILED: {error_msg}", file=sys.stderr)
         return error_msg, {}
 
     prefix = getattr(thread_local, 'prefix', '')
@@ -2131,8 +2133,8 @@ def check_ports_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Dict[
 
     parsed = urlparse(address)
     if parsed.scheme != 'snmp':
-        error_msg = f"{parsed.scheme.upper()} protocol not supported for ports monitor, use snmp"
-        print(f"{prefix}PORTS check FAILED for '{name}': {error_msg}", file=sys.stderr)
+        error_msg = f"{parsed.scheme.upper()} protocol not supported for {resource['type']} monitor, use snmp"
+        print(f"{prefix}SWITCH check FAILED for '{name}': {error_msg}", file=sys.stderr)
         return error_msg, {}
 
     community = resource.get('community') or parsed.username or 'public'
@@ -2140,8 +2142,8 @@ def check_ports_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Dict[
     port      = parsed.port or 161
 
     if not hostname:
-        error_msg = "ports monitor address must include hostname"
-        print(f"{prefix}PORTS check FAILED for '{name}': {error_msg}", file=sys.stderr)
+        error_msg = f"{resource['type']} monitor address must include hostname"
+        print(f"{prefix}SWITCH check FAILED for '{name}': {error_msg}", file=sys.stderr)
         return error_msg, {}
 
     # Standard SNMP OIDs
@@ -2265,12 +2267,12 @@ def check_ports_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Dict[
             if_descr_items = session.walk(OID_IF_DESCR)
         except Exception as e:
             error_msg = f"SNMP walk failed: {e}"
-            print(f"{prefix}PORTS check FAILED for '{name}': {error_msg}", file=sys.stderr)
+            print(f"{prefix}SWITCH check FAILED for '{name}': {error_msg}", file=sys.stderr)
             return error_msg, {}
 
         if not if_descr_items:
             error_msg = "no interfaces found"
-            print(f"{prefix}PORTS check FAILED for '{name}': {error_msg}", file=sys.stderr)
+            print(f"{prefix}SWITCH check FAILED for '{name}': {error_msg}", file=sys.stderr)
             return error_msg, {}
 
         interfaces = {
@@ -2284,7 +2286,7 @@ def check_ports_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Dict[
             admin_items = session.walk(OID_IF_ADMIN_STATUS)
         except Exception as e:
             error_msg = f"SNMP walk failed: {e}"
-            print(f"{prefix}PORTS check FAILED for '{name}': {error_msg}", file=sys.stderr)
+            print(f"{prefix}SWITCH check FAILED for '{name}': {error_msg}", file=sys.stderr)
             return error_msg, {}
 
         oper_by_index  = {item.oid.split('.')[-1]: item.value for item in oper_items}
@@ -2517,11 +2519,11 @@ def check_ports_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Dict[
 
             if VERBOSE:
                 total_macs = sum(len(v) for v in macs_by_ifindex.values())
-                print(f"{prefix}PORTS MAC table: {total_macs} learned MACs across {len(macs_by_ifindex)} interfaces")
+                print(f"{prefix}SWITCH MAC table: {total_macs} learned MACs across {len(macs_by_ifindex)} interfaces")
 
         except Exception as e:
             if VERBOSE:
-                print(f"{prefix}PORTS Q-BRIDGE FDB walk failed for '{name}' (MACs unavailable): {e}")
+                print(f"{prefix}SWITCH Q-BRIDGE FDB walk failed for '{name}' (MACs unavailable): {e}")
 
         # --- Build current_ports_state (numeric sort on if_index) ---
         current_ports_state = {}
@@ -2538,7 +2540,7 @@ def check_ports_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Dict[
         # --- Tamper detection: active port count ---
         ports_up_count = sum(1 for s in current_ports_state.values() if s['oper'] == 'up')
         if VERBOSE:
-            print(f"{prefix}PORTS up count: {ports_up_count}/{len(current_ports_state)}")
+            print(f"{prefix}SWITCH up count: {ports_up_count}/{len(current_ports_state)}")
 
         # --- Tamper detection: NVRAM + flash used bytes ---
         nvram_flash_bytes = None
@@ -2552,23 +2554,23 @@ def check_ports_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Dict[
                         used  = int(session.get(f"{OID_HR_STORAGE_USED}.{st_index}").value)
                         nvram_flash_bytes = (nvram_flash_bytes or 0) + used * units
                         if VERBOSE:
-                            print(f"{prefix}PORTS NVRAM/flash '{item.value}': {used * units:,} bytes used")
+                            print(f"{prefix}SWITCH NVRAM/flash '{item.value}': {used * units:,} bytes used")
                     except Exception as e:
                         if VERBOSE:
-                            print(f"{prefix}PORTS NVRAM/flash entry '{item.value}' FAILED: {e}")
+                            print(f"{prefix}SWITCH NVRAM/flash entry '{item.value}' FAILED: {e}")
         except Exception as e:
             if VERBOSE:
-                print(f"{prefix}PORTS hrStorage NVRAM/flash walk FAILED: {e}")
+                print(f"{prefix}SWITCH hrStorage NVRAM/flash walk FAILED: {e}")
 
         # --- Network capacity: MAC count ---
         mac_count = sum(len(v) for v in macs_by_ifindex.values())
         if VERBOSE:
-            print(f"{prefix}PORTS MAC count: {mac_count}")
+            print(f"{prefix}SWITCH MAC count: {mac_count}")
 
         # --- Network capacity: ARP entry count + build mac→ip map for detail page ---
         arp_by_mac, arp_count = _walk_arp(session, prefix, VERBOSE)
         if VERBOSE:
-            print(f"{prefix}PORTS ARP count: {arp_count}")
+            print(f"{prefix}SWITCH ARP count: {arp_count}")
 
         # --- RMON packet size distribution (switch only — non-fatal) ---
         pkts_64 = pkts_65_127 = pkts_128_255 = pkts_256_511 = None
@@ -2581,7 +2583,7 @@ def check_ports_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Dict[
         proto_tcp_in = proto_tcp_out = proto_udp_in = proto_udp_out = None
         proto_icmp_in = proto_icmp_out = proto_ip_in = proto_ip_out = None
 
-        if resource['type'] == 'switch':
+        if resource['type'] == 'router':
             def _rmon_sum(oid: str) -> Optional[int]:
                 try:
                     items = session.walk(oid)
@@ -2652,7 +2654,7 @@ def check_ports_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Dict[
                       f"udp={proto_udp_in}/{proto_udp_out} icmp={proto_icmp_in}/{proto_icmp_out} (in/out)")
 
         if VERBOSE:
-            print(f"{prefix}PORTS poll SUCCESS for '{name}': {len(current_ports_state)} interfaces")
+            print(f"{prefix}SWITCH poll SUCCESS for '{name}': {len(current_ports_state)} interfaces")
             for if_index, iface in current_ports_state.items():
                 mac_str = ', '.join(iface['macs']) if iface['macs'] else 'none'
                 in_val  = interfaces[if_index].get('in_octets')
@@ -2751,7 +2753,7 @@ def check_ports_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Dict[
 
     except Exception as e:
         error_msg = f"{type(e).__name__}: {e}"
-        print(f"{prefix}PORTS check FAILED for '{name}' at '{address}': {error_msg}", file=sys.stderr)
+        print(f"{prefix}SWITCH check FAILED for '{name}' at '{address}': {error_msg}", file=sys.stderr)
         if VERBOSE > 1:
             traceback.print_exc(file=sys.stderr)
         return error_msg, {}
@@ -3049,7 +3051,7 @@ def check_resource(resource: Dict[str, Any]) -> Tuple[Optional[str], Optional[in
             error_msg   = check_ping_resource(resource)
             ports_state = None
 
-        elif resource['type'] in ('ports', 'switch'):
+        elif resource['type'] in ('switch', 'router'):
             error_msg, ports_state = check_ports_resource(resource)
 
         elif resource['type'] == 'host':
@@ -4025,10 +4027,10 @@ def check_and_heartbeat_r(resource: Dict[str, Any], site_config: Dict[str, Any])
 
     # Handle ports monitor diff/notify logic
     # 'host' skips this block — it has no port state to diff
-    if resource['type'] in ('ports', 'switch') and is_up and current_ports_state:
+    if resource['type'] in ('switch', 'router') and is_up and current_ports_state:
         if prev_ports_state is None:
             if VERBOSE:
-                print(f"{prefix}PORTS baseline established for '{resource['name']}': {len(current_ports_state)} interfaces")
+                print(f"{prefix}SWITCH baseline established for '{resource['name']}': {len(current_ports_state)} interfaces")
         else:
             all_indices = set(prev_ports_state.keys()) | set(current_ports_state.keys())
 
@@ -4181,7 +4183,7 @@ def check_and_heartbeat_r(resource: Dict[str, Any], site_config: Dict[str, Any])
 
     # Update RRD database for availability monitors (ping, http, quic, tcp, udp)
     # SNMP-family RRDs (ports, host, port) are handled in check_resource() / check_port_resource()
-    if RRD_ENABLED and resource['type'] not in ('ports', 'switch', 'host', 'port'):
+    if RRD_ENABLED and resource['type'] not in ('switch', 'router', 'host', 'port'):
         rrd_path = get_rrd_path(resource['name'], 'availability')
         rras = create_rrd_rras(check_every_n_secs)
 
@@ -4214,7 +4216,7 @@ def check_and_heartbeat_r(resource: Dict[str, Any], site_config: Dict[str, Any])
         'last_config_checksum':     resource_checksum,
     }
 
-    if resource['type'] in ('ports', 'switch') and current_ports_state:
+    if resource['type'] in ('switch', 'router') and current_ports_state:
         new_state['ports_state'] = current_ports_state
     else:
         new_state['down_count']        = down_count
@@ -4906,16 +4908,16 @@ def generate_mrtg_config(config: Dict[str, Any], work_dir: str, mrtg_config_path
         if not to_natural_language_boolean(resource.get('display', True)):
             continue
 
-        if monitor_type in ('ports', 'port', 'host', 'switch'):
+        if monitor_type in ('switch', 'port', 'host', 'router'):
             rrd_path = get_rrd_path(resource['name'], 'snmp')
-            percentile = resource.get('percentile') if monitor_type in ('ports', 'port', 'switch') else None
+            percentile = resource.get('percentile') if monitor_type in ('switch', 'port', 'router') else None
             display_name = f"{monitor_type}: {resource['name']}"
 
-            if monitor_type == 'switch':
+            if monitor_type == 'router':
                 ports_state = state.get(resource['name'], {}).get('ports_state', {}) if state else {}
                 if not ports_state:
                     if VERBOSE:
-                        print(f"{prefix}SWITCH MRTG config skipped for '{resource['name']}': no ports_state yet")
+                        print(f"{prefix}ROUTER MRTG config skipped for '{resource['name']}': no ports_state yet")
                 else:
                     _generate_switch_mrtg_targets(
                         mrtg_lines, safe_name, display_name, resource,
@@ -5014,7 +5016,7 @@ def generate_mrtg_config(config: Dict[str, Any], work_dir: str, mrtg_config_path
                 ])
 
             else:
-                # ports and port: full bandwidth/packets/errors target set
+                # switch and port: full bandwidth/packets/errors target set
 
                 # Bandwidth: bits in (left) & bits out (right)
                 mrtg_lines.extend([
@@ -5108,7 +5110,7 @@ def generate_mrtg_config(config: Dict[str, Any], work_dir: str, mrtg_config_path
                     f"",
                 ])
 
-                if monitor_type == 'ports':
+                if monitor_type == 'switch':
                     # TCP retransmits: same DS both sides (single metric, symmetric display)
                     mrtg_lines.extend([
                         f"######################################################################",
@@ -5348,13 +5350,13 @@ def generate_mrtg_index(config: Dict[str, Any], index_path: str, state: Dict[str
     def _emit_snmp_row(resource: Dict[str, Any]) -> None:
         """Emit one ports monitor row (label + full-width network-row grid)."""
         safe_name    = re.sub(r'[^\w\-.]', '_', resource['name'])
-        display_name = f"ports: {resource['name']}"
+        display_name = f"switch: {resource['name']}"
         monitor_state = state.get(resource['name'], {}) if state else {}
         is_down      = not monitor_state.get('is_up', True)
         label_class  = "network-host-label down" if is_down else "network-host-label"
         cell_class   = "network-cell down" if is_down else "network-cell"
         outage_str   = f" &nbsp;<span style='font-weight: normal; font-size: 13px;'>Down {format_time_ago(monitor_state.get('last_alarm_started'))}</span>" if is_down else ""
-        detail_href  = _detail_href('ports', safe_name)
+        detail_href  = _detail_href('switch', safe_name)
 
         col_style = "repeat(8, 1fr); --cols-narrow: 3"
 
@@ -5415,7 +5417,7 @@ def generate_mrtg_index(config: Dict[str, Any], index_path: str, state: Dict[str
     def _emit_switch_row(resource: Dict[str, Any]) -> None:
         """Emit one switch monitor row (label + 8-cell network-row grid)."""
         safe_name = re.sub(r'[^\w\-.]', '_', resource['name'])
-        display_name = f"switch: {resource['name']}"
+        display_name = f"router: {resource['name']}"
         monitor_state = state.get(resource['name'], {}) if state else {}
         is_down = not monitor_state.get('is_up', True)
         label_class = "network-host-label down" if is_down else "network-host-label"
@@ -5423,7 +5425,7 @@ def generate_mrtg_index(config: Dict[str, Any], index_path: str, state: Dict[str
         outage_str = (f" &nbsp;<span style='font-weight: normal; font-size: 13px;'>"
                       f"Down {format_time_ago(monitor_state.get('last_alarm_started'))}</span>"
                       if is_down else "")
-        detail_href = _detail_href('switch', safe_name)
+        detail_href = _detail_href('router', safe_name)
 
         targets = [
             ('-bandwidth', 'Bandwidth Per Port'),
@@ -5522,7 +5524,7 @@ def generate_mrtg_index(config: Dict[str, Any], index_path: str, state: Dict[str
     displayed  = [r for r in monitors if     to_natural_language_boolean(r.get('display', True))]
     hidden     = [r for r in monitors if not to_natural_language_boolean(r.get('display', True))]
 
-    snmp_types = ('ports', 'port', 'host', 'switch')
+    snmp_types = ('switch', 'port', 'host', 'router')
     avail_types = ('ping', 'http', 'quic', 'tcp', 'udp')
 
     has_snmp  = any(r['type'] in snmp_types  for r in displayed)
@@ -5539,12 +5541,12 @@ def generate_mrtg_index(config: Dict[str, Any], index_path: str, state: Dict[str
             safe_name = re.sub(r'[^\w\-.]', '_', resource['name'])
             monitor_type = resource['type']
 
-            if monitor_type == 'ports':
+            if monitor_type == 'switch':
                 if port_host_run:
                     _emit_port_host_group(port_host_run)
                     port_host_run = []
                 _emit_snmp_row(resource)
-            elif monitor_type == 'switch':
+            elif monitor_type == 'router':
                 if port_host_run:
                     _emit_port_host_group(port_host_run)
                     port_host_run = []
@@ -5620,7 +5622,7 @@ def generate_mrtg_index(config: Dict[str, Any], index_path: str, state: Dict[str
         _set_www_data_group(str(current_path))
 
         if VERBOSE:
-            snmp_count   = sum(1 for r in displayed if r['type'] in ('ports', 'switch'))
+            snmp_count   = sum(1 for r in displayed if r['type'] in ('switch', 'router'))
             port_count   = sum(1 for r in displayed if r['type'] == 'port')
             host_count   = sum(1 for r in displayed if r['type'] == 'host')
             avail_count  = sum(1 for r in displayed if r['type'] in avail_types)
@@ -6087,7 +6089,7 @@ def main() -> None:
                 thread_local.prefix = ''  # clear any stale thread prefix for clean log lines
                 detail_start_ms = int(datetime.now().timestamp() * 1000)
                 for resource in config['monitors']:
-                    if resource['type'] in ('ports', 'port', 'host', 'switch'):
+                    if resource['type'] in ('switch', 'port', 'host', 'router'):
                         detail = STATE.get(resource['name'], {}).get('detail', {})
                         generate_monitor_detail_page(resource, detail, work_dir)
                 detail_elapsed_ms = int(datetime.now().timestamp() * 1000) - detail_start_ms

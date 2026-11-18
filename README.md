@@ -2172,7 +2172,7 @@ The configuration validator enforces these rules:
 31. `host` monitors must use `snmp://` scheme (SNMP transport)
 32. `expect`, `ssl_fingerprint`, `ignore_ssl_expiry`, `send`, `content_type`, `percentile` are not allowed for `host` monitors
 33. `host` monitors support `heartbeat_url` and `heartbeat_every_n_secs` like other monitor types
-34. `type: snmp` is not valid — the validator emits: *"type 'snmp' is not valid. Did you mean type: switch?"*
+34. `type: snmp` is not valid — the validator emits: *"type 'snmp' is not valid. (Did you mean type: switch?")*
 35. `display` is optional for all monitor types and accepts boolean or string values; when `false`, the monitor is excluded from MRTG index output but monitoring, alerting, heartbeats, and RRD collection continue unaffected; hidden monitors appear in the MRTG index audit footer and render in red when down
 36. `alarms` is optional at both site and monitor level; accepts boolean or string values; monitor-level `alarms` overrides site-level `alarms`; when `false`, all outage/recovery/reminder notifications are suppressed while monitoring, state tracking, heartbeats, RRD collection, and MRTG display continue unaffected
 37. `type: ports` is not valid — the validator emits: *"type 'ports' is not valid. Did you mean type: switch?"* (`ports` was renamed `switch`; the old `switch` was renamed `router`)
@@ -2749,7 +2749,7 @@ under the [GNU General Public License version 3](LICENSE.txt).
 <a href="https://www.fi.muni.cz/~kas/mrtg-rrd/">`mrtg-rrd.cgi.pl`</a> is licensed by Jan "Yenya" Kasprzak <kas@fi.muni.cz><br />
 under the [GNU General Public License version 2](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html).
 ```
-Software: APMonitor 1.4.2
+Software: APMonitor 1.4.3
 License: GNU General Public License version 3
 Licensor: Andrew (AP) Prendergast, ap@andrewprendergast.com -- FSF Member
 
