@@ -233,7 +233,7 @@ alternatives.
 # Relevance to the 12 Pillars of Information Security
 
 NB: This tool is useful for implementing the second &amp; third pillars (Availability &amp; System Integrity)
-from the 12 Pillars of Information Security, for Necessary, Sufficient & Complete Security:
+from the 12 Pillars of Information Security (see <a href="https://doi.org/10.13140/RG.2.2.12609.84321">ResearchGate mini-paper DOI: 10.13140/RG.2.2.12609.84321</a>), for Necessary, Sufficient & Complete Security:
 
 <img src="images/The-Pillars-of-Information-Security.png" width="500" />
 

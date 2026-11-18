@@ -11,6 +11,7 @@ Thread safe, reentrant, modifiable.
 
 # Release 1.4.3 (19-Nov-26)  Doc Updates
 - Added notes about changing to router and switch
+- Added link to 12 pillars paper
 
 # Release 1.4.2 (03-Oct-26): Router Stats
 - Refactored _walk_arp to apply once-and-only-once
